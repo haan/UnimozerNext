@@ -1,23 +1,20 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import MonacoEditor from "@monaco-editor/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DiagramPanel } from "./components/diagram/DiagramPanel";
+import { CodePanel } from "./components/editor/CodePanel";
 import { Button } from "./components/ui/button";
-
-type FileNode = {
-  name: string;
-  path: string;
-  kind: "file" | "dir";
-  children?: FileNode[];
-};
+import type { DiagramState } from "./models/diagram";
+import type { FileNode } from "./models/files";
+import type { UmlGraph } from "./models/uml";
+import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "./services/diagram";
+import { buildMockGraph } from "./services/uml";
 
 type OpenFile = {
   name: string;
   path: string;
 };
-
-const SKIP_HINTS = ["node_modules", "bin", "target", "out", ".git"];
 
 const basename = (path: string) => {
   const normalized = path.replace(/[\\/]+$/, "");
@@ -28,62 +25,25 @@ const basename = (path: string) => {
 const formatStatus = (input: unknown) =>
   typeof input === "string" ? input : JSON.stringify(input);
 
-const TreeNode = ({
-  node,
-  depth,
-  activePath,
-  onOpenFile
-}: {
-  node: FileNode;
-  depth: number;
-  activePath: string | null;
-  onOpenFile: (node: FileNode) => void;
-}) => {
-  const [expanded, setExpanded] = useState(true);
-  const isDir = node.kind === "dir";
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => (isDir ? setExpanded(!expanded) : onOpenFile(node))}
-        className={`flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm transition hover:bg-accent/60 ${
-          !isDir && node.path === activePath
-            ? "bg-accent text-accent-foreground"
-            : "text-foreground/80"
-        }`}
-        style={{ paddingLeft: `${depth * 12 + 8}px` }}
-      >
-        <span className="text-muted-foreground">
-          {isDir ? (expanded ? "-" : "+") : "*"}
-        </span>
-        <span className="truncate">{node.name}</span>
-      </button>
-      {isDir && expanded && node.children?.length ? (
-        <div>
-          {node.children.map((child) => (
-            <TreeNode
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-              activePath={activePath}
-              onOpenFile={onOpenFile}
-            />
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
+const joinPath = (root: string, file: string) => {
+  const separator = root.includes("\\") ? "\\" : "/";
+  return `${root.replace(/[\\/]+$/, "")}${separator}${file}`;
 };
 
 export default function App() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [tree, setTree] = useState<FileNode | null>(null);
+  const [umlGraph, setUmlGraph] = useState<UmlGraph | null>(null);
+  const [diagramState, setDiagramState] = useState<DiagramState | null>(null);
+  const [diagramPath, setDiagramPath] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
   const [content, setContent] = useState("");
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [status, setStatus] = useState("Open a Java project to begin.");
   const [busy, setBusy] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [splitRatio, setSplitRatio] = useState(0.5);
+  const [isResizing, setIsResizing] = useState(false);
 
   const dirty = useMemo(() => {
     if (!openFile) return false;
@@ -93,6 +53,55 @@ export default function App() {
   const refreshTree = async (root: string) => {
     const result = await invoke<FileNode>("list_project_tree", { root });
     setTree(result);
+  };
+
+  const loadDiagramState = async (root: string, graph: UmlGraph) => {
+    const diagramFile = joinPath(root, "diagram.json");
+    let baseState: DiagramState | null = null;
+    let loadedFromDisk = false;
+
+    try {
+      const text = await invoke<string>("read_text_file", { path: diagramFile });
+      baseState = JSON.parse(text) as DiagramState;
+      loadedFromDisk = true;
+    } catch {
+      baseState = null;
+    }
+
+    if (!baseState) {
+      try {
+        const legacyText = await invoke<string>("read_text_file", {
+          path: joinPath(root, "unimozer.pck")
+        });
+        const legacyNodes = parseLegacyPck(legacyText);
+        if (Object.keys(legacyNodes).length > 0) {
+          baseState = {
+            ...createDefaultDiagramState(),
+            nodes: legacyNodes
+          };
+        }
+      } catch {
+        baseState = null;
+      }
+    }
+
+    if (!baseState) {
+      baseState = createDefaultDiagramState();
+    }
+
+    const merged = mergeDiagramState(
+      baseState,
+      graph.nodes.map((node) => node.id)
+    );
+    setDiagramState(merged.state);
+    setDiagramPath(diagramFile);
+
+    if (!loadedFromDisk || merged.added) {
+      await invoke("write_text_file", {
+        path: diagramFile,
+        contents: JSON.stringify(merged.state, null, 2)
+      });
+    }
   };
 
   const handleOpenProject = async () => {
@@ -124,15 +133,56 @@ export default function App() {
     }
   };
 
-  const handleOpenFile = async (node: FileNode) => {
-    if (node.kind !== "file") return;
+  useEffect(() => {
+    if (!projectPath || !tree) {
+      setUmlGraph(null);
+      setDiagramState(null);
+      setDiagramPath(null);
+      return;
+    }
+    const graph = buildMockGraph(tree, projectPath);
+    setUmlGraph(graph);
+  }, [projectPath, tree]);
+
+  useEffect(() => {
+    if (!projectPath || !umlGraph) return;
+    void loadDiagramState(projectPath, umlGraph);
+  }, [projectPath, umlGraph]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMove = (event: PointerEvent) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const minPanel = 260;
+      let x = event.clientX - rect.left;
+      x = Math.max(minPanel, Math.min(rect.width - minPanel, x));
+      setSplitRatio(x / rect.width);
+    };
+
+    const handleUp = () => {
+      setIsResizing(false);
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [isResizing]);
+
+  const openFileByPath = async (path: string) => {
     setBusy(true);
     try {
-      const text = await invoke<string>("read_text_file", { path: node.path });
-      setOpenFile({ name: node.name, path: node.path });
+      const text = await invoke<string>("read_text_file", { path });
+      const name = basename(path);
+      setOpenFile({ name, path });
       setContent(text);
       setLastSavedContent(text);
-      setStatus(`Opened ${node.name}`);
+      setStatus(`Opened ${name}`);
     } catch (error) {
       setStatus(`Failed to open file: ${formatStatus(error)}`);
     } finally {
@@ -154,12 +204,39 @@ export default function App() {
     }
   };
 
+  const handleNodePositionChange = (id: string, x: number, y: number, commit: boolean) => {
+    setDiagramState((prev) => {
+      if (!prev) return prev;
+      const next = {
+        ...prev,
+        nodes: {
+          ...prev.nodes,
+          [id]: { x, y }
+        }
+      };
+      if (commit && diagramPath) {
+        void invoke("write_text_file", {
+          path: diagramPath,
+          contents: JSON.stringify(next, null, 2)
+        });
+      }
+      return next;
+    });
+  };
+
+  const handleNodeSelect = (id: string) => {
+    if (!umlGraph) return;
+    const node = umlGraph.nodes.find((item) => item.id === id);
+    if (!node) return;
+    void openFileByPath(node.path);
+  };
+
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
         <div>
           <div className="text-lg font-semibold text-foreground">Unimozer Next</div>
-          <div className="text-xs text-muted-foreground">Milestone 1: Project + File Tree + Monaco</div>
+          <div className="text-xs text-muted-foreground">Milestone 2: UML Diagram + Layout</div>
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" onClick={handleOpenProject} disabled={busy}>
@@ -177,58 +254,36 @@ export default function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-72 flex-col border-r border-border bg-background">
-          <div className="border-b border-border px-4 py-3">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Project</div>
-            <div className="mt-1 truncate text-sm text-foreground">
-              {projectPath ? basename(projectPath) : "No project"}
-            </div>
-            <div className="mt-1 text-[11px] text-muted-foreground">
-              {projectPath ? projectPath : "Use Open Project to select a folder"}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto px-2 py-2">
-            {tree ? (
-              <TreeNode node={tree} depth={0} activePath={openFile?.path ?? null} onOpenFile={handleOpenFile} />
-            ) : (
-              <div className="px-2 py-4 text-xs text-muted-foreground">
-                Select a folder to load Java sources.
-                <div className="mt-2 text-[10px] text-muted-foreground/80">
-                  Hint: {SKIP_HINTS.join(", ")} are hidden.
-                </div>
-              </div>
-            )}
-          </div>
-        </aside>
-
         <main className="flex flex-1 flex-col bg-background">
-          <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
-            {openFile ? openFile.path : "No file open"}
-            {dirty ? " * Unsaved changes" : ""}
-          </div>
-          <div className="flex-1">
-            {openFile ? (
-              <MonacoEditor
-                language="java"
-                theme="vs"
-                value={content}
-                onChange={(value) => {
-                  const next = value ?? "";
-                  setContent(next);
-                }}
-                options={{
-                  fontSize: 14,
-                  minimap: { enabled: false },
-                  scrollBeyondLastLine: false,
-                  wordWrap: "on"
-                }}
+          <div ref={containerRef} className="flex flex-1 overflow-hidden">
+            <section
+              className="flex flex-col border-r border-border"
+              style={{ width: `${splitRatio * 100}%` }}
+            >
+              <DiagramPanel
+                graph={umlGraph}
+                diagram={diagramState}
+                onNodePositionChange={handleNodePositionChange}
+                onNodeSelect={handleNodeSelect}
               />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Open a Java file from the tree to start editing.
-              </div>
-            )}
+            </section>
+
+            <div
+              className="w-2 cursor-col-resize bg-border/40 transition hover:bg-border"
+              onPointerDown={(event) => {
+                event.preventDefault();
+                setIsResizing(true);
+              }}
+            />
+
+            <section className="flex min-w-0 flex-1 flex-col">
+              <CodePanel
+                openFile={openFile}
+                content={content}
+                dirty={dirty}
+                onChange={setContent}
+              />
+            </section>
           </div>
         </main>
       </div>
