@@ -9,6 +9,11 @@ use std::{
   process::{Command, Stdio}
 };
 use std::io::Write;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,14 +115,20 @@ fn parse_uml_graph(
 
   let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
 
-  let mut child = Command::new(java_path)
+  let mut command = Command::new(java_path);
+  command
     .arg("-jar")
     .arg(jar_path)
     .stdin(Stdio::piped())
     .stdout(Stdio::piped())
-    .stderr(Stdio::piped())
-    .spawn()
-    .map_err(|error| error.to_string())?;
+    .stderr(Stdio::piped());
+
+  #[cfg(target_os = "windows")]
+  {
+    command.creation_flags(CREATE_NO_WINDOW);
+  }
+
+  let mut child = command.spawn().map_err(|error| error.to_string())?;
 
   if let Some(stdin) = child.stdin.as_mut() {
     stdin.write_all(&payload).map_err(|error| error.to_string())?;
