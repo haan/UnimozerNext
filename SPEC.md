@@ -430,6 +430,16 @@ unimozer-next/
 - extends/implements edges visible
 - field associations visible when types match other project classes
 
+### Milestone 3.1 (Optional) — Symbol Solver accuracy pass
+**Deliverable**
+- Add JavaParser Symbol Solver for precise type resolution
+- Resolve ambiguous imports and same-name types across packages
+- Keep compatibility with in-memory buffers via temp workspace mirror
+
+**Acceptance**
+- association edges resolve correctly when class names collide across packages
+- wildcard imports resolve reliably
+
 ---
 
 ### Milestone 4 — Compile + Run + Console

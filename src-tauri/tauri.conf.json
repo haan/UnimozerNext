@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.unimozer.next",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "npm run prepare:jdk && npm run dev",
+    "beforeBuildCommand": "npm run prepare:jdk && npm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -26,6 +26,7 @@
   "bundle": {
     "active": true,
     "targets": ["msi", "nsis"],
-    "icon": ["icons/icon.ico"]
+    "icon": ["icons/icon.ico"],
+    "resources": ["../resources/jdk/current/**/*"]
   }
 }

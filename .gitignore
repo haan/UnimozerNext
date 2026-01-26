@@ -18,6 +18,9 @@ pnpm-debug.log*
 /src-tauri/target/
 /src-tauri/.tauri/
 
+# Bundled JDKs
+/resources/jdk/
+
 # OS
 .DS_Store
 Thumbs.db
