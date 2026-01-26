@@ -9,7 +9,7 @@ import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
 import type { UmlGraph } from "./models/uml";
 import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "./services/diagram";
-import { buildMockGraph } from "./services/uml";
+import { buildMockGraph, parseUmlGraph } from "./services/uml";
 
 type OpenFile = {
   name: string;
@@ -24,6 +24,9 @@ const basename = (path: string) => {
 
 const formatStatus = (input: unknown) =>
   typeof input === "string" ? input : JSON.stringify(input);
+
+const trimStatus = (input: string, max = 200) =>
+  input.length > max ? `${input.slice(0, max)}...` : input;
 
 const joinPath = (root: string, file: string) => {
   const separator = root.includes("\\") ? "\\" : "/";
@@ -41,6 +44,8 @@ export default function App() {
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [status, setStatus] = useState("Open a Java project to begin.");
   const [busy, setBusy] = useState(false);
+  const [umlStatus, setUmlStatus] = useState<string | null>(null);
+  const parseSeq = useRef(0);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [isResizing, setIsResizing] = useState(false);
@@ -140,9 +145,40 @@ export default function App() {
       setDiagramPath(null);
       return;
     }
-    const graph = buildMockGraph(tree, projectPath);
-    setUmlGraph(graph);
-  }, [projectPath, tree]);
+
+    const overrides =
+      openFile && openFile.path
+        ? [
+            {
+              path: openFile.path,
+              content
+            }
+          ]
+        : [];
+
+    parseSeq.current += 1;
+    const currentSeq = parseSeq.current;
+    const timer = window.setTimeout(async () => {
+      setUmlStatus("Parsing UML...");
+      try {
+        const graph = await parseUmlGraph(projectPath, "src", overrides);
+        if (currentSeq === parseSeq.current) {
+          setUmlGraph(graph);
+          setUmlStatus(null);
+        }
+      } catch (error) {
+        if (currentSeq === parseSeq.current) {
+          setUmlStatus(`UML parse failed: ${trimStatus(formatStatus(error))}`);
+          const fallback = buildMockGraph(tree, projectPath);
+          setUmlGraph(fallback);
+        }
+      }
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [projectPath, tree, openFile?.path, content]);
 
   useEffect(() => {
     if (!projectPath || !umlGraph) return;
@@ -236,7 +272,7 @@ export default function App() {
       <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
         <div>
           <div className="text-lg font-semibold text-foreground">Unimozer Next</div>
-          <div className="text-xs text-muted-foreground">Milestone 2: UML Diagram + Layout</div>
+          <div className="text-xs text-muted-foreground">Milestone 3: JavaParser UML</div>
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" onClick={handleOpenProject} disabled={busy}>
@@ -290,6 +326,7 @@ export default function App() {
 
       <footer className="border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
         {status}
+        {umlStatus ? ` • ${umlStatus}` : ""}
       </footer>
     </div>
   );

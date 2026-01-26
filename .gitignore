@@ -21,6 +21,11 @@ pnpm-debug.log*
 # Bundled JDKs
 /resources/jdk/
 
+# Java parser bridge
+/resources/java-parser/*.jar
+/java-parser/build/
+/java-parser/.gradle/
+
 # OS
 .DS_Store
 Thumbs.db

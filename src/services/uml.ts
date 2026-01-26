@@ -1,5 +1,6 @@
 import type { FileNode } from "../models/files";
 import type { UmlGraph, UmlNode } from "../models/uml";
+import { invoke } from "@tauri-apps/api/core";
 
 const stripJavaExtension = (name: string) => name.replace(/\.java$/i, "");
 
@@ -47,3 +48,19 @@ export const buildMockGraph = (tree: FileNode, rootPath: string): UmlGraph => {
     edges: []
   };
 };
+
+export type UmlOverride = {
+  path: string;
+  content: string;
+};
+
+export const parseUmlGraph = async (
+  root: string,
+  srcRoot: string,
+  overrides: UmlOverride[]
+): Promise<UmlGraph> =>
+  invoke<UmlGraph>("parse_uml_graph", {
+    root,
+    srcRoot,
+    overrides
+  });

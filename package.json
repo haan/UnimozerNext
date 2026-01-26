@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "prepare:jdk": "node scripts/select-jdk.js",
+    "build:parser": "cd java-parser && gradle copyBridgeJar",
     "tauri dev": "tauri dev",
     "tauri build": "tauri build"
   },

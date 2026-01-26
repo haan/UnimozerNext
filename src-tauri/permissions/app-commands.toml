@@ -3,6 +3,7 @@ identifier = "allow-app-commands"
 description = "Allow the frontend to use app commands."
 commands.allow = [
   "list_project_tree",
+  "parse_uml_graph",
   "read_text_file",
   "write_text_file"
 ]

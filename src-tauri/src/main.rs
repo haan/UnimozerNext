@@ -1,11 +1,14 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use tauri::Manager;
 use std::{
   cmp::Ordering,
   fs,
   io,
-  path::{Path, PathBuf}
+  path::{Path, PathBuf},
+  process::{Command, Stdio}
 };
+use std::io::Write;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +17,44 @@ struct FileNode {
   path: String,
   kind: String,
   children: Option<Vec<FileNode>>
+}
+
+#[derive(Serialize, Deserialize)]
+struct UmlNode {
+  id: String,
+  name: String,
+  kind: String,
+  path: String,
+  fields: Vec<String>,
+  methods: Vec<String>
+}
+
+#[derive(Serialize, Deserialize)]
+struct UmlEdge {
+  id: String,
+  from: String,
+  to: String,
+  kind: String
+}
+
+#[derive(Serialize, Deserialize)]
+struct UmlGraph {
+  nodes: Vec<UmlNode>,
+  edges: Vec<UmlEdge>
+}
+
+#[derive(Serialize, Deserialize)]
+struct SourceOverride {
+  path: String,
+  content: String
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ParserRequest {
+  root: String,
+  src_root: String,
+  overrides: Vec<SourceOverride>
 }
 
 const SKIP_DIRS: [&str; 8] = [
@@ -47,6 +88,51 @@ fn read_text_file(path: String) -> Result<String, String> {
 #[tauri::command]
 fn write_text_file(path: String, contents: String) -> Result<(), String> {
   fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn parse_uml_graph(
+  app: tauri::AppHandle,
+  root: String,
+  src_root: String,
+  overrides: Vec<SourceOverride>
+) -> Result<UmlGraph, String> {
+  let java_path = resolve_resource(&app, java_executable_name())
+    .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
+  let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
+    .ok_or_else(|| "Java parser bridge not found".to_string())?;
+
+  let request = ParserRequest {
+    root,
+    src_root,
+    overrides
+  };
+
+  let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+
+  let mut child = Command::new(java_path)
+    .arg("-jar")
+    .arg(jar_path)
+    .stdin(Stdio::piped())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .spawn()
+    .map_err(|error| error.to_string())?;
+
+  if let Some(stdin) = child.stdin.as_mut() {
+    stdin.write_all(&payload).map_err(|error| error.to_string())?;
+  }
+
+  let output = child
+    .wait_with_output()
+    .map_err(|error| error.to_string())?;
+
+  if !output.status.success() {
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    return Err(format!("Parser bridge failed: {}", stderr.trim()));
+  }
+
+  serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())
 }
 
 fn build_tree(path: &Path, is_root: bool) -> io::Result<Option<FileNode>> {
@@ -114,13 +200,43 @@ fn should_skip_dir(path: &Path) -> bool {
   }
 }
 
+fn java_executable_name() -> &'static str {
+  if cfg!(target_os = "windows") {
+    "jdk/current/bin/java.exe"
+  } else {
+    "jdk/current/bin/java"
+  }
+}
+
+fn resolve_resource(app: &tauri::AppHandle, relative: &str) -> Option<PathBuf> {
+  if let Ok(dir) = app.path().resource_dir() {
+    let candidate: PathBuf = dir.join(relative);
+    if candidate.exists() {
+      return Some(candidate);
+    }
+  }
+
+  let fallback = PathBuf::from("resources").join(relative);
+  if fallback.exists() {
+    return Some(fallback);
+  }
+
+  let dev_fallback = PathBuf::from("..").join("resources").join(relative);
+  if dev_fallback.exists() {
+    return Some(dev_fallback);
+  }
+
+  None
+}
+
 fn main() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
     .invoke_handler(tauri::generate_handler![
       list_project_tree,
       read_text_file,
-      write_text_file
+      write_text_file,
+      parse_uml_graph
     ])
     .run(tauri::generate_context!())
     .expect("error while running tauri application");

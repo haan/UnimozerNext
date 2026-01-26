@@ -107,13 +107,69 @@ export const UmlDiagram = ({
     [diagram, graph.nodes]
   );
 
+  const nodeMap = useMemo(() => {
+    const map = new Map<string, (typeof nodesWithLayout)[number]>();
+    nodesWithLayout.forEach((node) => map.set(node.id, node));
+    return map;
+  }, [nodesWithLayout]);
+
   return (
     <svg ref={svgRef} className="h-full w-full" role="img">
       <defs>
         <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
           <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.12" />
         </filter>
+        <marker
+          id="edge-arrow"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--foreground) / 0.35)" />
+        </marker>
+        <marker
+          id="edge-triangle"
+          viewBox="0 0 12 12"
+          refX="11"
+          refY="6"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 0 L 12 6 L 0 12 z" fill="white" stroke="hsl(var(--foreground) / 0.4)" />
+        </marker>
       </defs>
+
+      <g>
+        {graph.edges.map((edge) => {
+          const from = nodeMap.get(edge.from);
+          const to = nodeMap.get(edge.to);
+          if (!from || !to) return null;
+          const x1 = from.x + from.width / 2;
+          const y1 = from.y + from.height / 2;
+          const x2 = to.x + to.width / 2;
+          const y2 = to.y + to.height / 2;
+          const dx = (x2 - x1) * 0.5;
+          const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+          const marker =
+            edge.kind === "association" ? "url(#edge-arrow)" : "url(#edge-triangle)";
+          const dash = edge.kind === "implements" ? "6 4" : "0";
+          return (
+            <path
+              key={edge.id}
+              d={path}
+              fill="none"
+              stroke="hsl(var(--foreground) / 0.35)"
+              strokeWidth={1}
+              strokeDasharray={dash}
+              markerEnd={marker}
+            />
+          );
+        })}
+      </g>
 
       {nodesWithLayout.map((node) => (
         <ClassNode
