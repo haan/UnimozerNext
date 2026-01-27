@@ -2,8 +2,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DiagramState } from "../../models/diagram";
 import type { UmlGraph, UmlNode } from "../../models/uml";
-import { ClassNode } from "./ClassNode";
-import { HEADER_HEIGHT, NODE_WIDTH, ROW_HEIGHT, SECTION_PADDING } from "./constants";
+import { Aggregation } from "./Aggregation";
+import { Class } from "./Class";
+import { Composition } from "./Composition";
+import { Implementation } from "./Implementation";
+import { Inheritance } from "./Inheritance";
+import { ReflexiveComposition } from "./ReflexiveComposition";
+import {
+  HEADER_HEIGHT,
+  NODE_WIDTH,
+  ROW_HEIGHT,
+  SECTION_PADDING,
+  TEXT_PADDING,
+  UML_FONT_SIZE
+} from "./constants";
 
 const computeNodeHeight = (node: UmlNode, diagram: DiagramState) => {
   const showFields = diagram.showFields && node.fields.length > 0;
@@ -11,22 +23,143 @@ const computeNodeHeight = (node: UmlNode, diagram: DiagramState) => {
   let height = HEADER_HEIGHT;
 
   if (showFields) {
-    height += SECTION_PADDING + node.fields.length * ROW_HEIGHT;
+    height += 2*SECTION_PADDING + (node.fields.length) * ROW_HEIGHT;
   }
   if (showMethods) {
-    height += SECTION_PADDING + node.methods.length * ROW_HEIGHT;
+    height += 2*SECTION_PADDING + (node.methods.length) * ROW_HEIGHT;
   }
 
   return height;
 };
 
-const getSvgPoint = (svg: SVGSVGElement | null, clientX: number, clientY: number) => {
+const UML_FONT_FAMILY =
+  "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
+let measureCanvas: HTMLCanvasElement | null = null;
+
+const measureTextWidth = (text: string, font: string) => {
+  if (!measureCanvas) {
+    measureCanvas = document.createElement("canvas");
+  }
+  const ctx = measureCanvas.getContext("2d");
+  if (!ctx) return text.length * 8;
+  ctx.font = font;
+  return ctx.measureText(text).width;
+};
+
+const computeNodeWidth = (node: UmlNode, diagram: DiagramState) => {
+  const padding = TEXT_PADDING;
+  const nameWidth = measureTextWidth(node.name, `600 ${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`);
+  const fieldWidth = diagram.showFields
+    ? Math.max(
+        0,
+        ...node.fields.map((field) => measureTextWidth(field, `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`))
+      )
+    : 0;
+  const methodWidth = diagram.showMethods
+    ? Math.max(
+        0,
+        ...node.methods.map((method) => measureTextWidth(method, `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`))
+      )
+    : 0;
+
+  const contentWidth = Math.max(nameWidth, fieldWidth, methodWidth);
+  return Math.max(NODE_WIDTH, Math.ceil(contentWidth + padding * 2));
+};
+
+const getSvgPoint = (
+  svg: SVGSVGElement | null,
+  clientX: number,
+  clientY: number,
+  view: { x: number; y: number; scale: number }
+) => {
   if (!svg) return { x: clientX, y: clientY };
   const rect = svg.getBoundingClientRect();
+  const x = clientX - rect.left;
+  const y = clientY - rect.top;
   return {
-    x: clientX - rect.left,
-    y: clientY - rect.top
+    x: x / view.scale - view.x,
+    y: y / view.scale - view.y
   };
+};
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const EDGE_CORNER_GUTTER = 40;
+
+const getRectEdgeAnchor = (
+  rect: { x: number; y: number; width: number; height: number },
+  target: { x: number; y: number }
+) => {
+  const cx = rect.x + rect.width / 2;
+  const cy = rect.y + rect.height / 2;
+  const dx = target.x - cx;
+  const dy = target.y - cy;
+  if (dx === 0 && dy === 0) {
+    return { x: cx, y: cy, normal: { x: 0, y: 0 } };
+  }
+
+  const maxGutter = Math.max(
+    0,
+    Math.min(rect.width / 2 - 2, rect.height / 2 - 2, EDGE_CORNER_GUTTER)
+  );
+  const preferHorizontal = Math.abs(dx) >= Math.abs(dy);
+  if (preferHorizontal && dx !== 0) {
+    const sideX = dx > 0 ? rect.x + rect.width : rect.x;
+    const t = (sideX - cx) / dx;
+    const y = clamp(
+      cy + dy * t,
+      rect.y + maxGutter,
+      rect.y + rect.height - maxGutter
+    );
+    return { x: sideX, y, normal: { x: Math.sign(dx) || 1, y: 0 } };
+  }
+
+  const sideY = dy > 0 ? rect.y + rect.height : rect.y;
+  const t = dy === 0 ? 0 : (sideY - cy) / dy;
+  const x = clamp(
+    cx + dx * t,
+    rect.x + maxGutter,
+    rect.x + rect.width - maxGutter
+  );
+  return { x, y: sideY, normal: { x: 0, y: Math.sign(dy) || 1 } };
+};
+
+const buildOrthogonalPath = (
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  startNormal: { x: number; y: number },
+  endNormal: { x: number; y: number }
+) => {
+  const stub = 1;
+  const s1 = { x: start.x + startNormal.x * stub, y: start.y + startNormal.y * stub };
+  const s2 = { x: end.x + endNormal.x * stub, y: end.y + endNormal.y * stub };
+  const dx = s2.x - s1.x;
+  const dy = s2.y - s1.y;
+
+  if (Math.abs(dx) < 1 || Math.abs(dy) < 1) {
+    return `M ${start.x} ${start.y} L ${s1.x} ${s1.y} L ${s2.x} ${s2.y} L ${end.x} ${end.y}`;
+  }
+
+  const radius = 6;
+  const r = Math.min(radius, Math.abs(dx) / 2, Math.abs(dy) / 2);
+  const sx = Math.sign(dx) || 1;
+  const sy = Math.sign(dy) || 1;
+
+  if (startNormal.x !== 0) {
+    const midX = s1.x + dx / 2;
+    const x1a = midX - sx * r;
+    const x2a = midX + sx * r;
+    const y1a = s1.y + sy * r;
+    const y2a = s2.y - sy * r;
+    return `M ${start.x} ${start.y} L ${s1.x} ${s1.y} L ${x1a} ${s1.y} Q ${midX} ${s1.y} ${midX} ${y1a} L ${midX} ${y2a} Q ${midX} ${s2.y} ${x2a} ${s2.y} L ${s2.x} ${s2.y} L ${end.x} ${end.y}`;
+  }
+
+  const midY = s1.y + dy / 2;
+  const y1a = midY - sy * r;
+  const y2a = midY + sy * r;
+  const x1a = s1.x + sx * r;
+  const x2a = s2.x - sx * r;
+  return `M ${start.x} ${start.y} L ${s1.x} ${s1.y} L ${s1.x} ${y1a} Q ${s1.x} ${midY} ${x1a} ${midY} L ${x2a} ${midY} Q ${s2.x} ${midY} ${s2.x} ${y2a} L ${s2.x} ${s2.y} L ${end.x} ${end.y}`;
 };
 
 export type UmlDiagramProps = {
@@ -45,6 +178,14 @@ type DragState = {
   moved: boolean;
 };
 
+type PanState = {
+  startClientX: number;
+  startClientY: number;
+  startX: number;
+  startY: number;
+  scale: number;
+};
+
 export const UmlDiagram = ({
   graph,
   diagram,
@@ -53,33 +194,51 @@ export const UmlDiagram = ({
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const [panning, setPanning] = useState<PanState | null>(null);
+  const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
 
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
-      if (!dragging) return;
-      const point = getSvgPoint(svgRef.current, event.clientX, event.clientY);
-      const x = point.x - dragging.offsetX;
-      const y = point.y - dragging.offsetY;
-      const moved =
-        dragging.moved ||
-        Math.abs(point.x - dragging.startX) > 3 ||
-        Math.abs(point.y - dragging.startY) > 3;
-      if (moved !== dragging.moved) {
-        setDragging({ ...dragging, moved });
+      if (dragging) {
+        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+        const x = point.x - dragging.offsetX;
+        const y = point.y - dragging.offsetY;
+        const moved =
+          dragging.moved ||
+          Math.abs(point.x - dragging.startX) > 3 ||
+          Math.abs(point.y - dragging.startY) > 3;
+        if (moved !== dragging.moved) {
+          setDragging({ ...dragging, moved });
+        }
+        onNodePositionChange(dragging.id, x, y, false);
+        return;
       }
-      onNodePositionChange(dragging.id, x, y, false);
+
+      if (panning) {
+        const dx = (event.clientX - panning.startClientX) / panning.scale;
+        const dy = (event.clientY - panning.startClientY) / panning.scale;
+        setView((current) => ({
+          ...current,
+          x: panning.startX + dx,
+          y: panning.startY + dy
+        }));
+      }
     };
 
     const handleUp = () => {
-      if (!dragging) return;
-      const { id, moved } = dragging;
-      setDragging(null);
-      const position = diagram.nodes[id];
-      if (position) {
-        onNodePositionChange(id, position.x, position.y, true);
+      if (dragging) {
+        const { id, moved } = dragging;
+        setDragging(null);
+        const position = diagram.nodes[id];
+        if (position) {
+          onNodePositionChange(id, position.x, position.y, true);
+        }
+        if (!moved && onNodeSelect) {
+          onNodeSelect(id);
+        }
       }
-      if (!moved && onNodeSelect) {
-        onNodeSelect(id);
+      if (panning) {
+        setPanning(null);
       }
     };
 
@@ -90,7 +249,7 @@ export const UmlDiagram = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [dragging, diagram.nodes, onNodePositionChange]);
+  }, [dragging, panning, diagram.nodes, onNodePositionChange, onNodeSelect, view]);
 
   const nodesWithLayout = useMemo(
     () =>
@@ -100,7 +259,7 @@ export const UmlDiagram = ({
           ...node,
           x: position.x,
           y: position.y,
-          width: NODE_WIDTH,
+          width: computeNodeWidth(node, diagram),
           height: computeNodeHeight(node, diagram)
         };
       }),
@@ -114,49 +273,136 @@ export const UmlDiagram = ({
   }, [nodesWithLayout]);
 
   return (
-    <svg ref={svgRef} className="h-full w-full" role="img">
+    <svg
+      ref={svgRef}
+      className="h-full w-full select-none touch-none"
+      role="img"
+      onPointerDown={(event) => {
+        if (event.button !== 0) return;
+        if (event.target !== svgRef.current) return;
+        event.preventDefault();
+        setPanning({
+          startClientX: event.clientX,
+          startClientY: event.clientY,
+          startX: view.x,
+          startY: view.y,
+          scale: view.scale
+        });
+      }}
+      onWheel={(event) => {
+        event.preventDefault();
+        const svg = svgRef.current;
+        if (!svg) return;
+        const rect = svg.getBoundingClientRect();
+        const sx = event.clientX - rect.left;
+        const sy = event.clientY - rect.top;
+        const worldX = sx / view.scale - view.x;
+        const worldY = sy / view.scale - view.y;
+        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+        const nextScale = Math.min(2.5, Math.max(0.4, view.scale * zoomFactor));
+        const nextX = sx / nextScale - worldX;
+        const nextY = sy / nextScale - worldY;
+        setView({ x: nextX, y: nextY, scale: nextScale });
+      }}
+    >
       <defs>
         <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
           <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.12" />
         </filter>
         <marker
           id="edge-arrow"
-          viewBox="0 0 10 10"
-          refX="9"
-          refY="5"
-          markerWidth="6"
-          markerHeight="6"
-          orient="auto-start-reverse"
-        >
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="hsl(var(--foreground) / 0.35)" />
-        </marker>
-        <marker
-          id="edge-triangle"
           viewBox="0 0 12 12"
           refX="11"
           refY="6"
-          markerWidth="7"
-          markerHeight="7"
+          markerWidth="8"
+          markerHeight="8"
           orient="auto-start-reverse"
         >
-          <path d="M 0 0 L 12 6 L 0 12 z" fill="white" stroke="hsl(var(--foreground) / 0.4)" />
+          <path
+            d="M 0 0 L 12 6 L 0 12"
+            fill="none"
+            stroke="hsl(var(--foreground) / 0.5)"
+            strokeWidth={1.2}
+          />
+        </marker>
+        <marker
+          id="edge-triangle"
+          viewBox="0 0 18 18"
+          refX="17"
+          refY="9"
+          markerWidth="12"
+          markerHeight="12"
+          orient="auto-start-reverse"
+        >
+          <path
+            d="M 0 0 L 18 9 L 0 18 z"
+            fill="white"
+            stroke="hsl(var(--foreground) / 0.4)"
+            strokeWidth={1.8}
+          />
+        </marker>
+        <marker
+          id="edge-diamond-open"
+          viewBox="0 0 30 12"
+          refX="24"
+          refY="6"
+          markerWidth="24"
+          markerHeight="12"
+          orient="auto-start-reverse"
+        >
+          <path
+            d="M 0 6 L 10 0 L 20 6 L 10 12 z"
+            fill="white"
+            stroke="hsl(var(--foreground) / 0.45)"
+            strokeWidth={1.4}
+          />
+        </marker>
+        <marker
+          id="edge-diamond-filled"
+          viewBox="0 0 30 12"
+          refX="24"
+          refY="6"
+          markerWidth="24"
+          markerHeight="12"
+          orient="auto-start-reverse"
+        >
+          <path
+            d="M 0 6 L 10 0 L 20 6 L 10 12 z"
+            fill="hsl(var(--foreground) / 1)"
+            stroke="hsl(var(--foreground) / 0.45)"
+            strokeWidth={1.2}
+          />
         </marker>
       </defs>
 
-      <g>
-        {graph.edges.map((edge) => {
+      <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`} pointerEvents="none">
+        {graph.edges
+          .filter((edge) => edge.kind !== "reflexive-composition")
+          .map((edge) => {
           const from = nodeMap.get(edge.from);
           const to = nodeMap.get(edge.to);
           if (!from || !to) return null;
-          const x1 = from.x + from.width / 2;
-          const y1 = from.y + from.height / 2;
-          const x2 = to.x + to.width / 2;
-          const y2 = to.y + to.height / 2;
-          const dx = (x2 - x1) * 0.5;
-          const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-          const marker =
-            edge.kind === "association" ? "url(#edge-arrow)" : "url(#edge-triangle)";
-          const dash = edge.kind === "implements" ? "6 4" : "0";
+          const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+          const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+          const start = getRectEdgeAnchor(from, toCenter);
+          const end = getRectEdgeAnchor(to, fromCenter);
+          const path =
+            edge.kind === "extends"
+              ? `M ${start.x} ${start.y} L ${end.x} ${end.y}`
+              : buildOrthogonalPath(start, end, start.normal, end.normal);
+          if (edge.kind === "composition") {
+            return <Composition key={edge.id} d={path} />;
+          }
+          if (edge.kind === "aggregation") {
+            return <Aggregation key={edge.id} d={path} />;
+          }
+          if (edge.kind === "extends") {
+            return <Inheritance key={edge.id} d={path} />;
+          }
+          if (edge.kind === "implements") {
+            return <Implementation key={edge.id} d={path} />;
+          }
+
           return (
             <path
               key={edge.id}
@@ -164,32 +410,52 @@ export const UmlDiagram = ({
               fill="none"
               stroke="hsl(var(--foreground) / 0.35)"
               strokeWidth={1}
-              strokeDasharray={dash}
-              markerEnd={marker}
+              strokeDasharray="6 3"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              markerEnd="url(#edge-arrow)"
             />
           );
         })}
       </g>
 
-      {nodesWithLayout.map((node) => (
-        <ClassNode
-          key={node.id}
-          node={node}
-          diagram={diagram}
-          onHeaderPointerDown={(event) => {
-            event.preventDefault();
-            const point = getSvgPoint(svgRef.current, event.clientX, event.clientY);
-            setDragging({
-              id: node.id,
-              offsetX: point.x - node.x,
-              offsetY: point.y - node.y,
-              startX: point.x,
-              startY: point.y,
-              moved: false
-            });
-          }}
-        />
-      ))}
+      <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+        {nodesWithLayout.map((node) => (
+          <Class
+            key={node.id}
+            node={node}
+            diagram={diagram}
+            onHeaderPointerDown={(event) => {
+              event.preventDefault();
+              const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+              setDragging({
+                id: node.id,
+                offsetX: point.x - node.x,
+                offsetY: point.y - node.y,
+                startX: point.x,
+                startY: point.y,
+                moved: false
+              });
+            }}
+          />
+        ))}
+
+        {graph.edges
+          .filter((edge) => edge.kind === "reflexive-composition")
+          .map((edge) => {
+            const from = nodeMap.get(edge.from);
+            if (!from) return null;
+            const loopInset = 40;
+            const startX = from.x + from.width / 2;
+            const startY = from.y;
+            const cornerX = from.x + from.width + loopInset;
+            const cornerY = from.y - loopInset;
+            const endX = from.x + from.width;
+            const endY = from.y + from.height / 2;
+            const d = `M ${startX} ${startY} L ${startX} ${cornerY} L ${cornerX} ${cornerY} L ${cornerX} ${endY} L ${endX} ${endY}`;
+            return <ReflexiveComposition key={edge.id} d={d} />;
+          })}
+      </g>
     </svg>
   );
 };

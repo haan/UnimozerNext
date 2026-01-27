@@ -1,5 +1,11 @@
 export type UmlNodeKind = "class" | "interface" | "enum" | "record";
-export type UmlEdgeKind = "extends" | "implements" | "association";
+export type UmlEdgeKind =
+  | "extends"
+  | "implements"
+  | "association"
+  | "aggregation"
+  | "composition"
+  | "reflexive-composition";
 
 export type UmlNode = {
   id: string;

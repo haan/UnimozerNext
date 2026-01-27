@@ -49,6 +49,7 @@ export default function App() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [isResizing, setIsResizing] = useState(false);
+  const openFilePath = openFile?.path ?? null;
 
   const dirty = useMemo(() => {
     if (!openFile) return false;
@@ -127,6 +128,9 @@ export default function App() {
     try {
       await refreshTree(dir);
       setProjectPath(dir);
+      setUmlGraph(null);
+      setDiagramState(null);
+      setDiagramPath(null);
       setOpenFile(null);
       setContent("");
       setLastSavedContent("");
@@ -147,10 +151,10 @@ export default function App() {
     }
 
     const overrides =
-      openFile && openFile.path
+      openFilePath
         ? [
             {
-              path: openFile.path,
+              path: openFilePath,
               content
             }
           ]
@@ -178,7 +182,7 @@ export default function App() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [projectPath, tree, openFile?.path, content]);
+  }, [projectPath, tree, openFilePath, content]);
 
   useEffect(() => {
     if (!projectPath || !umlGraph) return;
@@ -291,7 +295,7 @@ export default function App() {
 
       <div className="flex flex-1 overflow-hidden">
         <main className="flex flex-1 flex-col bg-background">
-          <div ref={containerRef} className="flex flex-1 overflow-hidden">
+          <div ref={containerRef} className="relative flex flex-1 overflow-hidden">
             <section
               className="flex flex-col border-r border-border"
               style={{ width: `${splitRatio * 100}%` }}
@@ -305,12 +309,18 @@ export default function App() {
             </section>
 
             <div
-              className="w-2 cursor-col-resize bg-border/40 transition hover:bg-border"
+              className="absolute top-0 h-full w-3 -translate-x-1.5 cursor-col-resize transition hover:bg-border/40"
+              style={{ left: `${splitRatio * 100}%` }}
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize information panel"
               onPointerDown={(event) => {
                 event.preventDefault();
                 setIsResizing(true);
               }}
-            />
+            >
+              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60" />
+            </div>
 
             <section className="flex min-w-0 flex-1 flex-col">
               <CodePanel
