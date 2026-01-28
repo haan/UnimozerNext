@@ -45,7 +45,8 @@ export const buildMockGraph = (tree: FileNode, rootPath: string): UmlGraph => {
   collectNodes(tree, rootPath, nodes);
   return {
     nodes,
-    edges: []
+    edges: [],
+    failedFiles: []
   };
 };
 

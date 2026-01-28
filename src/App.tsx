@@ -1,10 +1,17 @@
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { DiagramPanel } from "./components/diagram/DiagramPanel";
 import { CodePanel } from "./components/editor/CodePanel";
-import { Button } from "./components/ui/button";
+import {
+  Menubar,
+  MenubarContent,
+  MenubarItem,
+  MenubarMenu,
+  MenubarSeparator,
+  MenubarTrigger
+} from "./components/ui/menubar";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
 import type { UmlGraph } from "./models/uml";
@@ -46,6 +53,7 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [umlStatus, setUmlStatus] = useState<string | null>(null);
   const parseSeq = useRef(0);
+  const lastGoodGraph = useRef<UmlGraph | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [isResizing, setIsResizing] = useState(false);
@@ -55,6 +63,48 @@ export default function App() {
     if (!openFile) return false;
     return content !== lastSavedContent;
   }, [content, lastSavedContent, openFile]);
+
+  const mergeWithLastGoodGraph = (graph: UmlGraph, previous: UmlGraph | null): UmlGraph => {
+    const failedFiles = graph.failedFiles ?? [];
+    if (!previous || failedFiles.length === 0) return graph;
+    const failedSet = new Set(failedFiles);
+    const mergedNodes = new Map<string, UmlGraph["nodes"][number]>();
+    graph.nodes.forEach((node) => mergedNodes.set(node.id, node));
+    previous.nodes.forEach((node) => {
+      if (failedSet.has(node.path) && !mergedNodes.has(node.id)) {
+        mergedNodes.set(node.id, node);
+      }
+    });
+    const nodeIds = new Set(mergedNodes.keys());
+    const mergedEdges = new Map<string, UmlGraph["edges"][number]>();
+    graph.edges.forEach((edge) => mergedEdges.set(edge.id, edge));
+    previous.edges.forEach((edge) => {
+      if (mergedEdges.has(edge.id)) return;
+      if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) return;
+      const fromNode = previous.nodes.find((node) => node.id === edge.from);
+      const toNode = previous.nodes.find((node) => node.id === edge.to);
+      if (!fromNode || !toNode) return;
+      if (failedSet.has(fromNode.path) || failedSet.has(toNode.path)) {
+        mergedEdges.set(edge.id, edge);
+      }
+    });
+    return {
+      ...graph,
+      nodes: Array.from(mergedNodes.values()),
+      edges: Array.from(mergedEdges.values())
+    };
+  };
+
+  const applyInvalidFlags = (graph: UmlGraph, failedFiles?: string[]): UmlGraph => {
+    const failedSet = new Set(failedFiles ?? []);
+    return {
+      ...graph,
+      nodes: graph.nodes.map((node) => ({
+        ...node,
+        isInvalid: failedSet.has(node.path)
+      }))
+    };
+  };
 
   const refreshTree = async (root: string) => {
     const result = await invoke<FileNode>("list_project_tree", { root });
@@ -129,6 +179,7 @@ export default function App() {
       await refreshTree(dir);
       setProjectPath(dir);
       setUmlGraph(null);
+      lastGoodGraph.current = null;
       setDiagramState(null);
       setDiagramPath(null);
       setOpenFile(null);
@@ -145,6 +196,7 @@ export default function App() {
   useEffect(() => {
     if (!projectPath || !tree) {
       setUmlGraph(null);
+      lastGoodGraph.current = null;
       setDiagramState(null);
       setDiagramPath(null);
       return;
@@ -167,14 +219,26 @@ export default function App() {
       try {
         const graph = await parseUmlGraph(projectPath, "src", overrides);
         if (currentSeq === parseSeq.current) {
-          setUmlGraph(graph);
-          setUmlStatus(null);
+          const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraph.current);
+          const nextGraph = applyInvalidFlags(mergedGraph, graph.failedFiles);
+          lastGoodGraph.current = nextGraph;
+          setUmlGraph(nextGraph);
+          if (graph.failedFiles && graph.failedFiles.length > 0) {
+            const count = graph.failedFiles.length;
+            setUmlStatus(`UML parse incomplete (${count} file${count === 1 ? "" : "s"}).`);
+          } else {
+            setUmlStatus(null);
+          }
         }
       } catch (error) {
         if (currentSeq === parseSeq.current) {
           setUmlStatus(`UML parse failed: ${trimStatus(formatStatus(error))}`);
-          const fallback = buildMockGraph(tree, projectPath);
-          setUmlGraph(fallback);
+          if (lastGoodGraph.current) {
+            setUmlGraph(lastGoodGraph.current);
+          } else {
+            const fallback = buildMockGraph(tree, projectPath);
+            setUmlGraph(fallback);
+          }
         }
       }
     }, 500);
@@ -244,6 +308,30 @@ export default function App() {
     }
   };
 
+  const handleSaveAs = async () => {
+    const selection = await save({
+      title: "Save Java File As",
+      defaultPath: openFile?.path
+    });
+    if (!selection || typeof selection !== "string") {
+      setStatus("Save As cancelled.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await invoke("write_text_file", { path: selection, contents: content });
+      const name = basename(selection);
+      setOpenFile({ name, path: selection });
+      setLastSavedContent(content);
+      setStatus(`Saved ${name}`);
+    } catch (error) {
+      setStatus(`Failed to save file: ${formatStatus(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleNodePositionChange = (id: string, x: number, y: number, commit: boolean) => {
     setDiagramState((prev) => {
       if (!prev) return prev;
@@ -273,24 +361,42 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3">
-        <div>
-          <div className="text-lg font-semibold text-foreground">Unimozer Next</div>
-          <div className="text-xs text-muted-foreground">Milestone 3: JavaParser UML</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button type="button" onClick={handleOpenProject} disabled={busy}>
-            Open Project
-          </Button>
-          <Button
-            type="button"
-            onClick={handleSave}
-            variant="secondary"
-            disabled={!dirty || busy}
-          >
-            Save
-          </Button>
-        </div>
+      <header className="flex items-center border-b border-border bg-card px-4 py-2">
+        <Menubar className="border-0 bg-transparent p-0 shadow-none">
+          <MenubarMenu>
+            <MenubarTrigger>File</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={handleOpenProject} disabled={busy}>
+                Open
+              </MenubarItem>
+              <MenubarItem onClick={handleSave} disabled={!dirty || busy || !openFile}>
+                Save
+              </MenubarItem>
+              <MenubarItem onClick={handleSaveAs} disabled={busy}>
+                Save As
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>Edit</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem disabled>Undo</MenubarItem>
+              <MenubarItem disabled>Redo</MenubarItem>
+              <MenubarSeparator />
+              <MenubarItem disabled>Cut</MenubarItem>
+              <MenubarItem disabled>Copy</MenubarItem>
+              <MenubarItem disabled>Paste</MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>View</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem disabled>Zoom In</MenubarItem>
+              <MenubarItem disabled>Zoom Out</MenubarItem>
+              <MenubarItem disabled>Reset Zoom</MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+        </Menubar>
       </header>
 
       <div className="flex flex-1 overflow-hidden">

@@ -25,13 +25,38 @@ struct FileNode {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UmlField {
+  signature: String,
+  #[serde(default)]
+  is_static: bool,
+  #[serde(default)]
+  visibility: String
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UmlMethod {
+  signature: String,
+  #[serde(default)]
+  is_abstract: bool,
+  #[serde(default)]
+  is_static: bool,
+  #[serde(default)]
+  visibility: String
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct UmlNode {
   id: String,
   name: String,
   kind: String,
   path: String,
-  fields: Vec<String>,
-  methods: Vec<String>
+  #[serde(default)]
+  is_abstract: bool,
+  fields: Vec<UmlField>,
+  methods: Vec<UmlMethod>
 }
 
 #[derive(Serialize, Deserialize)]
@@ -43,9 +68,12 @@ struct UmlEdge {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct UmlGraph {
   nodes: Vec<UmlNode>,
-  edges: Vec<UmlEdge>
+  edges: Vec<UmlEdge>,
+  #[serde(default)]
+  failed_files: Vec<String>
 }
 
 #[derive(Serialize, Deserialize)]

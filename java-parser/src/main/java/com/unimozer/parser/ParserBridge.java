@@ -60,6 +60,7 @@ public class ParserBridge {
   static class Graph {
     public List<Node> nodes = new ArrayList<>();
     public List<Edge> edges = new ArrayList<>();
+    public List<String> failedFiles = new ArrayList<>();
   }
 
   static class Node {
@@ -67,8 +68,22 @@ public class ParserBridge {
     public String name;
     public String kind;
     public String path;
-    public List<String> fields = new ArrayList<>();
-    public List<String> methods = new ArrayList<>();
+    public boolean isAbstract;
+    public List<FieldInfo> fields = new ArrayList<>();
+    public List<MethodInfo> methods = new ArrayList<>();
+  }
+
+  static class FieldInfo {
+    public String signature;
+    public boolean isStatic;
+    public String visibility;
+  }
+
+  static class MethodInfo {
+    public String signature;
+    public boolean isAbstract;
+    public boolean isStatic;
+    public String visibility;
   }
 
   static class Edge {
@@ -121,9 +136,10 @@ public class ParserBridge {
       .collect(Collectors.toList());
 
     List<ParsedType> parsedTypes = new ArrayList<>();
+    List<String> failedFiles = new ArrayList<>();
 
     for (Path file : javaFiles) {
-      CompilationUnit cu = parseCompilationUnit(parser, file, overrideMap);
+      CompilationUnit cu = parseCompilationUnit(parser, file, overrideMap, failedFiles);
       if (cu == null) continue;
 
       Context ctx = buildContext(cu);
@@ -141,6 +157,7 @@ public class ParserBridge {
     }
 
     Graph graph = buildGraph(parsedTypes);
+    graph.failedFiles = failedFiles;
     mapper.writeValue(System.out, graph);
   }
 
@@ -159,7 +176,12 @@ public class ParserBridge {
     return Paths.get(input).toAbsolutePath().normalize();
   }
 
-  static CompilationUnit parseCompilationUnit(JavaParser parser, Path file, Map<Path, String> overrides) {
+  static CompilationUnit parseCompilationUnit(
+    JavaParser parser,
+    Path file,
+    Map<Path, String> overrides,
+    List<String> failedFiles
+  ) {
     try {
       Path normalized = file.toAbsolutePath().normalize();
       if (overrides.containsKey(normalized)) {
@@ -167,11 +189,20 @@ public class ParserBridge {
           ParseStart.COMPILATION_UNIT,
           Providers.provider(overrides.get(normalized))
         );
+        if (!result.isSuccessful() || result.getResult().isEmpty()) {
+          failedFiles.add(file.toString());
+          return null;
+        }
         return result.getResult().orElse(null);
       }
       ParseResult<CompilationUnit> result = parser.parse(file);
+      if (!result.isSuccessful() || result.getResult().isEmpty()) {
+        failedFiles.add(file.toString());
+        return null;
+      }
       return result.getResult().orElse(null);
     } catch (IOException ex) {
+      failedFiles.add(file.toString());
       return null;
     }
   }
@@ -202,8 +233,9 @@ public class ParserBridge {
     node.name = name;
     node.kind = inferKind(typeDecl);
     node.path = file.toString();
-    node.fields = collectFieldStrings(typeDecl);
-    node.methods = collectMethodStrings(typeDecl, name);
+    node.isAbstract = isAbstractType(typeDecl);
+    node.fields = collectFieldInfo(typeDecl);
+    node.methods = collectMethodInfo(typeDecl, name);
 
     return node;
   }
@@ -218,38 +250,71 @@ public class ParserBridge {
     return "class";
   }
 
-  static List<String> collectFieldStrings(TypeDeclaration<?> typeDecl) {
-    List<String> fields = new ArrayList<>();
+  static boolean isAbstractType(TypeDeclaration<?> typeDecl) {
+    if (typeDecl.isClassOrInterfaceDeclaration()) {
+      ClassOrInterfaceDeclaration decl = typeDecl.asClassOrInterfaceDeclaration();
+      return decl.isInterface() || decl.isAbstract();
+    }
+    return false;
+  }
+
+  static List<FieldInfo> collectFieldInfo(TypeDeclaration<?> typeDecl) {
+    List<FieldInfo> fields = new ArrayList<>();
     for (FieldDeclaration field : typeDecl.getFields()) {
-      String visibility = visibilitySymbol(field);
       String typeName = field.getElementType().asString();
+      boolean isStatic = field.isStatic();
+      String visibility = visibilitySymbol(field);
       for (VariableDeclarator variable : field.getVariables()) {
-        fields.add(visibility + " " + variable.getNameAsString() + ": " + typeName);
+        FieldInfo info = new FieldInfo();
+        info.signature = variable.getNameAsString() + ": " + typeName;
+        info.isStatic = isStatic;
+        info.visibility = visibility;
+        fields.add(info);
       }
     }
     return fields;
   }
 
-  static List<String> collectMethodStrings(TypeDeclaration<?> typeDecl, String className) {
-    List<String> methods = new ArrayList<>();
+  static List<MethodInfo> collectMethodInfo(TypeDeclaration<?> typeDecl, String className) {
+    List<MethodInfo> methods = new ArrayList<>();
     for (MethodDeclaration method : typeDecl.getMethods()) {
-      String visibility = visibilitySymbol(method);
       String params = method.getParameters().stream()
         .map(param -> param.getType().asString())
         .collect(Collectors.joining(", "));
       String returnType = method.getType().isVoidType()
         ? "void"
         : method.getType().asString();
-      methods.add(visibility + " " + method.getNameAsString() + "(" + params + "): " + returnType);
+      boolean isAbstract = method.isAbstract() || isInterfaceAbstract(typeDecl, method);
+      boolean isStatic = method.isStatic();
+      String visibility = visibilitySymbol(method);
+      String signature = method.getNameAsString() + "(" + params + "): " + returnType;
+      MethodInfo info = new MethodInfo();
+      info.signature = signature;
+      info.isAbstract = isAbstract;
+      info.isStatic = isStatic;
+      info.visibility = visibility;
+      methods.add(info);
     }
     for (ConstructorDeclaration ctor : typeDecl.getConstructors()) {
-      String visibility = visibilitySymbol(ctor);
       String params = ctor.getParameters().stream()
         .map(param -> param.getType().asString())
         .collect(Collectors.joining(", "));
-      methods.add(visibility + " " + className + "(" + params + ")");
+      String visibility = visibilitySymbol(ctor);
+      MethodInfo info = new MethodInfo();
+      info.signature = className + "(" + params + ")";
+      info.isAbstract = false;
+      info.isStatic = false;
+      info.visibility = visibility;
+      methods.add(info);
     }
     return methods;
+  }
+
+  static boolean isInterfaceAbstract(TypeDeclaration<?> typeDecl, MethodDeclaration method) {
+    if (!typeDecl.isClassOrInterfaceDeclaration()) return false;
+    ClassOrInterfaceDeclaration decl = typeDecl.asClassOrInterfaceDeclaration();
+    if (!decl.isInterface()) return false;
+    return !method.isDefault() && !method.isStatic();
   }
 
   static String visibilitySymbol(NodeWithModifiers<?> node) {

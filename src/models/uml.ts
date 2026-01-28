@@ -6,13 +6,28 @@ export type UmlEdgeKind =
   | "dependency"
   | "reflexive-association";
 
+export type UmlMethod = {
+  signature: string;
+  isAbstract?: boolean;
+  isStatic?: boolean;
+  visibility?: string;
+};
+
+export type UmlField = {
+  signature: string;
+  isStatic?: boolean;
+  visibility?: string;
+};
+
 export type UmlNode = {
   id: string;
   name: string;
   kind: UmlNodeKind;
   path: string;
-  fields: string[];
-  methods: string[];
+  isAbstract?: boolean;
+  isInvalid?: boolean;
+  fields: UmlField[];
+  methods: UmlMethod[];
 };
 
 export type UmlEdge = {
@@ -25,4 +40,5 @@ export type UmlEdge = {
 export type UmlGraph = {
   nodes: UmlNode[];
   edges: UmlEdge[];
+  failedFiles?: string[];
 };

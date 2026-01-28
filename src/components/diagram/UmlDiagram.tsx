@@ -56,13 +56,25 @@ const computeNodeWidth = (node: UmlNode, diagram: DiagramState) => {
   const fieldWidth = diagram.showFields
     ? Math.max(
         0,
-        ...node.fields.map((field) => measureTextWidth(field, `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`))
+        ...node.fields.map((field) => {
+          const visibility = field.visibility ? `${field.visibility} ` : "";
+          return measureTextWidth(
+            `${visibility}${field.signature}`,
+            `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`
+          );
+        })
       )
     : 0;
   const methodWidth = diagram.showMethods
     ? Math.max(
         0,
-        ...node.methods.map((method) => measureTextWidth(method, `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`))
+        ...node.methods.map((method) => {
+          const visibility = method.visibility ? `${method.visibility} ` : "";
+          return measureTextWidth(
+            `${visibility}${method.signature}`,
+            `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`
+          );
+        })
       )
     : 0;
 
@@ -196,6 +208,29 @@ export const UmlDiagram = ({
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+  const [fontReady, setFontReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ensureFont = async () => {
+      if (typeof document === "undefined" || !document.fonts) {
+        if (!cancelled) setFontReady(true);
+        return;
+      }
+      try {
+        await document.fonts.load(`400 ${UML_FONT_SIZE}px "JetBrains Mono"`);
+        await document.fonts.load(`600 ${UML_FONT_SIZE}px "JetBrains Mono"`);
+        await document.fonts.ready;
+      } catch {
+        // If font loading fails, we still want a layout pass.
+      }
+      if (!cancelled) setFontReady(true);
+    };
+    void ensureFont();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
@@ -259,11 +294,11 @@ export const UmlDiagram = ({
           ...node,
           x: position.x,
           y: position.y,
-          width: computeNodeWidth(node, diagram),
+          width: fontReady ? computeNodeWidth(node, diagram) : NODE_WIDTH,
           height: computeNodeHeight(node, diagram)
         };
       }),
-    [diagram, graph.nodes]
+    [diagram, graph.nodes, fontReady]
   );
 
   const nodeMap = useMemo(() => {
