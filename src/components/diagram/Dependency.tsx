@@ -2,7 +2,7 @@ export type EdgePathProps = {
   d: string;
 };
 
-export const Aggregation = ({ d }: EdgePathProps) => (
+export const Dependency = ({ d }: EdgePathProps) => (
   <path
     d={d}
     fill="none"
@@ -11,7 +11,6 @@ export const Aggregation = ({ d }: EdgePathProps) => (
     strokeDasharray="6 3"
     strokeLinejoin="round"
     strokeLinecap="round"
-    markerStart="url(#edge-diamond-open)"
     markerEnd="url(#edge-arrow)"
   />
 );

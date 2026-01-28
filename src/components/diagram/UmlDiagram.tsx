@@ -2,19 +2,23 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { DiagramState } from "../../models/diagram";
 import type { UmlGraph, UmlNode } from "../../models/uml";
-import { Aggregation } from "./Aggregation";
+import { Association } from "./Association";
 import { Class } from "./Class";
-import { Composition } from "./Composition";
+import { Dependency } from "./Dependency";
 import { Implementation } from "./Implementation";
 import { Inheritance } from "./Inheritance";
-import { ReflexiveComposition } from "./ReflexiveComposition";
+import { ReflexiveAssociation } from "./ReflexiveAssociation";
 import {
   HEADER_HEIGHT,
   NODE_WIDTH,
   ROW_HEIGHT,
   SECTION_PADDING,
   TEXT_PADDING,
-  UML_FONT_SIZE
+  UML_FONT_SIZE,
+  EDGE_CORNER_GUTTER,
+  EDGE_RADIUS,
+  REFLEXIVE_LOOP_INSET,
+  EDGE_SNAP_DELTA
 } from "./constants";
 
 const computeNodeHeight = (node: UmlNode, diagram: DiagramState) => {
@@ -83,8 +87,8 @@ const getSvgPoint = (
 };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-
-const EDGE_CORNER_GUTTER = 40;
+const getEdgeGutter = (rect: { width: number; height: number }) =>
+  Math.max(0, Math.min(rect.width / 2 - 2, rect.height / 2 - 2, EDGE_CORNER_GUTTER));
 
 const getRectEdgeAnchor = (
   rect: { x: number; y: number; width: number; height: number },
@@ -98,10 +102,7 @@ const getRectEdgeAnchor = (
     return { x: cx, y: cy, normal: { x: 0, y: 0 } };
   }
 
-  const maxGutter = Math.max(
-    0,
-    Math.min(rect.width / 2 - 2, rect.height / 2 - 2, EDGE_CORNER_GUTTER)
-  );
+  const maxGutter = getEdgeGutter(rect);
   const preferHorizontal = Math.abs(dx) >= Math.abs(dy);
   if (preferHorizontal && dx !== 0) {
     const sideX = dx > 0 ? rect.x + rect.width : rect.x;
@@ -130,9 +131,8 @@ const buildOrthogonalPath = (
   startNormal: { x: number; y: number },
   endNormal: { x: number; y: number }
 ) => {
-  const stub = 1;
-  const s1 = { x: start.x + startNormal.x * stub, y: start.y + startNormal.y * stub };
-  const s2 = { x: end.x + endNormal.x * stub, y: end.y + endNormal.y * stub };
+  const s1 = { x: start.x + startNormal.x, y: start.y + startNormal.y };
+  const s2 = { x: end.x + endNormal.x, y: end.y + endNormal.y };
   const dx = s2.x - s1.x;
   const dy = s2.y - s1.y;
 
@@ -140,7 +140,7 @@ const buildOrthogonalPath = (
     return `M ${start.x} ${start.y} L ${s1.x} ${s1.y} L ${s2.x} ${s2.y} L ${end.x} ${end.y}`;
   }
 
-  const radius = 6;
+  const radius = EDGE_RADIUS;
   const r = Math.min(radius, Math.abs(dx) / 2, Math.abs(dy) / 2);
   const sx = Math.sign(dx) || 1;
   const sy = Math.sign(dy) || 1;
@@ -341,60 +341,66 @@ export const UmlDiagram = ({
             strokeWidth={1.8}
           />
         </marker>
-        <marker
-          id="edge-diamond-open"
-          viewBox="0 0 30 12"
-          refX="24"
-          refY="6"
-          markerWidth="24"
-          markerHeight="12"
-          orient="auto-start-reverse"
-        >
-          <path
-            d="M 0 6 L 10 0 L 20 6 L 10 12 z"
-            fill="white"
-            stroke="hsl(var(--foreground) / 0.45)"
-            strokeWidth={1.4}
-          />
-        </marker>
-        <marker
-          id="edge-diamond-filled"
-          viewBox="0 0 30 12"
-          refX="24"
-          refY="6"
-          markerWidth="24"
-          markerHeight="12"
-          orient="auto-start-reverse"
-        >
-          <path
-            d="M 0 6 L 10 0 L 20 6 L 10 12 z"
-            fill="hsl(var(--foreground) / 1)"
-            stroke="hsl(var(--foreground) / 0.45)"
-            strokeWidth={1.2}
-          />
-        </marker>
       </defs>
 
       <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`} pointerEvents="none">
         {graph.edges
-          .filter((edge) => edge.kind !== "reflexive-composition")
+          .filter((edge) => edge.kind !== "reflexive-association")
           .map((edge) => {
           const from = nodeMap.get(edge.from);
           const to = nodeMap.get(edge.to);
           if (!from || !to) return null;
           const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
           const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
-          const start = getRectEdgeAnchor(from, toCenter);
-          const end = getRectEdgeAnchor(to, fromCenter);
+          const dx = toCenter.x - fromCenter.x;
+          const dy = toCenter.y - fromCenter.y;
+          const absDx = Math.abs(dx);
+          const absDy = Math.abs(dy);
+          const snapHorizontal = absDy <= EDGE_SNAP_DELTA && absDy <= absDx;
+          const snapVertical = !snapHorizontal && absDx <= EDGE_SNAP_DELTA;
+          let start = getRectEdgeAnchor(from, toCenter);
+          let end = getRectEdgeAnchor(to, fromCenter);
+
+          if (snapHorizontal) {
+            const fromGutter = getEdgeGutter(from);
+            const toGutter = getEdgeGutter(to);
+            const yMin = Math.max(from.y + fromGutter, to.y + toGutter);
+            const yMax = Math.min(
+              from.y + from.height - fromGutter,
+              to.y + to.height - toGutter
+            );
+            if (yMin <= yMax) {
+              const y = clamp((fromCenter.y + toCenter.y) / 2, yMin, yMax);
+              const startX = dx >= 0 ? from.x + from.width : from.x;
+              const endX = dx >= 0 ? to.x : to.x + to.width;
+              start = { x: startX, y, normal: { x: dx >= 0 ? 1 : -1, y: 0 } };
+              end = { x: endX, y, normal: { x: dx >= 0 ? -1 : 1, y: 0 } };
+            }
+          } else if (snapVertical) {
+            const fromGutter = getEdgeGutter(from);
+            const toGutter = getEdgeGutter(to);
+            const xMin = Math.max(from.x + fromGutter, to.x + toGutter);
+            const xMax = Math.min(
+              from.x + from.width - fromGutter,
+              to.x + to.width - toGutter
+            );
+            if (xMin <= xMax) {
+              const x = clamp((fromCenter.x + toCenter.x) / 2, xMin, xMax);
+              const startY = dy >= 0 ? from.y + from.height : from.y;
+              const endY = dy >= 0 ? to.y : to.y + to.height;
+              start = { x, y: startY, normal: { x: 0, y: dy >= 0 ? 1 : -1 } };
+              end = { x, y: endY, normal: { x: 0, y: dy >= 0 ? -1 : 1 } };
+            }
+          }
           const path =
             edge.kind === "extends"
               ? `M ${start.x} ${start.y} L ${end.x} ${end.y}`
               : buildOrthogonalPath(start, end, start.normal, end.normal);
-          if (edge.kind === "composition") {
-            return <Composition key={edge.id} d={path} />;
+          if (edge.kind === "association") {
+            return <Association key={edge.id} d={path} />;
           }
-          if (edge.kind === "aggregation") {
-            return <Aggregation key={edge.id} d={path} />;
+          if (edge.kind === "dependency") {
+            return <Dependency key={edge.id} d={path} />;
           }
           if (edge.kind === "extends") {
             return <Inheritance key={edge.id} d={path} />;
@@ -441,11 +447,11 @@ export const UmlDiagram = ({
         ))}
 
         {graph.edges
-          .filter((edge) => edge.kind === "reflexive-composition")
+          .filter((edge) => edge.kind === "reflexive-association")
           .map((edge) => {
             const from = nodeMap.get(edge.from);
             if (!from) return null;
-            const loopInset = 40;
+            const loopInset = REFLEXIVE_LOOP_INSET;
             const startX = from.x + from.width / 2;
             const startY = from.y;
             const cornerX = from.x + from.width + loopInset;
@@ -453,7 +459,7 @@ export const UmlDiagram = ({
             const endX = from.x + from.width;
             const endY = from.y + from.height / 2;
             const d = `M ${startX} ${startY} L ${startX} ${cornerY} L ${cornerX} ${cornerY} L ${cornerX} ${endY} L ${endX} ${endY}`;
-            return <ReflexiveComposition key={edge.id} d={d} />;
+            return <ReflexiveAssociation key={edge.id} d={d} />;
           })}
       </g>
     </svg>

@@ -1,17 +1,16 @@
-export type EdgePathProps = {
+export type ReflexiveAssociationProps = {
   d: string;
 };
 
-export const Composition = ({ d }: EdgePathProps) => (
+export const ReflexiveAssociation = ({ d }: ReflexiveAssociationProps) => (
   <path
     d={d}
     fill="none"
     stroke="hsl(var(--foreground) / 0.35)"
     strokeWidth={1}
-    strokeDasharray="6 3"
+    strokeDasharray="0"
     strokeLinejoin="round"
     strokeLinecap="round"
-    markerStart="url(#edge-diamond-filled)"
     markerEnd="url(#edge-arrow)"
   />
 );

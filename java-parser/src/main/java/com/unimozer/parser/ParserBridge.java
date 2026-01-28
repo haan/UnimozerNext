@@ -17,6 +17,12 @@ import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.RecordDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.CastExpr;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.InstanceOfExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithModifiers;
@@ -83,8 +89,8 @@ public class ParserBridge {
     public Context ctx;
     public List<String> extendsTypes = new ArrayList<>();
     public List<String> implementsTypes = new ArrayList<>();
-    public List<String> aggregationTypes = new ArrayList<>();
-    public List<String> compositionTypes = new ArrayList<>();
+    public List<String> dependencyTypes = new ArrayList<>();
+    public List<String> associationTypes = new ArrayList<>();
   }
 
   public static void main(String[] args) throws Exception {
@@ -128,8 +134,8 @@ public class ParserBridge {
         parsedType.ctx = ctx;
         parsedType.extendsTypes = collectExtendsTypes(typeDecl);
         parsedType.implementsTypes = collectImplementsTypes(typeDecl);
-        parsedType.compositionTypes = collectCompositionTypes(typeDecl);
-        parsedType.aggregationTypes = collectAggregationTypes(typeDecl);
+        parsedType.associationTypes = collectAssociationTypes(typeDecl);
+        parsedType.dependencyTypes = collectDependencyTypes(typeDecl);
         parsedTypes.add(parsedType);
       }
     }
@@ -275,7 +281,7 @@ public class ParserBridge {
     return names;
   }
 
-  static List<String> collectCompositionTypes(TypeDeclaration<?> typeDecl) {
+  static List<String> collectAssociationTypes(TypeDeclaration<?> typeDecl) {
     List<String> names = new ArrayList<>();
     for (FieldDeclaration field : typeDecl.getFields()) {
       for (VariableDeclarator variable : field.getVariables()) {
@@ -285,13 +291,14 @@ public class ParserBridge {
     return names;
   }
 
-  static List<String> collectAggregationTypes(TypeDeclaration<?> typeDecl) {
+  static List<String> collectDependencyTypes(TypeDeclaration<?> typeDecl) {
     List<String> names = new ArrayList<>();
 
     for (MethodDeclaration method : typeDecl.getMethods()) {
       for (var param : method.getParameters()) {
         collectTypeNames(param.getType(), names);
       }
+      collectTypeNames(method.getType(), names);
       for (Type thrown : method.getThrownExceptions()) {
         collectTypeNames(thrown, names);
       }
@@ -310,12 +317,50 @@ public class ParserBridge {
       collectTypeNames(created.getType(), names);
     }
 
+    for (VariableDeclarator variable : typeDecl.findAll(VariableDeclarator.class)) {
+      if (isFieldVariable(variable)) {
+        continue;
+      }
+      collectTypeNames(variable.getType(), names);
+    }
+
     for (FieldAccessExpr fieldAccess : typeDecl.findAll(FieldAccessExpr.class)) {
       String scope = fieldAccess.getScope().toString();
       if (scope.isBlank() || !Character.isUpperCase(scope.charAt(0))) {
         continue;
       }
       names.add(scope);
+    }
+
+    for (MethodCallExpr call : typeDecl.findAll(MethodCallExpr.class)) {
+      if (call.getScope().isEmpty()) continue;
+      var scope = call.getScope().get();
+      if (scope.isNameExpr()) {
+        String name = scope.asNameExpr().getNameAsString();
+        if (!name.isBlank() && Character.isUpperCase(name.charAt(0))) {
+          names.add(name);
+        }
+      } else if (scope.isFieldAccessExpr()) {
+        String name = scope.asFieldAccessExpr().toString();
+        if (!name.isBlank() && Character.isUpperCase(name.charAt(0))) {
+          names.add(name);
+        }
+      }
+    }
+
+    for (AnnotationExpr annotation : typeDecl.findAll(AnnotationExpr.class)) {
+      String name = annotation.getNameAsString();
+      if (!name.isBlank()) {
+        names.add(name);
+      }
+    }
+
+    for (CastExpr castExpr : typeDecl.findAll(CastExpr.class)) {
+      collectTypeNames(castExpr.getType(), names);
+    }
+
+    for (InstanceOfExpr instanceOfExpr : typeDecl.findAll(InstanceOfExpr.class)) {
+      collectTypeNames(instanceOfExpr.getType(), names);
     }
 
     return names;
@@ -354,6 +399,18 @@ public class ParserBridge {
     }
   }
 
+  static boolean isFieldVariable(VariableDeclarator variable) {
+    var parent = variable.getParentNode();
+    while (parent.isPresent()) {
+      var node = parent.get();
+      if (node instanceof FieldDeclaration) {
+        return true;
+      }
+      parent = node.getParentNode();
+    }
+    return false;
+  }
+
   static Graph buildGraph(List<ParsedType> parsedTypes) {
     Graph graph = new Graph();
     Map<String, Node> byId = new HashMap<>();
@@ -381,21 +438,21 @@ public class ParserBridge {
         addEdge(graph, edgeIds, from, resolved, "implements");
       }
 
-      Set<String> compositionTargets = new HashSet<>();
-      for (String name : parsed.compositionTypes) {
+      Set<String> associationTargets = new HashSet<>();
+      for (String name : parsed.associationTypes) {
         String resolved = resolveType(name, parsed.ctx, byId, bySimple);
         if (resolved != null) {
-          compositionTargets.add(resolved);
-          addEdge(graph, edgeIds, from, resolved, "composition");
+          associationTargets.add(resolved);
+          addEdge(graph, edgeIds, from, resolved, "association");
         }
       }
 
-      for (String name : parsed.aggregationTypes) {
+      for (String name : parsed.dependencyTypes) {
         String resolved = resolveType(name, parsed.ctx, byId, bySimple);
-        if (resolved == null || compositionTargets.contains(resolved)) {
+        if (resolved == null || associationTargets.contains(resolved)) {
           continue;
         }
-        addEdge(graph, edgeIds, from, resolved, "aggregation");
+        addEdge(graph, edgeIds, from, resolved, "dependency");
       }
     }
 
@@ -449,10 +506,10 @@ public class ParserBridge {
     if (from == null || to == null) return;
     String actualKind = kind;
     if (from.equals(to)) {
-      if (!"composition".equals(kind)) {
+      if (!"association".equals(kind)) {
         return;
       }
-      actualKind = "reflexive-composition";
+      actualKind = "reflexive-association";
     }
     String id = from + ":" + actualKind + ":" + to;
     if (edgeIds.contains(id)) return;

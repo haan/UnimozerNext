@@ -3,9 +3,8 @@ export type UmlEdgeKind =
   | "extends"
   | "implements"
   | "association"
-  | "aggregation"
-  | "composition"
-  | "reflexive-composition";
+  | "dependency"
+  | "reflexive-association";
 
 export type UmlNode = {
   id: string;
