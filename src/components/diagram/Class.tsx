@@ -25,7 +25,7 @@ export const Class = ({ node, diagram, onHeaderPointerDown }: ClassProps) => {
   const fillColor = node.isInvalid ? "var(--uml-class-invalid-bg)" : "var(--uml-class-bg)";
   const content: React.ReactNode[] = [];
 
-  if (fields.length > 0) {
+  if (diagram.showFields) {
     content.push(
       <line
         key={`${node.id}-fields-separator`}
@@ -53,8 +53,8 @@ export const Class = ({ node, diagram, onHeaderPointerDown }: ClassProps) => {
     cursorY += SECTION_PADDING;
   }
 
-  if (methods.length > 0) {
-    const lineY = fields.length > 0 ? cursorY : HEADER_HEIGHT;
+  if (diagram.showMethods) {
+    const lineY = diagram.showFields ? cursorY : HEADER_HEIGHT;
     content.push(
       <line
         key={`${node.id}-methods-separator`}

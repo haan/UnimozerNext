@@ -1,26 +1,37 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DiagramPanel } from "./components/diagram/DiagramPanel";
 import { CodePanel } from "./components/editor/CodePanel";
+import { SettingsDialog } from "./components/settings/SettingsDialog";
 import {
   Menubar,
   MenubarContent,
   MenubarItem,
   MenubarMenu,
   MenubarSeparator,
+  MenubarShortcut,
   MenubarTrigger
 } from "./components/ui/menubar";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
 import type { UmlGraph } from "./models/uml";
+import type { AppSettings } from "./models/settings";
 import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "./services/diagram";
+import { createDefaultSettings } from "./models/settings";
 import { buildMockGraph, parseUmlGraph } from "./services/uml";
+import { readSettings, writeSettings } from "./services/settings";
 
 type OpenFile = {
   name: string;
   path: string;
+};
+
+type FileDraft = {
+  content: string;
+  lastSavedContent: string;
 };
 
 const basename = (path: string) => {
@@ -40,6 +51,16 @@ const joinPath = (root: string, file: string) => {
   return `${root.replace(/[\\/]+$/, "")}${separator}${file}`;
 };
 
+const toRelativePath = (fullPath: string, rootPath: string) => {
+  const normalizedRoot = rootPath.replace(/[\\/]+$/, "").toLowerCase();
+  const normalizedFull = fullPath.toLowerCase();
+  if (normalizedFull.startsWith(normalizedRoot)) {
+    const sliced = fullPath.slice(normalizedRoot.length).replace(/^[\\/]/, "");
+    return sliced.length ? sliced : fullPath;
+  }
+  return fullPath;
+};
+
 export default function App() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [tree, setTree] = useState<FileNode | null>(null);
@@ -47,10 +68,13 @@ export default function App() {
   const [diagramState, setDiagramState] = useState<DiagramState | null>(null);
   const [diagramPath, setDiagramPath] = useState<string | null>(null);
   const [openFile, setOpenFile] = useState<OpenFile | null>(null);
+  const [fileDrafts, setFileDrafts] = useState<Record<string, FileDraft>>({});
   const [content, setContent] = useState("");
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [status, setStatus] = useState("Open a Java project to begin.");
   const [busy, setBusy] = useState(false);
+  const [settings, setSettings] = useState<AppSettings>(createDefaultSettings());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [umlStatus, setUmlStatus] = useState<string | null>(null);
   const parseSeq = useRef(0);
   const lastGoodGraph = useRef<UmlGraph | null>(null);
@@ -58,11 +82,76 @@ export default function App() {
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [isResizing, setIsResizing] = useState(false);
   const openFilePath = openFile?.path ?? null;
+  const defaultTitle = "Unimozer Next";
 
   const dirty = useMemo(() => {
     if (!openFile) return false;
     return content !== lastSavedContent;
   }, [content, lastSavedContent, openFile]);
+
+  const hasUnsavedChanges = useMemo(
+    () => Object.values(fileDrafts).some((draft) => draft.content !== draft.lastSavedContent),
+    [fileDrafts]
+  );
+
+  const projectName = useMemo(
+    () => (projectPath ? basename(projectPath) : ""),
+    [projectPath]
+  );
+
+  const updateDraftForPath = useCallback(
+    (path: string, nextContent: string, savedOverride?: string) => {
+      setFileDrafts((prev) => {
+        const existing = prev[path];
+        const lastSaved = savedOverride ?? existing?.lastSavedContent ?? nextContent;
+        if (existing && existing.content === nextContent && existing.lastSavedContent === lastSaved) {
+          return prev;
+        }
+        return {
+          ...prev,
+          [path]: {
+            content: nextContent,
+            lastSavedContent: lastSaved
+          }
+        };
+      });
+    },
+    []
+  );
+
+  const visibleGraph = useMemo(() => {
+    if (!umlGraph) return null;
+    if (settings.uml.showDependencies) return umlGraph;
+    return {
+      ...umlGraph,
+      edges: umlGraph.edges.filter((edge) => edge.kind !== "dependency")
+    };
+  }, [umlGraph, settings.uml.showDependencies]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadSettings = async () => {
+      try {
+        const stored = await readSettings();
+        if (!cancelled) {
+          setSettings(stored);
+        }
+      } catch {
+        if (!cancelled) {
+          setSettings(createDefaultSettings());
+        }
+      }
+    };
+    void loadSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSettingsChange = (next: AppSettings) => {
+    setSettings(next);
+    void writeSettings(next);
+  };
 
   const mergeWithLastGoodGraph = (graph: UmlGraph, previous: UmlGraph | null): UmlGraph => {
     const failedFiles = graph.failedFiles ?? [];
@@ -106,13 +195,20 @@ export default function App() {
     };
   };
 
-  const refreshTree = async (root: string) => {
+  const refreshTree = useCallback(async (root: string) => {
     const result = await invoke<FileNode>("list_project_tree", { root });
     setTree(result);
+  }, []);
+
+  const handleContentChange = (value: string) => {
+    setContent(value);
+    if (openFilePath) {
+      updateDraftForPath(openFilePath, value, lastSavedContent);
+    }
   };
 
   const loadDiagramState = async (root: string, graph: UmlGraph) => {
-    const diagramFile = joinPath(root, "diagram.json");
+    const diagramFile = joinPath(root, "unimozer.json");
     let baseState: DiagramState | null = null;
     let loadedFromDisk = false;
 
@@ -160,7 +256,7 @@ export default function App() {
     }
   };
 
-  const handleOpenProject = async () => {
+  const handleOpenProject = useCallback(async () => {
     setStatus("Opening project...");
     const selection = await open({
       directory: true,
@@ -183,6 +279,7 @@ export default function App() {
       setDiagramState(null);
       setDiagramPath(null);
       setOpenFile(null);
+      setFileDrafts({});
       setContent("");
       setLastSavedContent("");
       setStatus(`Project loaded: ${dir}`);
@@ -191,7 +288,7 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  };
+  }, [refreshTree]);
 
   useEffect(() => {
     if (!projectPath || !tree) {
@@ -199,18 +296,18 @@ export default function App() {
       lastGoodGraph.current = null;
       setDiagramState(null);
       setDiagramPath(null);
+      if (Object.keys(fileDrafts).length > 0) {
+        setFileDrafts({});
+      }
       return;
     }
 
-    const overrides =
-      openFilePath
-        ? [
-            {
-              path: openFilePath,
-              content
-            }
-          ]
-        : [];
+    const overrides = Object.entries(fileDrafts)
+      .filter(([, draft]) => draft.content !== draft.lastSavedContent)
+      .map(([path, draft]) => ({
+        path,
+        content: draft.content
+      }));
 
     parseSeq.current += 1;
     const currentSeq = parseSeq.current;
@@ -246,7 +343,13 @@ export default function App() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [projectPath, tree, openFilePath, content]);
+  }, [projectPath, tree, fileDrafts]);
+
+  useEffect(() => {
+    const window = getCurrentWindow();
+    const nextTitle = projectPath ? `${defaultTitle} - ${projectPath}` : defaultTitle;
+    window.setTitle(nextTitle).catch(() => undefined);
+  }, [projectPath]);
 
   useEffect(() => {
     if (!projectPath || !umlGraph) return;
@@ -281,12 +384,21 @@ export default function App() {
   const openFileByPath = async (path: string) => {
     setBusy(true);
     try {
-      const text = await invoke<string>("read_text_file", { path });
+      const existingDraft = fileDrafts[path];
       const name = basename(path);
-      setOpenFile({ name, path });
-      setContent(text);
-      setLastSavedContent(text);
-      setStatus(`Opened ${name}`);
+      if (existingDraft) {
+        setOpenFile({ name, path });
+        setContent(existingDraft.content);
+        setLastSavedContent(existingDraft.lastSavedContent);
+        setStatus(`Opened ${name}`);
+      } else {
+        const text = await invoke<string>("read_text_file", { path });
+        setOpenFile({ name, path });
+        setContent(text);
+        setLastSavedContent(text);
+        updateDraftForPath(path, text, text);
+        setStatus(`Opened ${name}`);
+      }
     } catch (error) {
       setStatus(`Failed to open file: ${formatStatus(error)}`);
     } finally {
@@ -294,43 +406,123 @@ export default function App() {
     }
   };
 
-  const handleSave = async () => {
-    if (!openFile) return;
+  const handleSave = useCallback(async () => {
+    const dirtyDrafts = Object.entries(fileDrafts).filter(
+      ([, draft]) => draft.content !== draft.lastSavedContent
+    );
+    if (dirtyDrafts.length === 0) return;
     setBusy(true);
     try {
-      await invoke("write_text_file", { path: openFile.path, contents: content });
-      setLastSavedContent(content);
-      setStatus(`Saved ${openFile.name}`);
+      for (const [path, draft] of dirtyDrafts) {
+        await invoke("write_text_file", { path, contents: draft.content });
+        updateDraftForPath(path, draft.content, draft.content);
+        if (openFilePath === path) {
+          setLastSavedContent(draft.content);
+        }
+      }
+      setStatus(
+        dirtyDrafts.length === 1 ? "Saved 1 file." : `Saved ${dirtyDrafts.length} files.`
+      );
     } catch (error) {
       setStatus(`Failed to save file: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
-  };
+  }, [fileDrafts, openFilePath, updateDraftForPath]);
 
-  const handleSaveAs = async () => {
+  const handleExportProject = async () => {
+    if (!projectPath) {
+      setStatus("Open a project before exporting.");
+      return;
+    }
     const selection = await save({
-      title: "Save Java File As",
-      defaultPath: openFile?.path
+      title: "Save project as",
+      defaultPath: projectPath
     });
     if (!selection || typeof selection !== "string") {
-      setStatus("Save As cancelled.");
+      setStatus("Export cancelled.");
       return;
     }
 
+    const overrides = Object.entries(fileDrafts)
+      .filter(([, draft]) => draft.content !== draft.lastSavedContent)
+      .map(([path, draft]) => ({
+        path,
+        content: draft.content
+      }));
+
     setBusy(true);
     try {
-      await invoke("write_text_file", { path: selection, contents: content });
-      const name = basename(selection);
-      setOpenFile({ name, path: selection });
-      setLastSavedContent(content);
-      setStatus(`Saved ${name}`);
+      await invoke("export_netbeans_project", {
+        root: projectPath,
+        srcRoot: "src",
+        target: selection,
+        overrides
+      });
+
+      await refreshTree(selection);
+
+      const remappedDrafts: Record<string, FileDraft> = {};
+      for (const [path, draft] of Object.entries(fileDrafts)) {
+        const relative = toRelativePath(path, projectPath);
+        const nextPath = joinPath(selection, relative);
+        remappedDrafts[nextPath] = {
+          content: draft.content,
+          lastSavedContent: draft.content
+        };
+      }
+
+      let nextOpenFile: OpenFile | null = null;
+      let nextContent = "";
+      let nextLastSaved = "";
+      if (openFilePath) {
+        const relative = toRelativePath(openFilePath, projectPath);
+        const nextPath = joinPath(selection, relative);
+        nextOpenFile = { name: basename(nextPath), path: nextPath };
+        const draft = remappedDrafts[nextPath];
+        if (draft) {
+          nextContent = draft.content;
+          nextLastSaved = draft.lastSavedContent;
+        }
+      }
+
+      setProjectPath(selection);
+      setUmlGraph(null);
+      lastGoodGraph.current = null;
+      setDiagramState(null);
+      setDiagramPath(null);
+      setFileDrafts(remappedDrafts);
+      setOpenFile(nextOpenFile);
+      setContent(nextContent);
+      setLastSavedContent(nextLastSaved);
+      setStatus(`Project saved to ${selection}`);
     } catch (error) {
-      setStatus(`Failed to save file: ${formatStatus(error)}`);
+      setStatus(`Export failed: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isSave = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s";
+      const isOpen = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o";
+      if (!isSave && !isOpen) return;
+      event.preventDefault();
+      if (isOpen) {
+        if (!busy) {
+          void handleOpenProject();
+        }
+        return;
+      }
+      if (!hasUnsavedChanges || busy) return;
+      void handleSave();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [hasUnsavedChanges, busy, handleSave, handleOpenProject]);
 
   const handleNodePositionChange = (id: string, x: number, y: number, commit: boolean) => {
     setDiagramState((prev) => {
@@ -361,19 +553,39 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center border-b border-border bg-card px-4 py-2">
+      <header className="relative flex items-center border-b border-border bg-card px-4 py-2">
         <Menubar className="border-0 bg-transparent p-0 shadow-none">
           <MenubarMenu>
             <MenubarTrigger>File</MenubarTrigger>
             <MenubarContent>
               <MenubarItem onClick={handleOpenProject} disabled={busy}>
                 Open
+                <MenubarShortcut>
+                  {navigator.platform.toLowerCase().includes("mac") ? "⌘O" : "Ctrl+O"}
+                </MenubarShortcut>
               </MenubarItem>
-              <MenubarItem onClick={handleSave} disabled={!dirty || busy || !openFile}>
+              <MenubarItem onClick={handleSave} disabled={!hasUnsavedChanges || busy}>
                 Save
+                <MenubarShortcut>
+                  {navigator.platform.toLowerCase().includes("mac") ? "⌘S" : "Ctrl+S"}
+                </MenubarShortcut>
               </MenubarItem>
-              <MenubarItem onClick={handleSaveAs} disabled={busy}>
+              <MenubarItem onClick={handleExportProject} disabled={busy || !projectPath}>
                 Save As
+              </MenubarItem>
+              <MenubarSeparator />
+              <MenubarItem onClick={() => setSettingsOpen(true)} disabled={busy}>
+                Settings
+              </MenubarItem>
+              <MenubarSeparator />
+              <MenubarItem
+                onClick={() => {
+                  const window = getCurrentWindow();
+                  window.close().catch(() => undefined);
+                }}
+                disabled={busy}
+              >
+                Exit
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
@@ -397,6 +609,15 @@ export default function App() {
             </MenubarContent>
           </MenubarMenu>
         </Menubar>
+
+        {projectName ? (
+          <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-sm font-medium text-foreground">
+            <span className="max-w-[60vw] truncate">{projectName}</span>
+            {hasUnsavedChanges ? (
+              <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+            ) : null}
+          </div>
+        ) : null}
       </header>
 
       <div className="flex flex-1 overflow-hidden">
@@ -407,7 +628,7 @@ export default function App() {
               style={{ width: `${splitRatio * 100}%` }}
             >
               <DiagramPanel
-                graph={umlGraph}
+                graph={visibleGraph}
                 diagram={diagramState}
                 onNodePositionChange={handleNodePositionChange}
                 onNodeSelect={handleNodeSelect}
@@ -433,7 +654,7 @@ export default function App() {
                 openFile={openFile}
                 content={content}
                 dirty={dirty}
-                onChange={setContent}
+                onChange={handleContentChange}
               />
             </section>
           </div>
@@ -444,6 +665,13 @@ export default function App() {
         {status}
         {umlStatus ? ` • ${umlStatus}` : ""}
       </footer>
+
+      <SettingsDialog
+        open={settingsOpen}
+        onOpenChange={setSettingsOpen}
+        settings={settings}
+        onChange={handleSettingsChange}
+      />
     </div>
   );
 }

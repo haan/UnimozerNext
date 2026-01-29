@@ -22,8 +22,8 @@ import {
 } from "./constants";
 
 const computeNodeHeight = (node: UmlNode, diagram: DiagramState) => {
-  const showFields = diagram.showFields && node.fields.length > 0;
-  const showMethods = diagram.showMethods && node.methods.length > 0;
+  const showFields = diagram.showFields;
+  const showMethods = diagram.showMethods;
   let height = HEADER_HEIGHT;
 
   if (showFields) {

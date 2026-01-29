@@ -5,5 +5,8 @@ commands.allow = [
   "list_project_tree",
   "parse_uml_graph",
   "read_text_file",
-  "write_text_file"
+  "write_text_file",
+  "export_netbeans_project",
+  "read_settings",
+  "write_settings"
 ]

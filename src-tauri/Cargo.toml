@@ -1,6 +1,6 @@
 [package]
 name = "unimozer-next"
-version = "0.2.2"
+version = "0.2.4"
 description = "Unimozer Next"
 authors = ["You"]
 edition = "2021"
@@ -16,3 +16,6 @@ tauri-plugin-dialog = "2.3.2"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-window-state = "2"
