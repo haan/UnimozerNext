@@ -76,9 +76,18 @@ public class ParserBridge {
 
   static class MethodInfo {
     public String signature;
+    public String name;
+    public String returnType;
+    public List<ParamInfo> params = new ArrayList<>();
     public boolean isAbstract;
+    public boolean isMain;
     public boolean isStatic;
     public String visibility;
+  }
+
+  static class ParamInfo {
+    public String name;
+    public String type;
   }
 
   static class Edge {
@@ -281,11 +290,23 @@ public class ParserBridge {
         : method.getType().asString();
       boolean isAbstract = method.isAbstract() || isInterfaceAbstract(typeDecl, method);
       boolean isStatic = method.isStatic();
+      boolean isMain = isMainMethod(method);
       String visibility = visibilitySymbol(method);
       String signature = method.getNameAsString() + "(" + params + "): " + returnType;
       MethodInfo info = new MethodInfo();
       info.signature = signature;
+      info.name = method.getNameAsString();
+      info.returnType = returnType;
+      info.params = method.getParameters().stream()
+        .map(param -> {
+          ParamInfo paramInfo = new ParamInfo();
+          paramInfo.name = param.getNameAsString();
+          paramInfo.type = param.getType().asString();
+          return paramInfo;
+        })
+        .collect(Collectors.toList());
       info.isAbstract = isAbstract;
+      info.isMain = isMain;
       info.isStatic = isStatic;
       info.visibility = visibility;
       methods.add(info);
@@ -297,7 +318,18 @@ public class ParserBridge {
       String visibility = visibilitySymbol(ctor);
       MethodInfo info = new MethodInfo();
       info.signature = className + "(" + params + ")";
+      info.name = className;
+      info.returnType = "";
+      info.params = ctor.getParameters().stream()
+        .map(param -> {
+          ParamInfo paramInfo = new ParamInfo();
+          paramInfo.name = param.getNameAsString();
+          paramInfo.type = param.getType().asString();
+          return paramInfo;
+        })
+        .collect(Collectors.toList());
       info.isAbstract = false;
+      info.isMain = false;
       info.isStatic = false;
       info.visibility = visibility;
       methods.add(info);
@@ -317,6 +349,26 @@ public class ParserBridge {
     if (node.hasModifier(Modifier.Keyword.PROTECTED)) return "#";
     if (node.hasModifier(Modifier.Keyword.PRIVATE)) return "-";
     return "~";
+  }
+
+  static boolean isMainMethod(MethodDeclaration method) {
+    if (!"main".equals(method.getNameAsString())) return false;
+    if (!method.isPublic() || !method.isStatic()) return false;
+    if (!method.getType().isVoidType()) return false;
+    if (method.getParameters().size() != 1) return false;
+    var param = method.getParameter(0);
+    if (param.isVarArgs()) {
+      return isStringLike(param.getType());
+    }
+    Type paramType = param.getType();
+    if (!paramType.isArrayType()) return false;
+    return isStringLike(paramType.asArrayType().getComponentType());
+  }
+
+  static boolean isStringLike(Type type) {
+    if (!type.isClassOrInterfaceType()) return false;
+    String name = type.asClassOrInterfaceType().getNameWithScope();
+    return "String".equals(name) || name.endsWith(".String");
   }
 
   static List<String> collectExtendsTypes(TypeDeclaration<?> typeDecl) {

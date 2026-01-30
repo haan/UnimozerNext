@@ -70,11 +70,15 @@ body,
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 221.2 83.2% 53.3%;
-    --radius: 0.75rem;
+    --radius: 0.5rem;
     --uml-class-bg: #fdf2cc;
     --uml-class-border: hsl(var(--foreground) / 0.2);
     --uml-class-invalid-bg: #fff1dd;
     --uml-class-invalid-border: hsl(36 85% 45% / 0.55);
+    --uml-class-compiled-bg: #e7f7e7;
+    --uml-class-compiled-border: rgba(110, 180, 110, 0.6);
+    --console-bg: #0b0b0b;
+    --console-fg: #f5f5f5;
   }
 
   body {

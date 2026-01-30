@@ -1,6 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::io::{BufRead, BufReader, Write};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::{
@@ -9,7 +9,12 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
-use tauri::Manager;
+use std::sync::{
+    atomic::{AtomicU64, Ordering as AtomicOrdering},
+    Arc, Mutex,
+};
+use std::time::Duration;
+use tauri::{Emitter, Manager};
 
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -38,11 +43,27 @@ struct UmlField {
 struct UmlMethod {
     signature: String,
     #[serde(default)]
+    name: String,
+    #[serde(default)]
+    return_type: String,
+    #[serde(default)]
+    params: Vec<UmlParam>,
+    #[serde(default)]
     is_abstract: bool,
+    #[serde(default)]
+    is_main: bool,
     #[serde(default)]
     is_static: bool,
     #[serde(default)]
     visibility: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UmlParam {
+    name: String,
+    #[serde(rename = "type")]
+    type_name: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -111,6 +132,60 @@ struct ParserRequest {
     overrides: Vec<SourceOverride>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CompileResult {
+    ok: bool,
+    stdout: String,
+    stderr: String,
+    out_dir: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RunOutputEvent {
+    run_id: u64,
+    stream: String,
+    line: String,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RunCompleteEvent {
+    run_id: u64,
+    ok: bool,
+    code: Option<i32>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RunStartEvent {
+    run_id: u64,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ParseUmlGraphResponse {
+    graph: UmlGraph,
+    raw: String,
+}
+
+struct RunHandle {
+    id: u64,
+    child: std::process::Child,
+}
+
+struct RunState {
+    current: Arc<Mutex<Option<RunHandle>>>,
+    run_id: AtomicU64,
+}
+
+impl RunState {
+    fn next_id(&self) -> u64 {
+        self.run_id.fetch_add(1, AtomicOrdering::SeqCst) + 1
+    }
+}
+
 const SKIP_DIRS: [&str; 8] = [
     "node_modules",
     "target",
@@ -172,7 +247,7 @@ fn parse_uml_graph(
     root: String,
     src_root: String,
     overrides: Vec<SourceOverride>,
-) -> Result<UmlGraph, String> {
+) -> Result<ParseUmlGraphResponse, String> {
     let java_path = resolve_resource(&app, java_executable_name())
         .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
     let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
@@ -216,7 +291,241 @@ fn parse_uml_graph(
         return Err(format!("Parser bridge failed: {}", stderr.trim()));
     }
 
-    serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())
+    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+    let graph = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    Ok(ParseUmlGraphResponse { graph, raw })
+}
+
+#[tauri::command]
+fn compile_project(
+    app: tauri::AppHandle,
+    root: String,
+    src_root: String,
+    overrides: Vec<SourceOverride>,
+) -> Result<CompileResult, String> {
+    let _ = overrides;
+    let javac_path = resolve_resource(&app, javac_executable_name())
+        .ok_or_else(|| "Bundled Java compiler not found".to_string())?;
+
+    let root_path = PathBuf::from(&root);
+    let src_root_path = resolve_project_src_root(&root_path, &src_root);
+    if !src_root_path.is_dir() {
+        return Err("Source directory not found".to_string());
+    }
+
+    let build_dir = root_path.join("build");
+    let out_dir = build_dir.join("classes");
+    if out_dir.exists() {
+        fs::remove_dir_all(&out_dir).map_err(|error| error.to_string())?;
+    }
+    fs::create_dir_all(&out_dir).map_err(|error| error.to_string())?;
+
+    let mut java_files = Vec::new();
+    collect_java_files(&src_root_path, &mut java_files).map_err(|error| error.to_string())?;
+
+    let mut sources_list = String::new();
+    for file in java_files {
+        sources_list.push_str(&format!("{}\n", file.display()));
+    }
+
+    let sources_file = build_dir.join("sources.txt");
+    fs::write(&sources_file, sources_list).map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(javac_path);
+    command
+        .arg("-encoding")
+        .arg("UTF-8")
+        .arg("-d")
+        .arg(&out_dir)
+        .arg(format!("@{}", sources_file.display()))
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let output = command.output().map_err(|error| error.to_string())?;
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+
+    Ok(CompileResult {
+        ok: output.status.success(),
+        stdout,
+        stderr,
+        out_dir: out_dir.to_string_lossy().to_string(),
+    })
+}
+
+#[tauri::command]
+fn run_main(
+    app: tauri::AppHandle,
+    state: tauri::State<RunState>,
+    root: String,
+    main_class: String,
+) -> Result<u64, String> {
+    let java_path = resolve_resource(&app, java_executable_name())
+        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
+
+    let root_path = PathBuf::from(&root);
+    let class_dir = root_path.join("build").join("classes");
+    if !class_dir.is_dir() {
+        return Err("Compiled classes not found (build/classes missing)".to_string());
+    }
+
+    let run_id = state.next_id();
+    if let Ok(mut guard) = state.current.lock() {
+        if let Some(handle) = guard.as_mut() {
+            let _ = handle.child.kill();
+        }
+    }
+
+    let mut command = Command::new(java_path);
+    command
+        .arg("-cp")
+        .arg(&class_dir)
+        .arg(&main_class)
+        .current_dir(&root_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let stdout = child.stdout.take();
+    let stderr = child.stderr.take();
+
+    if let Ok(mut guard) = state.current.lock() {
+        *guard = Some(RunHandle { id: run_id, child });
+    }
+
+    let _ = app.emit("run-start", RunStartEvent { run_id });
+
+    if let Some(stdout) = stdout {
+        spawn_output_reader(app.clone(), stdout, run_id, "stdout");
+    }
+    if let Some(stderr) = stderr {
+        spawn_output_reader(app.clone(), stderr, run_id, "stderr");
+    }
+
+    let current_slot = state.current.clone();
+    let app_handle = app.clone();
+    std::thread::spawn(move || loop {
+        let status = {
+            let mut guard = match current_slot.lock() {
+                Ok(guard) => guard,
+                Err(_) => return,
+            };
+            let Some(handle) = guard.as_mut() else {
+                return;
+            };
+            if handle.id != run_id {
+                return;
+            }
+            match handle.child.try_wait() {
+                Ok(status) => status,
+                Err(_) => None,
+            }
+        };
+
+        if let Some(status) = status {
+            if let Ok(mut guard) = current_slot.lock() {
+                if guard.as_ref().map(|handle| handle.id == run_id).unwrap_or(false) {
+                    *guard = None;
+                }
+            }
+            let payload = RunCompleteEvent {
+                run_id,
+                ok: status.success(),
+                code: status.code(),
+            };
+            let _ = app_handle.emit("run-complete", payload);
+            return;
+        }
+
+        std::thread::sleep(Duration::from_millis(200));
+    });
+
+    Ok(run_id)
+}
+
+#[tauri::command]
+fn cancel_run(state: tauri::State<RunState>) -> Result<(), String> {
+    let mut guard = state
+        .current
+        .lock()
+        .map_err(|_| "Failed to lock run state".to_string())?;
+    if let Some(handle) = guard.as_mut() {
+        handle.child.kill().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+fn spawn_output_reader<R: std::io::Read + Send + 'static>(
+    app: tauri::AppHandle,
+    reader: R,
+    run_id: u64,
+    stream: &str,
+) {
+    let stream_name = stream.to_string();
+    std::thread::spawn(move || {
+        let mut buf = BufReader::new(reader);
+        let mut line = String::new();
+        let mut buffer = String::new();
+        let mut emitted_bytes: usize = 0;
+        let mut truncated = false;
+        const CHUNK_SIZE: usize = 8 * 1024;
+        const MAX_EMIT_BYTES: usize = 200 * 1024;
+        loop {
+            line.clear();
+            match buf.read_line(&mut line) {
+                Ok(0) => break,
+                Ok(_) => {
+                    if emitted_bytes >= MAX_EMIT_BYTES {
+                        if !truncated {
+                            let payload = RunOutputEvent {
+                                run_id,
+                                stream: stream_name.clone(),
+                                line: "... output truncated ...".to_string(),
+                            };
+                            let _ = app.emit("run-output", payload);
+                            truncated = true;
+                        }
+                        continue;
+                    }
+
+                    let trimmed = line.trim_end_matches(&['\r', '\n'][..]);
+                    if !buffer.is_empty() {
+                        buffer.push('\n');
+                    }
+                    buffer.push_str(trimmed);
+                    if buffer.len() >= CHUNK_SIZE {
+                        emitted_bytes += buffer.len();
+                        let payload = RunOutputEvent {
+                            run_id,
+                            stream: stream_name.clone(),
+                            line: buffer.clone(),
+                        };
+                        let _ = app.emit("run-output", payload);
+                        buffer.clear();
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+        if !buffer.is_empty() && emitted_bytes < MAX_EMIT_BYTES {
+            let payload = RunOutputEvent {
+                run_id,
+                stream: stream_name,
+                line: buffer,
+            };
+            let _ = app.emit("run-output", payload);
+        }
+    });
 }
 
 #[tauri::command]
@@ -377,6 +686,14 @@ fn java_executable_name() -> &'static str {
     }
 }
 
+fn javac_executable_name() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "jdk/current/bin/javac.exe"
+    } else {
+        "jdk/current/bin/javac"
+    }
+}
+
 fn resolve_resource(app: &tauri::AppHandle, relative: &str) -> Option<PathBuf> {
     if let Ok(dir) = app.path().resource_dir() {
         let candidate: PathBuf = dir.join(relative);
@@ -407,6 +724,32 @@ fn resolve_src_root(root: &Path, src_root: &str) -> PathBuf {
         return candidate;
     }
     root.join(candidate)
+}
+
+fn resolve_project_src_root(root: &Path, src_root: &str) -> PathBuf {
+    let nbproject = root.join("nbproject").join("project.properties");
+    if nbproject.exists() {
+        if let Ok(contents) = fs::read_to_string(&nbproject) {
+            for line in contents.lines() {
+                let trimmed = line.trim();
+                if trimmed.starts_with('#') || !trimmed.contains('=') {
+                    continue;
+                }
+                let mut parts = trimmed.splitn(2, '=');
+                let key = parts.next().unwrap_or("").trim();
+                let value = parts.next().unwrap_or("").trim();
+                if key == "src.dir" && !value.is_empty() {
+                    let candidate = PathBuf::from(value);
+                    return if candidate.is_absolute() {
+                        candidate
+                    } else {
+                        root.join(candidate)
+                    };
+                }
+            }
+        }
+    }
+    resolve_src_root(root, src_root)
 }
 
 fn normalize_for_compare(path: PathBuf) -> String {
@@ -444,6 +787,10 @@ fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn main() {
     tauri::Builder::default()
+        .manage(RunState {
+            current: Arc::new(Mutex::new(None)),
+            run_id: AtomicU64::new(0),
+        })
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -451,6 +798,9 @@ fn main() {
             read_text_file,
             write_text_file,
             export_netbeans_project,
+            compile_project,
+            run_main,
+            cancel_run,
             read_settings,
             write_settings,
             parse_uml_graph

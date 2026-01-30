@@ -7,6 +7,9 @@ commands.allow = [
   "read_text_file",
   "write_text_file",
   "export_netbeans_project",
+  "compile_project",
+  "run_main",
+  "cancel_run",
   "read_settings",
   "write_settings"
 ]

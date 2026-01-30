@@ -59,8 +59,8 @@ export const parseUmlGraph = async (
   root: string,
   srcRoot: string,
   overrides: UmlOverride[]
-): Promise<UmlGraph> =>
-  invoke<UmlGraph>("parse_uml_graph", {
+): Promise<{ graph: UmlGraph; raw: string }> =>
+  invoke<{ graph: UmlGraph; raw: string }>("parse_uml_graph", {
     root,
     srcRoot,
     overrides

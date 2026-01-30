@@ -177,8 +177,11 @@ const buildOrthogonalPath = (
 export type UmlDiagramProps = {
   graph: UmlGraph;
   diagram: DiagramState;
+  compiled?: boolean;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect?: (id: string) => void;
+  onCompileClass?: (node: UmlNode) => void;
+  onRunMain?: (node: UmlNode) => void;
 };
 
 type DragState = {
@@ -201,8 +204,11 @@ type PanState = {
 export const UmlDiagram = ({
   graph,
   diagram,
+  compiled,
   onNodePositionChange,
-  onNodeSelect
+  onNodeSelect,
+  onCompileClass,
+  onRunMain
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
@@ -466,7 +472,9 @@ export const UmlDiagram = ({
             key={node.id}
             node={node}
             diagram={diagram}
+            compiled={compiled}
             onHeaderPointerDown={(event) => {
+              if (event.button !== 0) return;
               event.preventDefault();
               const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
               setDragging({
@@ -478,6 +486,8 @@ export const UmlDiagram = ({
                 moved: false
               });
             }}
+            onCompile={() => onCompileClass?.(node)}
+            onRunMain={() => onRunMain?.(node)}
           />
         ))}
 

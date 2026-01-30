@@ -1,8 +1,10 @@
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { ConsolePanel } from "./components/console/ConsolePanel";
 import { DiagramPanel } from "./components/diagram/DiagramPanel";
 import { CodePanel } from "./components/editor/CodePanel";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
@@ -17,7 +19,7 @@ import {
 } from "./components/ui/menubar";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
-import type { UmlGraph } from "./models/uml";
+import type { UmlGraph, UmlNode } from "./models/uml";
 import type { AppSettings } from "./models/settings";
 import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "./services/diagram";
 import { createDefaultSettings } from "./models/settings";
@@ -32,6 +34,22 @@ type OpenFile = {
 type FileDraft = {
   content: string;
   lastSavedContent: string;
+};
+
+type RunOutputEvent = {
+  runId: number;
+  stream: string;
+  line: string;
+};
+
+type RunStartEvent = {
+  runId: number;
+};
+
+type RunCompleteEvent = {
+  runId: number;
+  ok: boolean;
+  code?: number | null;
 };
 
 const basename = (path: string) => {
@@ -76,13 +94,23 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(createDefaultSettings());
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [umlStatus, setUmlStatus] = useState<string | null>(null);
+  const [compileStatus, setCompileStatus] = useState<"success" | "failed" | null>(null);
+  const [runSessionId, setRunSessionId] = useState<number | null>(null);
   const parseSeq = useRef(0);
   const lastGoodGraph = useRef<UmlGraph | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const consoleContainerRef = useRef<HTMLDivElement | null>(null);
   const [splitRatio, setSplitRatio] = useState(0.5);
   const [isResizing, setIsResizing] = useState(false);
+  const [consoleSplitRatio, setConsoleSplitRatio] = useState(0.7);
+  const [isConsoleResizing, setIsConsoleResizing] = useState(false);
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
+  const [consoleOutput, setConsoleOutput] = useState("");
+  const runSessionRef = useRef<number | null>(null);
+  const consoleLinesRef = useRef<string[]>([]);
+  const consoleDroppedRef = useRef(0);
+  const consoleFlushRef = useRef<number | null>(null);
 
   const dirty = useMemo(() => {
     if (!openFile) return false;
@@ -119,6 +147,79 @@ export default function App() {
     []
   );
 
+  const persistDirtyDrafts = useCallback(
+    async (setStatusMessage: boolean) => {
+      const dirtyDrafts = Object.entries(fileDrafts).filter(
+        ([, draft]) => draft.content !== draft.lastSavedContent
+      );
+      if (dirtyDrafts.length === 0) return 0;
+
+      for (const [path, draft] of dirtyDrafts) {
+        await invoke("write_text_file", { path, contents: draft.content });
+        updateDraftForPath(path, draft.content, draft.content);
+        if (openFilePath === path) {
+          setLastSavedContent(draft.content);
+        }
+      }
+
+      if (setStatusMessage) {
+        setStatus(
+          dirtyDrafts.length === 1 ? "Saved 1 file." : `Saved ${dirtyDrafts.length} files.`
+        );
+      }
+      return dirtyDrafts.length;
+    },
+    [fileDrafts, openFilePath, updateDraftForPath]
+  );
+
+  const setRunSession = useCallback((id: number | null) => {
+    runSessionRef.current = id;
+    setRunSessionId(id);
+  }, []);
+
+  const flushConsole = useCallback(() => {
+    if (consoleFlushRef.current !== null) return;
+    consoleFlushRef.current = window.setTimeout(() => {
+      consoleFlushRef.current = null;
+      const lines = consoleLinesRef.current;
+      const dropped = consoleDroppedRef.current;
+      const text = dropped > 0 ? [...lines, `... ${dropped} lines truncated ...`].join("\n") : lines.join("\n");
+      setConsoleOutput(text);
+    }, 50);
+  }, []);
+
+  const appendConsole = useCallback(
+    (text: string) => {
+      const lines = consoleLinesRef.current;
+      const incoming = text.split(/\r?\n/);
+      for (const line of incoming) {
+        lines.push(line);
+      }
+      const maxLines = 2000;
+      if (lines.length > maxLines) {
+        const excess = lines.length - maxLines;
+        lines.splice(0, excess);
+        consoleDroppedRef.current += excess;
+      }
+      flushConsole();
+    },
+    [flushConsole]
+  );
+
+  const resetConsole = useCallback((text = "") => {
+    if (consoleFlushRef.current !== null) {
+      window.clearTimeout(consoleFlushRef.current);
+      consoleFlushRef.current = null;
+    }
+    consoleDroppedRef.current = 0;
+    if (text) {
+      consoleLinesRef.current = text.split(/\r?\n/);
+    } else {
+      consoleLinesRef.current = [];
+    }
+    setConsoleOutput(text);
+  }, []);
+
   const visibleGraph = useMemo(() => {
     if (!umlGraph) return null;
     if (settings.uml.showDependencies) return umlGraph;
@@ -147,6 +248,62 @@ export default function App() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    let unlistenStart: (() => void) | null = null;
+    let unlistenOutput: (() => void) | null = null;
+    let unlistenComplete: (() => void) | null = null;
+
+    const setup = async () => {
+      const startUnlisten = await listen<RunStartEvent>("run-start", (event) => {
+        setRunSession(event.payload.runId);
+      });
+      if (!active) {
+        startUnlisten();
+        return;
+      }
+      unlistenStart = startUnlisten;
+
+      const outputUnlisten = await listen<RunOutputEvent>("run-output", (event) => {
+        const activeId = runSessionRef.current;
+        if (activeId === null || event.payload.runId !== activeId) return;
+        const prefix = event.payload.stream === "stderr" ? "[stderr] " : "";
+        if (event.payload.line) {
+          appendConsole(`${prefix}${event.payload.line}`);
+        }
+      });
+      if (!active) {
+        outputUnlisten();
+        return;
+      }
+      unlistenOutput = outputUnlisten;
+
+      const completeUnlisten = await listen<RunCompleteEvent>("run-complete", (event) => {
+        const activeId = runSessionRef.current;
+        if (activeId === null || event.payload.runId !== activeId) return;
+        const exitLabel = event.payload.ok
+          ? "Run finished."
+          : `Run failed (exit ${event.payload.code ?? "?"}).`;
+        appendConsole(exitLabel);
+        setStatus(event.payload.ok ? "Run main succeeded." : "Run main failed.");
+        setRunSession(null);
+      });
+      if (!active) {
+        completeUnlisten();
+        return;
+      }
+      unlistenComplete = completeUnlisten;
+    };
+
+    void setup();
+    return () => {
+      active = false;
+      if (unlistenStart) unlistenStart();
+      if (unlistenOutput) unlistenOutput();
+      if (unlistenComplete) unlistenComplete();
+    };
+  }, [appendConsole, setRunSession]);
 
   const handleSettingsChange = (next: AppSettings) => {
     setSettings(next);
@@ -201,6 +358,13 @@ export default function App() {
   }, []);
 
   const handleContentChange = (value: string) => {
+    if (compileStatus !== null && openFilePath) {
+      const baseline =
+        fileDrafts[openFilePath]?.lastSavedContent ?? lastSavedContent;
+      if (value !== baseline) {
+        setCompileStatus(null);
+      }
+    }
     setContent(value);
     if (openFilePath) {
       updateDraftForPath(openFilePath, value, lastSavedContent);
@@ -282,6 +446,7 @@ export default function App() {
       setFileDrafts({});
       setContent("");
       setLastSavedContent("");
+      setCompileStatus(null);
       setStatus(`Project loaded: ${dir}`);
     } catch (error) {
       setStatus(`Failed to open project: ${formatStatus(error)}`);
@@ -314,7 +479,8 @@ export default function App() {
     const timer = window.setTimeout(async () => {
       setUmlStatus("Parsing UML...");
       try {
-        const graph = await parseUmlGraph(projectPath, "src", overrides);
+        const result = await parseUmlGraph(projectPath, "src", overrides);
+        const graph = result.graph;
         if (currentSeq === parseSeq.current) {
           const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraph.current);
           const nextGraph = applyInvalidFlags(mergedGraph, graph.failedFiles);
@@ -343,7 +509,7 @@ export default function App() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [projectPath, tree, fileDrafts]);
+  }, [projectPath, tree, fileDrafts, resetConsole]);
 
   useEffect(() => {
     const window = getCurrentWindow();
@@ -381,6 +547,31 @@ export default function App() {
     };
   }, [isResizing]);
 
+  useEffect(() => {
+    if (!isConsoleResizing) return;
+
+    const handleMove = (event: PointerEvent) => {
+      if (!consoleContainerRef.current) return;
+      const rect = consoleContainerRef.current.getBoundingClientRect();
+      const minPanel = 140;
+      let y = event.clientY - rect.top;
+      y = Math.max(minPanel, Math.min(rect.height - minPanel, y));
+      setConsoleSplitRatio(y / rect.height);
+    };
+
+    const handleUp = () => {
+      setIsConsoleResizing(false);
+    };
+
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+  }, [isConsoleResizing]);
+
   const openFileByPath = async (path: string) => {
     setBusy(true);
     try {
@@ -413,22 +604,13 @@ export default function App() {
     if (dirtyDrafts.length === 0) return;
     setBusy(true);
     try {
-      for (const [path, draft] of dirtyDrafts) {
-        await invoke("write_text_file", { path, contents: draft.content });
-        updateDraftForPath(path, draft.content, draft.content);
-        if (openFilePath === path) {
-          setLastSavedContent(draft.content);
-        }
-      }
-      setStatus(
-        dirtyDrafts.length === 1 ? "Saved 1 file." : `Saved ${dirtyDrafts.length} files.`
-      );
+      await persistDirtyDrafts(true);
     } catch (error) {
       setStatus(`Failed to save file: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
-  }, [fileDrafts, openFilePath, updateDraftForPath]);
+  }, [fileDrafts, persistDirtyDrafts]);
 
   const handleExportProject = async () => {
     if (!projectPath) {
@@ -495,6 +677,7 @@ export default function App() {
       setOpenFile(nextOpenFile);
       setContent(nextContent);
       setLastSavedContent(nextLastSaved);
+      setCompileStatus(null);
       setStatus(`Project saved to ${selection}`);
     } catch (error) {
       setStatus(`Export failed: ${formatStatus(error)}`);
@@ -551,10 +734,101 @@ export default function App() {
     void openFileByPath(node.path);
   };
 
+  const handleCompileClass = async (node: UmlNode) => {
+    if (!projectPath) return;
+    const overrides = Object.entries(fileDrafts)
+      .filter(([, draft]) => draft.content !== draft.lastSavedContent)
+      .map(([path, draft]) => ({
+        path,
+        content: draft.content
+      }));
+
+    setBusy(true);
+    const startedAt = new Date().toLocaleTimeString();
+    resetConsole();
+    setCompileStatus(null);
+    appendConsole(`[${startedAt}] Compile requested for ${node.name}`);
+    try {
+      await persistDirtyDrafts(false);
+      const result = await invoke<{
+        ok: boolean;
+        stdout: string;
+        stderr: string;
+      }>("compile_project", {
+        root: projectPath,
+        srcRoot: "src",
+        overrides
+      });
+      if (result.stdout) {
+        appendConsole(result.stdout.trim());
+      }
+      if (result.stderr) {
+        appendConsole(result.stderr.trim());
+      }
+      if (result.ok) {
+        appendConsole("Compilation succeeded.");
+        setCompileStatus("success");
+      } else if (!result.stderr && !result.stdout) {
+        appendConsole("Compilation failed.");
+      }
+      if (!result.ok) {
+        setCompileStatus("failed");
+      }
+      setStatus(result.ok ? "Compile succeeded." : "Compile failed.");
+    } catch (error) {
+      appendConsole(`Compile failed: ${formatStatus(error)}`);
+      setCompileStatus("failed");
+      setStatus("Compile failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRunMain = async (node: UmlNode) => {
+    if (!projectPath) return;
+    const startedAt = new Date().toLocaleTimeString();
+    resetConsole();
+    appendConsole(`[${startedAt}] Run main requested for ${node.name}`);
+    try {
+      if (runSessionRef.current !== null) {
+        await invoke("cancel_run");
+        setRunSession(null);
+      }
+      await invoke<number>("run_main", {
+        root: projectPath,
+        mainClass: node.id
+      });
+      setStatus("Run main started.");
+    } catch (error) {
+      appendConsole(`Run main failed: ${formatStatus(error)}`);
+      setStatus("Run main failed.");
+      setRunSession(null);
+    }
+  };
+
+  const handleCancelRun = async () => {
+    if (runSessionRef.current === null) return;
+    try {
+      await invoke("cancel_run");
+      appendConsole("Run cancellation requested.");
+      setStatus("Cancelling run...");
+    } catch (error) {
+      appendConsole(`Cancel failed: ${formatStatus(error)}`);
+      setStatus("Cancel failed.");
+    }
+  };
+
   return (
     <div className="flex h-full flex-col">
       <header className="relative flex items-center border-b border-border bg-card px-4 py-2">
-        <Menubar className="border-0 bg-transparent p-0 shadow-none">
+        <div className="flex items-center gap-2">
+          <img
+            src="/icon/icon.png"
+            alt="Unimozer Next icon"
+            className="h-10 w-10"
+            draggable={false}
+          />
+          <Menubar className="border-0 bg-transparent p-0 shadow-none">
           <MenubarMenu>
             <MenubarTrigger>File</MenubarTrigger>
             <MenubarContent>
@@ -608,7 +882,8 @@ export default function App() {
               <MenubarItem disabled>Reset Zoom</MenubarItem>
             </MenubarContent>
           </MenubarMenu>
-        </Menubar>
+          </Menubar>
+        </div>
 
         {projectName ? (
           <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-sm font-medium text-foreground">
@@ -630,8 +905,11 @@ export default function App() {
               <DiagramPanel
                 graph={visibleGraph}
                 diagram={diagramState}
+                compiled={compileStatus === "success"}
                 onNodePositionChange={handleNodePositionChange}
                 onNodeSelect={handleNodeSelect}
+                onCompileClass={handleCompileClass}
+                onRunMain={handleRunMain}
               />
             </section>
 
@@ -650,12 +928,42 @@ export default function App() {
             </div>
 
             <section className="flex min-w-0 flex-1 flex-col">
-              <CodePanel
-                openFile={openFile}
-                content={content}
-                dirty={dirty}
-                onChange={handleContentChange}
-              />
+              <div
+                ref={consoleContainerRef}
+                className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                <div
+                  className="min-h-[200px] flex-none overflow-hidden"
+                  style={{ height: `${consoleSplitRatio * 100}%` }}
+                >
+                  <CodePanel
+                    openFile={openFile}
+                    content={content}
+                    dirty={dirty}
+                    onChange={handleContentChange}
+                  />
+                </div>
+                <div
+                  className="absolute left-0 w-full h-3 -translate-y-1.5 cursor-row-resize transition hover:bg-border/40"
+                  style={{ top: `${consoleSplitRatio * 100}%` }}
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label="Resize console panel"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    setIsConsoleResizing(true);
+                  }}
+                >
+                  <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
+                </div>
+                <div className="min-h-[140px] flex-1 overflow-hidden">
+                  <ConsolePanel
+                    output={consoleOutput}
+                    running={runSessionId !== null}
+                    onStop={handleCancelRun}
+                  />
+                </div>
+              </div>
             </section>
           </div>
         </main>

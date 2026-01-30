@@ -8,6 +8,10 @@ export type UmlEdgeKind =
 
 export type UmlMethod = {
   signature: string;
+  name?: string;
+  returnType?: string;
+  params?: { name: string; type: string }[];
+  isMain?: boolean;
   isAbstract?: boolean;
   isStatic?: boolean;
   visibility?: string;
