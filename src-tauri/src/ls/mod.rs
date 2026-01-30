@@ -13,6 +13,134 @@ mod jdtls;
 mod jsonrpc;
 mod uri;
 
+fn parse_properties(path: &std::path::Path) -> HashMap<String, String> {
+  let mut values = HashMap::new();
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return values;
+    };
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with('!') {
+            continue;
+        }
+        let separator = line
+            .find('=')
+            .or_else(|| line.find(':'))
+            .unwrap_or(line.len());
+        if separator == 0 || separator >= line.len() {
+            continue;
+        }
+        let key = line[..separator].trim();
+        let value = line[separator + 1..].trim();
+        if !key.is_empty() {
+            values.insert(key.to_string(), value.to_string());
+        }
+    }
+  values
+}
+
+fn resolve_property_value(
+    key: &str,
+    props: &HashMap<String, String>,
+    depth: usize,
+) -> String {
+    if depth > 8 {
+        return props.get(key).cloned().unwrap_or_default();
+    }
+    let Some(value) = props.get(key) else {
+        return String::new();
+    };
+    resolve_value(value, props, depth + 1)
+}
+
+fn resolve_value(value: &str, props: &HashMap<String, String>, depth: usize) -> String {
+    let mut output = String::new();
+    let mut rest = value;
+    while let Some(start) = rest.find("${") {
+        let (before, after_start) = rest.split_at(start);
+        output.push_str(before);
+        let Some(end) = after_start.find('}') else {
+            output.push_str(after_start);
+            return output;
+        };
+        let key = &after_start[2..end];
+        let resolved = resolve_property_value(key, props, depth + 1);
+        output.push_str(&resolved);
+        rest = &after_start[end + 1..];
+    }
+    output.push_str(rest);
+    output
+}
+
+fn ensure_eclipse_metadata(project_root: &std::path::Path) -> Result<(), String> {
+    let project_file = project_root.join(".project");
+    let classpath_file = project_root.join(".classpath");
+    if project_file.exists() && classpath_file.exists() {
+        return Ok(());
+    }
+
+    let nb_props = parse_properties(&project_root.join("nbproject").join("project.properties"));
+    let raw_src_dir = nb_props.get("src.dir").cloned().unwrap_or_else(|| "src".to_string());
+    let raw_output_dir = nb_props
+        .get("build.classes.dir")
+        .cloned()
+        .unwrap_or_else(|| "build/classes".to_string());
+    let src_dir = resolve_value(&raw_src_dir, &nb_props, 0);
+    let output_dir = resolve_value(&raw_output_dir, &nb_props, 0);
+    let project_name = project_root
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("project");
+
+    if !project_file.exists() {
+        let contents = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<projectDescription>
+  <name>{}</name>
+  <comment></comment>
+  <projects></projects>
+  <buildSpec>
+    <buildCommand>
+      <name>org.eclipse.jdt.core.javabuilder</name>
+      <arguments></arguments>
+    </buildCommand>
+  </buildSpec>
+  <natures>
+    <nature>org.eclipse.jdt.core.javanature</nature>
+  </natures>
+</projectDescription>
+"#,
+            project_name
+        );
+        std::fs::write(&project_file, contents).map_err(|error| error.to_string())?;
+    }
+
+    let needs_classpath_update = if classpath_file.exists() {
+        match std::fs::read_to_string(&classpath_file) {
+            Ok(existing) => existing.contains("${"),
+            Err(_) => false,
+        }
+    } else {
+        true
+    };
+
+    if needs_classpath_update {
+        let contents = format!(
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+  <classpathentry kind="src" path="{}"/>
+  <classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+  <classpathentry kind="output" path="{}"/>
+</classpath>
+"#,
+            src_dir, output_dir
+        );
+        std::fs::write(&classpath_file, contents).map_err(|error| error.to_string())?;
+    }
+
+    Ok(())
+}
+
 pub struct LsState {
     inner: Mutex<Option<LsProcess>>,
 }
@@ -82,7 +210,11 @@ struct LsProcess {
     client: LsClient,
 }
 
-fn spawn_reader(stdout: impl std::io::Read + Send + 'static, pending: Arc<Mutex<HashMap<u64, mpsc::Sender<Value>>>>) {
+fn spawn_reader(
+    app: AppHandle,
+    stdout: impl std::io::Read + Send + 'static,
+    pending: Arc<Mutex<HashMap<u64, mpsc::Sender<Value>>>>,
+) {
     thread::spawn(move || {
         let mut reader = jsonrpc::JsonRpcReader::new(stdout);
         while let Ok(Some(message)) = reader.read_message() {
@@ -90,6 +222,14 @@ fn spawn_reader(stdout: impl std::io::Read + Send + 'static, pending: Arc<Mutex<
                 if let Ok(mut pending) = pending.lock() {
                     if let Some(tx) = pending.remove(&id) {
                         let _ = tx.send(message);
+                    }
+                }
+                continue;
+            }
+            if let Some(method) = message.get("method").and_then(|value| value.as_str()) {
+                if method == "textDocument/publishDiagnostics" {
+                    if let Some(params) = message.get("params") {
+                        let _ = app.emit("ls_diagnostics", params.clone());
                     }
                 }
             }
@@ -145,7 +285,7 @@ fn start_ls(app: &AppHandle, project_root: PathBuf) -> Result<(LsProcess, PathBu
         .ok_or_else(|| "Failed to capture LS stdin".to_string())?;
 
     let pending = Arc::new(Mutex::new(HashMap::new()));
-    spawn_reader(stdout, pending.clone());
+    spawn_reader(app.clone(), stdout, pending.clone());
     spawn_log_writer(stderr, log_path.clone());
 
     let client = LsClient {
@@ -203,6 +343,20 @@ fn stop_process(mut process: LsProcess) -> Result<(), String> {
     Ok(())
 }
 
+fn with_client<T>(
+    state: &tauri::State<LsState>,
+    f: impl FnOnce(&LsClient) -> Result<T, String>,
+) -> Result<T, String> {
+    let guard = state
+        .inner
+        .lock()
+        .map_err(|_| "Failed to lock LS state".to_string())?;
+    let Some(process) = guard.as_ref() else {
+        return Err("LS is not running".to_string());
+    };
+    f(&process.client)
+}
+
 #[tauri::command]
 pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: String) -> Result<String, String> {
     let root_path = if project_root.starts_with("file://") {
@@ -213,6 +367,8 @@ pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: Stri
     if !root_path.is_dir() {
         return Err("Project root is not a directory".to_string());
     }
+
+    ensure_eclipse_metadata(&root_path)?;
 
     let mut guard = state
         .inner
@@ -266,4 +422,51 @@ pub fn ls_stop(state: tauri::State<LsState>) -> Result<(), String> {
         stop_process(process)?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub fn ls_did_open(
+    state: tauri::State<LsState>,
+    uri: String,
+    text: String,
+    language_id: String,
+) -> Result<(), String> {
+    let params = json!({
+        "textDocument": {
+            "uri": uri,
+            "languageId": language_id,
+            "version": 1,
+            "text": text
+        }
+    });
+    with_client(&state, |client| client.send_notification("textDocument/didOpen", params))
+}
+
+#[tauri::command]
+pub fn ls_did_change(
+    state: tauri::State<LsState>,
+    uri: String,
+    version: i32,
+    text: String,
+) -> Result<(), String> {
+    let params = json!({
+        "textDocument": {
+            "uri": uri,
+            "version": version
+        },
+        "contentChanges": [
+            { "text": text }
+        ]
+    });
+    with_client(&state, |client| client.send_notification("textDocument/didChange", params))
+}
+
+#[tauri::command]
+pub fn ls_did_close(state: tauri::State<LsState>, uri: String) -> Result<(), String> {
+    let params = json!({
+        "textDocument": {
+            "uri": uri
+        }
+    });
+    with_client(&state, |client| client.send_notification("textDocument/didClose", params))
 }

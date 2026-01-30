@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMonaco } from "@monaco-editor/react";
 
 import { ConsolePanel } from "./components/console/ConsolePanel";
 import { DiagramPanel } from "./components/diagram/DiagramPanel";
@@ -42,6 +43,28 @@ type RunOutputEvent = {
   line: string;
 };
 
+type LspPosition = {
+  line: number;
+  character: number;
+};
+
+type LspRange = {
+  start: LspPosition;
+  end: LspPosition;
+};
+
+type LspDiagnostic = {
+  range: LspRange;
+  severity?: number;
+  message: string;
+  source?: string;
+};
+
+type LsDiagnosticsEvent = {
+  uri: string;
+  diagnostics: LspDiagnostic[];
+};
+
 type RunStartEvent = {
   runId: number;
 };
@@ -79,6 +102,19 @@ const toRelativePath = (fullPath: string, rootPath: string) => {
   return fullPath;
 };
 
+const toFileUri = (path: string) => {
+  const normalized = path.replace(/\\/g, "/");
+  const withSlash = /^[a-zA-Z]:/.test(normalized) ? `/${normalized}` : normalized;
+  return `file://${encodeURI(withSlash)}`;
+};
+
+const toFqnFromPath = (root: string, srcRoot: string, filePath: string) => {
+  const srcPath = joinPath(root, srcRoot);
+  const relative = toRelativePath(filePath, srcPath);
+  const trimmed = relative === filePath ? basename(filePath) : relative;
+  return trimmed.replace(/\.java$/i, "").replace(/[\\/]+/g, ".");
+};
+
 export default function App() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [tree, setTree] = useState<FileNode | null>(null);
@@ -111,6 +147,13 @@ export default function App() {
   const consoleLinesRef = useRef<string[]>([]);
   const consoleDroppedRef = useRef(0);
   const consoleFlushRef = useRef<number | null>(null);
+  const lsOpenRef = useRef<Set<string>>(new Set());
+  const lsVersionRef = useRef<Record<string, number>>({});
+  const lsGlyphRef = useRef<Record<string, string[]>>({});
+  const prevOpenFileRef = useRef<string | null>(null);
+  const lsReadyRef = useRef(false);
+  const monaco = useMonaco();
+  const monacoRef = useRef<ReturnType<typeof useMonaco> | null>(null);
 
   const dirty = useMemo(() => {
     if (!openFile) return false;
@@ -176,6 +219,60 @@ export default function App() {
     runSessionRef.current = id;
     setRunSessionId(id);
   }, []);
+
+  useEffect(() => {
+    if (monaco) {
+      monacoRef.current = monaco;
+    }
+  }, [monaco]);
+
+  const notifyLsOpen = useCallback((path: string, text: string) => {
+    if (!lsReadyRef.current) return;
+    if (lsOpenRef.current.has(path)) return;
+    lsOpenRef.current.add(path);
+    lsVersionRef.current[path] = 1;
+    void invoke("ls_did_open", {
+      uri: toFileUri(path),
+      text,
+      languageId: "java"
+    }).catch(() => undefined);
+  }, []);
+
+  const notifyLsClose = useCallback((path: string) => {
+    if (!lsReadyRef.current) return;
+    if (!lsOpenRef.current.has(path)) return;
+    lsOpenRef.current.delete(path);
+    delete lsVersionRef.current[path];
+    void invoke("ls_did_close", { uri: toFileUri(path) }).catch(() => undefined);
+    const monacoInstance = monacoRef.current;
+    if (monacoInstance) {
+      const uri = toFileUri(path);
+      const model = monacoInstance.editor.getModel(monacoInstance.Uri.parse(uri));
+      if (model) {
+        monacoInstance.editor.setModelMarkers(model, "jdtls", []);
+        const existing = lsGlyphRef.current[uri] ?? [];
+        if (existing.length > 0) {
+          model.deltaDecorations(existing, []);
+        }
+        delete lsGlyphRef.current[uri];
+      }
+    }
+  }, []);
+
+  const notifyLsChange = useCallback((path: string, text: string) => {
+    if (!lsReadyRef.current) return;
+    if (!lsOpenRef.current.has(path)) {
+      notifyLsOpen(path, text);
+      return;
+    }
+    const nextVersion = (lsVersionRef.current[path] ?? 1) + 1;
+    lsVersionRef.current[path] = nextVersion;
+    void invoke("ls_did_change", {
+      uri: toFileUri(path),
+      version: nextVersion,
+      text
+    }).catch(() => undefined);
+  }, [notifyLsOpen]);
 
   const flushConsole = useCallback(() => {
     if (consoleFlushRef.current !== null) return;
@@ -246,6 +343,111 @@ export default function App() {
     void loadSettings();
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!projectPath) return;
+    lsReadyRef.current = false;
+    void invoke<string>("ls_start", { projectRoot: projectPath }).catch(() => undefined);
+    return () => {
+      void invoke("ls_stop").catch(() => undefined);
+    };
+  }, [projectPath]);
+
+  useEffect(() => {
+    let unlistenReady: (() => void) | null = null;
+    let unlistenError: (() => void) | null = null;
+    let active = true;
+
+    const setup = async () => {
+      const readyUnlisten = await listen("ls_ready", () => {
+        lsReadyRef.current = true;
+        if (openFilePath) {
+          notifyLsOpen(openFilePath, content);
+        }
+      });
+      if (!active) {
+        readyUnlisten();
+        return;
+      }
+      unlistenReady = readyUnlisten;
+
+      const errorUnlisten = await listen("ls_error", () => {
+        lsReadyRef.current = false;
+      });
+      if (!active) {
+        errorUnlisten();
+        return;
+      }
+      unlistenError = errorUnlisten;
+    };
+
+    void setup();
+    return () => {
+      active = false;
+      if (unlistenReady) unlistenReady();
+      if (unlistenError) unlistenError();
+    };
+  }, [openFilePath, content, notifyLsOpen]);
+
+  useEffect(() => {
+    let unlistenDiagnostics: (() => void) | null = null;
+    let active = true;
+
+    const setup = async () => {
+      const diagnosticsUnlisten = await listen<LsDiagnosticsEvent>(
+        "ls_diagnostics",
+        (event) => {
+          const monacoInstance = monacoRef.current;
+          if (!monacoInstance) return;
+          const model = monacoInstance.editor.getModel(
+            monacoInstance.Uri.parse(event.payload.uri)
+          );
+          if (!model) return;
+          const diagnostics = event.payload.diagnostics ?? [];
+          const markers = diagnostics
+            .filter((diag) => diag.severity === 1)
+            .map((diag) => ({
+              startLineNumber: diag.range.start.line + 1,
+              startColumn: diag.range.start.character + 1,
+              endLineNumber: diag.range.end.line + 1,
+              endColumn: diag.range.end.character + 1,
+              severity: monacoInstance.MarkerSeverity.Error,
+              message: diag.message,
+              source: diag.source ?? "jdtls"
+            }));
+          monacoInstance.editor.setModelMarkers(model, "jdtls", markers);
+
+          const glyphDecorations = markers.map((marker) => ({
+            range: new monacoInstance.Range(
+              marker.startLineNumber,
+              1,
+              marker.startLineNumber,
+              1
+            ),
+            options: {
+              glyphMarginClassName: "codicon codicon-error",
+              glyphMarginHoverMessage: { value: marker.message }
+            }
+          }));
+          const existing = lsGlyphRef.current[event.payload.uri] ?? [];
+          const next = model.deltaDecorations(existing, glyphDecorations);
+          lsGlyphRef.current[event.payload.uri] = next;
+        }
+      );
+
+      if (!active) {
+        diagnosticsUnlisten();
+        return;
+      }
+      unlistenDiagnostics = diagnosticsUnlisten;
+    };
+
+    void setup();
+    return () => {
+      active = false;
+      if (unlistenDiagnostics) unlistenDiagnostics();
     };
   }, []);
 
@@ -352,12 +554,41 @@ export default function App() {
     };
   };
 
+  const ensureFailedNodes = (
+    graph: UmlGraph,
+    failedFiles: string[] | undefined,
+    root: string,
+    srcRoot: string
+  ): UmlGraph => {
+    if (!failedFiles || failedFiles.length === 0) return graph;
+    const existingPaths = new Set(graph.nodes.map((node) => node.path));
+    const nodes = [...graph.nodes];
+    for (const filePath of failedFiles) {
+      if (existingPaths.has(filePath)) continue;
+      const name = basename(filePath).replace(/\.java$/i, "") || basename(filePath);
+      const id = toFqnFromPath(root, srcRoot, filePath) || name;
+      nodes.push({
+        id,
+        name,
+        kind: "class",
+        path: filePath,
+        fields: [],
+        methods: [],
+        isInvalid: true
+      });
+    }
+    return {
+      ...graph,
+      nodes
+    };
+  };
+
   const refreshTree = useCallback(async (root: string) => {
     const result = await invoke<FileNode>("list_project_tree", { root });
     setTree(result);
   }, []);
 
-  const handleContentChange = (value: string) => {
+  const handleContentChange = useCallback((value: string) => {
     if (compileStatus !== null && openFilePath) {
       const baseline =
         fileDrafts[openFilePath]?.lastSavedContent ?? lastSavedContent;
@@ -368,8 +599,9 @@ export default function App() {
     setContent(value);
     if (openFilePath) {
       updateDraftForPath(openFilePath, value, lastSavedContent);
+      notifyLsChange(openFilePath, value);
     }
-  };
+  }, [compileStatus, openFilePath, fileDrafts, lastSavedContent, updateDraftForPath, notifyLsChange]);
 
   const loadDiagramState = async (root: string, graph: UmlGraph) => {
     const diagramFile = joinPath(root, "unimozer.json");
@@ -447,6 +679,9 @@ export default function App() {
       setContent("");
       setLastSavedContent("");
       setCompileStatus(null);
+      lsOpenRef.current.clear();
+      lsVersionRef.current = {};
+      prevOpenFileRef.current = null;
       setStatus(`Project loaded: ${dir}`);
     } catch (error) {
       setStatus(`Failed to open project: ${formatStatus(error)}`);
@@ -483,7 +718,8 @@ export default function App() {
         const graph = result.graph;
         if (currentSeq === parseSeq.current) {
           const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraph.current);
-          const nextGraph = applyInvalidFlags(mergedGraph, graph.failedFiles);
+          const withFailedNodes = ensureFailedNodes(mergedGraph, graph.failedFiles, projectPath, "src");
+          const nextGraph = applyInvalidFlags(withFailedNodes, graph.failedFiles);
           lastGoodGraph.current = nextGraph;
           setUmlGraph(nextGraph);
           if (graph.failedFiles && graph.failedFiles.length > 0) {
@@ -581,6 +817,7 @@ export default function App() {
         setOpenFile({ name, path });
         setContent(existingDraft.content);
         setLastSavedContent(existingDraft.lastSavedContent);
+        notifyLsOpen(path, existingDraft.content);
         setStatus(`Opened ${name}`);
       } else {
         const text = await invoke<string>("read_text_file", { path });
@@ -588,6 +825,7 @@ export default function App() {
         setContent(text);
         setLastSavedContent(text);
         updateDraftForPath(path, text, text);
+        notifyLsOpen(path, text);
         setStatus(`Opened ${name}`);
       }
     } catch (error) {
@@ -706,6 +944,14 @@ export default function App() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [hasUnsavedChanges, busy, handleSave, handleOpenProject]);
+
+  useEffect(() => {
+    const prev = prevOpenFileRef.current;
+    if (prev && prev !== openFilePath) {
+      notifyLsClose(prev);
+    }
+    prevOpenFileRef.current = openFilePath;
+  }, [openFilePath, notifyLsClose]);
 
   const handleNodePositionChange = (id: string, x: number, y: number, commit: boolean) => {
     setDiagramState((prev) => {
@@ -939,6 +1185,7 @@ export default function App() {
                 >
                   <CodePanel
                     openFile={openFile}
+                    fileUri={openFilePath ? toFileUri(openFilePath) : null}
                     content={content}
                     dirty={dirty}
                     onChange={handleContentChange}

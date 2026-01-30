@@ -836,7 +836,10 @@ fn main() {
             write_settings,
             parse_uml_graph,
             ls::ls_start,
-            ls::ls_stop
+            ls::ls_stop,
+            ls::ls_did_open,
+            ls::ls_did_change,
+            ls::ls_did_close
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

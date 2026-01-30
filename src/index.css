@@ -85,3 +85,9 @@ body,
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide Monaco hover status bar row (e.g. "View Problem") */
+.monaco-editor .monaco-hover .hover-row.status-bar {
+  display: none !important;
+}
+

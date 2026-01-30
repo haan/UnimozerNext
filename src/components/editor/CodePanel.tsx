@@ -1,4 +1,5 @@
 import MonacoEditor from "@monaco-editor/react";
+import { memo } from "react";
 
 type OpenFile = {
   name: string;
@@ -7,19 +8,22 @@ type OpenFile = {
 
 export type CodePanelProps = {
   openFile: OpenFile | null;
+  fileUri: string | null;
   content: string;
   dirty: boolean;
   onChange: (value: string) => void;
 };
 
-export const CodePanel = ({ openFile, content, onChange }: CodePanelProps) => (
+export const CodePanel = memo(({ openFile, fileUri, content, onChange }: CodePanelProps) => (
   <div className="flex h-full flex-col overflow-hidden">
     <div className="flex-1 min-h-0">
       {openFile ? (
         <MonacoEditor
+          key={openFile.path}
           language="java"
           theme="vs"
-          value={content}
+          defaultValue={content}
+          path={fileUri ?? undefined}
           onChange={(value) => {
             const next = value ?? "";
             onChange(next);
@@ -28,7 +32,12 @@ export const CodePanel = ({ openFile, content, onChange }: CodePanelProps) => (
             fontSize: 14,
             minimap: { enabled: false },
             scrollBeyondLastLine: false,
-            wordWrap: "on"
+            wordWrap: "on",
+            suggestOnTriggerCharacters: false,
+            quickSuggestions: false,
+            wordBasedSuggestions: "off",
+            glyphMargin: true,
+            renderValidationDecorations: "on"
           }}
         />
       ) : (
@@ -38,4 +47,4 @@ export const CodePanel = ({ openFile, content, onChange }: CodePanelProps) => (
       )}
     </div>
   </div>
-);
+));

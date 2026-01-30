@@ -13,5 +13,8 @@ commands.allow = [
   "read_settings",
   "write_settings",
   "ls_start",
-  "ls_stop"
+  "ls_stop",
+  "ls_did_open",
+  "ls_did_change",
+  "ls_did_close"
 ]
