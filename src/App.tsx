@@ -906,6 +906,7 @@ export default function App() {
                 graph={visibleGraph}
                 diagram={diagramState}
                 compiled={compileStatus === "success"}
+                backgroundColor={settings.uml.panelBackground}
                 onNodePositionChange={handleNodePositionChange}
                 onNodeSelect={handleNodeSelect}
                 onCompileClass={handleCompileClass}

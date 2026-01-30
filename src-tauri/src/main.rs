@@ -100,6 +100,8 @@ struct UmlGraph {
 #[serde(rename_all = "camelCase")]
 struct UmlSettings {
     show_dependencies: bool,
+    #[serde(default)]
+    panel_background: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -113,6 +115,7 @@ impl Default for AppSettings {
         Self {
             uml: UmlSettings {
                 show_dependencies: true,
+                panel_background: None,
             },
         }
     }

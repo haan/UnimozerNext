@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import type { AppSettings } from "../../models/settings";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Switch } from "../ui/switch";
 import { cn } from "../../lib/utils";
+import { ChromePicker } from "react-color";
 
 type SettingsDialogProps = {
   open: boolean;
@@ -60,25 +62,63 @@ export const SettingsDialog = ({
             <h2 className="text-lg font-semibold">{activeGroup}</h2>
 
             {activeGroup === "UML" ? (
-              <div className="mt-6 flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
-                <div>
-                  <p className="text-sm font-medium">Show dependencies</p>
-                  <p className="text-xs text-muted-foreground">
-                    Display dependency relationships between classes.
-                  </p>
+              <div className="mt-6 grid gap-4">
+                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Show dependencies</p>
+                    <p className="text-xs text-muted-foreground">
+                      Display dependency relationships between classes.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.uml.showDependencies}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        uml: {
+                          ...settings.uml,
+                          showDependencies: checked
+                        }
+                      })
+                    }
+                  />
                 </div>
-                <Switch
-                  checked={settings.uml.showDependencies}
-                  onCheckedChange={(checked) =>
-                    onChange({
-                      ...settings,
-                      uml: {
-                        ...settings.uml,
-                        showDependencies: checked
-                      }
-                    })
-                  }
-                />
+
+                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">UML panel background</p>
+                    <p className="text-xs text-muted-foreground">
+                      Pick a background color for the UML diagram area.
+                    </p>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-8 w-8 rounded-full border border-border transition hover:border-foreground/40"
+                        style={{
+                          backgroundColor: settings.uml.panelBackground ?? "transparent"
+                        }}
+                        aria-label="Pick UML panel background color"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3">
+                      <ChromePicker
+                        color={settings.uml.panelBackground ?? "#f3f4f6"}
+                        onChange={(color) =>
+                          onChange({
+                            ...settings,
+                            uml: {
+                              ...settings.uml,
+                              panelBackground: color.hex
+                            }
+                          })
+                        }
+                        disableAlpha
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
               </div>
             ) : (
               <div className="mt-6 rounded-lg border border-dashed border-border bg-background/60 p-6 text-sm text-muted-foreground">

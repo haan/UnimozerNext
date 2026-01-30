@@ -1,5 +1,6 @@
 export type UmlSettings = {
   showDependencies: boolean;
+  panelBackground: string | null;
 };
 
 export type AppSettings = {
@@ -8,6 +9,7 @@ export type AppSettings = {
 
 export const createDefaultSettings = (): AppSettings => ({
   uml: {
-    showDependencies: true
+    showDependencies: true,
+    panelBackground: null
   }
 });
