@@ -251,7 +251,8 @@ fn parse_uml_graph(
     src_root: String,
     overrides: Vec<SourceOverride>,
 ) -> Result<ParseUmlGraphResponse, String> {
-    let java_path = resolve_resource(&app, java_executable_name())
+    let java_rel = java_executable_name();
+    let java_path = resolve_resource(&app, &java_rel)
         .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
     let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
         .ok_or_else(|| "Java parser bridge not found".to_string())?;
@@ -307,7 +308,8 @@ fn compile_project(
     overrides: Vec<SourceOverride>,
 ) -> Result<CompileResult, String> {
     let _ = overrides;
-    let javac_path = resolve_resource(&app, javac_executable_name())
+    let javac_rel = javac_executable_name();
+    let javac_path = resolve_resource(&app, &javac_rel)
         .ok_or_else(|| "Bundled Java compiler not found".to_string())?;
 
     let root_path = PathBuf::from(&root);
@@ -368,7 +370,8 @@ fn run_main(
     root: String,
     main_class: String,
 ) -> Result<u64, String> {
-    let java_path = resolve_resource(&app, java_executable_name())
+    let java_rel = java_executable_name();
+    let java_path = resolve_resource(&app, &java_rel)
         .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
 
     let root_path = PathBuf::from(&root);
@@ -681,19 +684,41 @@ fn should_skip_dir(path: &Path) -> bool {
     }
 }
 
-fn java_executable_name() -> &'static str {
+fn jdk_relative_dir() -> &'static str {
     if cfg!(target_os = "windows") {
-        "jdk/current/bin/java.exe"
+        if cfg!(target_arch = "aarch64") {
+            "jdk/win-arm64"
+        } else {
+            "jdk/win-x64"
+        }
+    } else if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            "jdk/mac-arm64"
+        } else {
+            "jdk/mac-x64"
+        }
     } else {
-        "jdk/current/bin/java"
+        if cfg!(target_arch = "aarch64") {
+            "jdk/linux-arm64"
+        } else {
+            "jdk/linux-x64"
+        }
     }
 }
 
-fn javac_executable_name() -> &'static str {
+fn java_executable_name() -> String {
     if cfg!(target_os = "windows") {
-        "jdk/current/bin/javac.exe"
+        format!("{}/bin/java.exe", jdk_relative_dir())
     } else {
-        "jdk/current/bin/javac"
+        format!("{}/bin/java", jdk_relative_dir())
+    }
+}
+
+fn javac_executable_name() -> String {
+    if cfg!(target_os = "windows") {
+        format!("{}/bin/javac.exe", jdk_relative_dir())
+    } else {
+        format!("{}/bin/javac", jdk_relative_dir())
     }
 }
 

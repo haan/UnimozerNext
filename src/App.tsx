@@ -934,7 +934,7 @@ export default function App() {
                 className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
               >
                 <div
-                  className="min-h-[200px] flex-none overflow-hidden"
+                  className="min-h-50 flex-none overflow-hidden"
                   style={{ height: `${consoleSplitRatio * 100}%` }}
                 >
                   <CodePanel
@@ -957,7 +957,7 @@ export default function App() {
                 >
                   <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
                 </div>
-                <div className="min-h-[140px] flex-1 overflow-hidden">
+                <div className="min-h-35 flex-1 overflow-hidden">
                   <ConsolePanel
                     output={consoleOutput}
                     running={runSessionId !== null}

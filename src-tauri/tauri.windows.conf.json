@@ -1,0 +1,11 @@
+{
+  "bundle": {
+    "resources": [
+      "../resources/jdk/win-x64/**",
+      "../resources/java-parser/**/*",
+      "../resources/jdtls/plugins/**/*",
+      "../resources/jdtls/config_win/**/*",
+      "../resources/jdtls/features/**/*"
+    ]
+  }
+}

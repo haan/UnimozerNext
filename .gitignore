@@ -21,6 +21,9 @@ pnpm-debug.log*
 # Bundled JDKs
 /resources/jdk/
 
+# Bundled JDTLS
+/resources/jdtls/
+
 # Java parser bridge
 /resources/java-parser/*.jar
 /java-parser/build/

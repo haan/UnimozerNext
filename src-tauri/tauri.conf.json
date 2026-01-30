@@ -4,8 +4,8 @@
   "version": "0.4.0",
   "identifier": "com.unimozer.next",
   "build": {
-    "beforeDevCommand": "npm run prepare:jdk && npm run dev",
-    "beforeBuildCommand": "npm run prepare:jdk && npm run build",
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../dist"
   },
@@ -32,7 +32,6 @@
       "icons/256x256.png",
       "icons/icon.ico",
       "icons/icon.icns"
-    ],
-    "resources": ["../resources/jdk/current/**/*", "../resources/java-parser/**/*"]
+    ]
   }
 }

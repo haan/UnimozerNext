@@ -35,7 +35,7 @@ export const SettingsDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[520px] w-[860px] max-w-[90vw] overflow-hidden p-0">
+      <DialogContent className="h-130 w-215 max-w-[90vw] overflow-hidden p-0">
         <div className="flex h-full">
           <aside className="flex w-48 flex-col border-r border-border bg-muted/40 p-4">
             <DialogTitle className="mb-4 text-base">Settings</DialogTitle>
