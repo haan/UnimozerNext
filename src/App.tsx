@@ -65,6 +65,16 @@ type LsDiagnosticsEvent = {
   diagnostics: LspDiagnostic[];
 };
 
+type LsCrashedEvent = {
+  projectRoot: string;
+  code?: number | null;
+};
+
+type LspTextEdit = {
+  range: LspRange;
+  newText: string;
+};
+
 type RunStartEvent = {
   runId: number;
 };
@@ -115,6 +125,38 @@ const toFqnFromPath = (root: string, srcRoot: string, filePath: string) => {
   return trimmed.replace(/\.java$/i, "").replace(/[\\/]+/g, ".");
 };
 
+const sortTextEditsDescending = (a: LspTextEdit, b: LspTextEdit) => {
+  if (a.range.start.line !== b.range.start.line) {
+    return b.range.start.line - a.range.start.line;
+  }
+  return b.range.start.character - a.range.start.character;
+};
+
+const applyTextEdits = (text: string, edits: LspTextEdit[]) => {
+  if (!edits || edits.length === 0) return text;
+  const lineStarts = [0];
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === "\n") {
+      lineStarts.push(i + 1);
+    }
+  }
+  const toOffset = (position: LspPosition) => {
+    const lineStart = lineStarts[position.line] ?? text.length;
+    return lineStart + position.character;
+  };
+  const normalized = edits.map((edit) => ({
+    start: toOffset(edit.range.start),
+    end: toOffset(edit.range.end),
+    newText: edit.newText
+  }));
+  normalized.sort((a, b) => b.start - a.start || b.end - a.end);
+  let result = text;
+  for (const edit of normalized) {
+    result = `${result.slice(0, edit.start)}${edit.newText}${result.slice(edit.end)}`;
+  }
+  return result;
+};
+
 export default function App() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
   const [tree, setTree] = useState<FileNode | null>(null);
@@ -136,9 +178,11 @@ export default function App() {
   const lastGoodGraph = useRef<UmlGraph | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const consoleContainerRef = useRef<HTMLDivElement | null>(null);
-  const [splitRatio, setSplitRatio] = useState(0.5);
+  const [splitRatio, setSplitRatio] = useState(createDefaultSettings().layout.umlSplitRatio);
   const [isResizing, setIsResizing] = useState(false);
-  const [consoleSplitRatio, setConsoleSplitRatio] = useState(0.7);
+  const [consoleSplitRatio, setConsoleSplitRatio] = useState(
+    createDefaultSettings().layout.consoleSplitRatio
+  );
   const [isConsoleResizing, setIsConsoleResizing] = useState(false);
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
@@ -154,6 +198,16 @@ export default function App() {
   const lsReadyRef = useRef(false);
   const monaco = useMonaco();
   const monacoRef = useRef<ReturnType<typeof useMonaco> | null>(null);
+  const splitRatioRef = useRef(splitRatio);
+  const consoleSplitRatioRef = useRef(consoleSplitRatio);
+  const getConsoleMinHeight = useCallback(() => {
+    if (typeof window === "undefined") return 100;
+    const raw = getComputedStyle(document.documentElement)
+      .getPropertyValue("--console-min-height")
+      .trim();
+    const value = Number.parseFloat(raw);
+    return Number.isFinite(value) && value > 0 ? value : 100;
+  }, []);
 
   const dirty = useMemo(() => {
     if (!openFile) return false;
@@ -190,31 +244,6 @@ export default function App() {
     []
   );
 
-  const persistDirtyDrafts = useCallback(
-    async (setStatusMessage: boolean) => {
-      const dirtyDrafts = Object.entries(fileDrafts).filter(
-        ([, draft]) => draft.content !== draft.lastSavedContent
-      );
-      if (dirtyDrafts.length === 0) return 0;
-
-      for (const [path, draft] of dirtyDrafts) {
-        await invoke("write_text_file", { path, contents: draft.content });
-        updateDraftForPath(path, draft.content, draft.content);
-        if (openFilePath === path) {
-          setLastSavedContent(draft.content);
-        }
-      }
-
-      if (setStatusMessage) {
-        setStatus(
-          dirtyDrafts.length === 1 ? "Saved 1 file." : `Saved ${dirtyDrafts.length} files.`
-        );
-      }
-      return dirtyDrafts.length;
-    },
-    [fileDrafts, openFilePath, updateDraftForPath]
-  );
-
   const setRunSession = useCallback((id: number | null) => {
     runSessionRef.current = id;
     setRunSessionId(id);
@@ -225,6 +254,26 @@ export default function App() {
       monacoRef.current = monaco;
     }
   }, [monaco]);
+
+  useEffect(() => {
+    if (settings.layout?.umlSplitRatio !== undefined) {
+      setSplitRatio(settings.layout.umlSplitRatio);
+    }
+  }, [settings.layout?.umlSplitRatio]);
+
+  useEffect(() => {
+    if (settings.layout?.consoleSplitRatio !== undefined) {
+      setConsoleSplitRatio(settings.layout.consoleSplitRatio);
+    }
+  }, [settings.layout?.consoleSplitRatio]);
+
+  useEffect(() => {
+    splitRatioRef.current = splitRatio;
+  }, [splitRatio]);
+
+  useEffect(() => {
+    consoleSplitRatioRef.current = consoleSplitRatio;
+  }, [consoleSplitRatio]);
 
   const notifyLsOpen = useCallback((path: string, text: string) => {
     if (!lsReadyRef.current) return;
@@ -273,6 +322,132 @@ export default function App() {
       text
     }).catch(() => undefined);
   }, [notifyLsOpen]);
+
+  const formatAndSaveUmlFiles = useCallback(
+    async (setStatusMessage: boolean) => {
+      const targetPaths =
+        umlGraph?.nodes?.length
+          ? Array.from(new Set(umlGraph.nodes.map((node) => node.path)))
+          : Object.keys(fileDrafts);
+      if (targetPaths.length === 0) return 0;
+
+      const entries: { path: string; content: string; hasDraft: boolean }[] = [];
+      for (const path of targetPaths) {
+        const draft = fileDrafts[path];
+        if (draft) {
+          entries.push({ path, content: draft.content, hasDraft: true });
+          continue;
+        }
+        try {
+          const text = await invoke<string>("read_text_file", { path });
+          entries.push({ path, content: text, hasDraft: false });
+        } catch {
+          // Skip files we cannot read.
+        }
+      }
+      if (entries.length === 0) return 0;
+
+      const formatted: Record<string, string> = {};
+      const tempOpened: string[] = [];
+      const monacoInstance = monacoRef.current;
+
+      if (lsReadyRef.current && settings.editor.autoFormatOnSave) {
+        for (const entry of entries) {
+          const path = entry.path;
+          const text = entry.content;
+          if (!lsOpenRef.current.has(path)) {
+            notifyLsOpen(path, text);
+            tempOpened.push(path);
+          } else {
+            notifyLsChange(path, text);
+          }
+        }
+
+        for (const entry of entries) {
+          const path = entry.path;
+          const draftContent = entry.content;
+          const uri = toFileUri(path);
+          const model = monacoInstance
+            ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(uri))
+            : null;
+          const tabSize = settings.editor.tabSize;
+          const insertSpaces = settings.editor.insertSpaces;
+
+          try {
+            const edits = await invoke<LspTextEdit[]>("ls_format_document", {
+              uri,
+              tabSize,
+              insertSpaces
+            });
+            if (edits && edits.length > 0) {
+              let next = draftContent;
+              if (model) {
+                const monacoEdits = [...edits]
+                  .sort(sortTextEditsDescending)
+                  .map((edit) => ({
+                    range: new monacoInstance.Range(
+                      edit.range.start.line + 1,
+                      edit.range.start.character + 1,
+                      edit.range.end.line + 1,
+                      edit.range.end.character + 1
+                    ),
+                    text: edit.newText
+                  }));
+                model.pushEditOperations([], monacoEdits, () => null);
+                next = model.getValue();
+                if (openFilePath === path) {
+                  setContent(next);
+                }
+              } else {
+                next = applyTextEdits(draftContent, edits);
+              }
+              formatted[path] = next;
+              if (entry.hasDraft) {
+                updateDraftForPath(path, next);
+              }
+              notifyLsChange(path, next);
+            }
+          } catch {
+            // Formatting failed; keep original content.
+          }
+        }
+
+        for (const path of tempOpened) {
+          notifyLsClose(path);
+        }
+      }
+
+      for (const entry of entries) {
+        const path = entry.path;
+        const contents = formatted[path] ?? entry.content;
+        await invoke("write_text_file", { path, contents });
+        if (entry.hasDraft) {
+          updateDraftForPath(path, contents, contents);
+        }
+        if (openFilePath === path) {
+          setLastSavedContent(contents);
+          if (formatted[path]) {
+            setContent(contents);
+          }
+        }
+      }
+
+      if (setStatusMessage) {
+        setStatus(entries.length === 1 ? "Saved 1 file." : `Saved ${entries.length} files.`);
+      }
+      return entries.length;
+    },
+    [
+      fileDrafts,
+      notifyLsChange,
+      notifyLsClose,
+      notifyLsOpen,
+      openFilePath,
+      settings.editor,
+      umlGraph,
+      updateDraftForPath
+    ]
+  );
 
   const flushConsole = useCallback(() => {
     if (consoleFlushRef.current !== null) return;
@@ -331,8 +506,25 @@ export default function App() {
     const loadSettings = async () => {
       try {
         const stored = await readSettings();
+        const defaults = createDefaultSettings();
+        const merged: AppSettings = {
+          ...defaults,
+          ...stored,
+          uml: {
+            ...defaults.uml,
+            ...(stored as AppSettings).uml
+          },
+          editor: {
+            ...defaults.editor,
+            ...(stored as AppSettings).editor
+          },
+          layout: {
+            ...defaults.layout,
+            ...(stored as AppSettings).layout
+          }
+        };
         if (!cancelled) {
-          setSettings(stored);
+          setSettings(merged);
         }
       } catch {
         if (!cancelled) {
@@ -352,6 +544,32 @@ export default function App() {
     void invoke<string>("ls_start", { projectRoot: projectPath }).catch(() => undefined);
     return () => {
       void invoke("ls_stop").catch(() => undefined);
+    };
+  }, [projectPath]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    let active = true;
+
+    const setup = async () => {
+      const crashUnlisten = await listen<LsCrashedEvent>("ls_crashed", (event) => {
+        if (!active) return;
+        lsReadyRef.current = false;
+        if (projectPath && event.payload.projectRoot === projectPath) {
+          void invoke<string>("ls_start", { projectRoot: projectPath }).catch(() => undefined);
+        }
+      });
+      if (!active) {
+        crashUnlisten();
+        return;
+      }
+      unlisten = crashUnlisten;
+    };
+
+    void setup();
+    return () => {
+      active = false;
+      if (unlisten) unlisten();
     };
   }, [projectPath]);
 
@@ -511,6 +729,34 @@ export default function App() {
     setSettings(next);
     void writeSettings(next);
   };
+
+  const updateUmlSplitRatioSetting = useCallback((ratio: number) => {
+    setSettings((prev) => {
+      const next = {
+        ...prev,
+        layout: {
+          ...prev.layout,
+          umlSplitRatio: ratio
+        }
+      };
+      void writeSettings(next);
+      return next;
+    });
+  }, []);
+
+  const updateConsoleSplitRatioSetting = useCallback((ratio: number) => {
+    setSettings((prev) => {
+      const next = {
+        ...prev,
+        layout: {
+          ...prev.layout,
+          consoleSplitRatio: ratio
+        }
+      };
+      void writeSettings(next);
+      return next;
+    });
+  }, []);
 
   const mergeWithLastGoodGraph = (graph: UmlGraph, previous: UmlGraph | null): UmlGraph => {
     const failedFiles = graph.failedFiles ?? [];
@@ -772,6 +1018,10 @@ export default function App() {
 
     const handleUp = () => {
       setIsResizing(false);
+      const ratio = splitRatioRef.current;
+      if (Number.isFinite(ratio)) {
+        updateUmlSplitRatioSetting(ratio);
+      }
     };
 
     window.addEventListener("pointermove", handleMove);
@@ -781,7 +1031,7 @@ export default function App() {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [isResizing]);
+  }, [isResizing, updateUmlSplitRatioSetting]);
 
   useEffect(() => {
     if (!isConsoleResizing) return;
@@ -789,7 +1039,7 @@ export default function App() {
     const handleMove = (event: PointerEvent) => {
       if (!consoleContainerRef.current) return;
       const rect = consoleContainerRef.current.getBoundingClientRect();
-      const minPanel = 140;
+      const minPanel = getConsoleMinHeight();
       let y = event.clientY - rect.top;
       y = Math.max(minPanel, Math.min(rect.height - minPanel, y));
       setConsoleSplitRatio(y / rect.height);
@@ -797,6 +1047,10 @@ export default function App() {
 
     const handleUp = () => {
       setIsConsoleResizing(false);
+      const ratio = consoleSplitRatioRef.current;
+      if (Number.isFinite(ratio)) {
+        updateConsoleSplitRatioSetting(ratio);
+      }
     };
 
     window.addEventListener("pointermove", handleMove);
@@ -806,7 +1060,7 @@ export default function App() {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [isConsoleResizing]);
+  }, [getConsoleMinHeight, isConsoleResizing, updateConsoleSplitRatioSetting]);
 
   const openFileByPath = async (path: string) => {
     setBusy(true);
@@ -836,19 +1090,15 @@ export default function App() {
   };
 
   const handleSave = useCallback(async () => {
-    const dirtyDrafts = Object.entries(fileDrafts).filter(
-      ([, draft]) => draft.content !== draft.lastSavedContent
-    );
-    if (dirtyDrafts.length === 0) return;
     setBusy(true);
     try {
-      await persistDirtyDrafts(true);
+      await formatAndSaveUmlFiles(true);
     } catch (error) {
       setStatus(`Failed to save file: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
-  }, [fileDrafts, persistDirtyDrafts]);
+  }, [formatAndSaveUmlFiles]);
 
   const handleExportProject = async () => {
     if (!projectPath) {
@@ -995,7 +1245,7 @@ export default function App() {
     setCompileStatus(null);
     appendConsole(`[${startedAt}] Compile requested for ${node.name}`);
     try {
-      await persistDirtyDrafts(false);
+      await formatAndSaveUmlFiles(false);
       const result = await invoke<{
         ok: boolean;
         stdout: string;
@@ -1188,6 +1438,14 @@ export default function App() {
                     fileUri={openFilePath ? toFileUri(openFilePath) : null}
                     content={content}
                     dirty={dirty}
+                    fontSize={settings.editor.fontSize}
+                    tabSize={settings.editor.tabSize}
+                    insertSpaces={settings.editor.insertSpaces}
+                    autoCloseBrackets={settings.editor.autoCloseBrackets}
+                    autoCloseQuotes={settings.editor.autoCloseQuotes}
+                    autoCloseComments={settings.editor.autoCloseComments}
+                    wordWrap={settings.editor.wordWrap}
+                    darkTheme={settings.editor.darkTheme}
                     onChange={handleContentChange}
                   />
                 </div>
@@ -1204,7 +1462,7 @@ export default function App() {
                 >
                   <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
                 </div>
-                <div className="min-h-35 flex-1 overflow-hidden">
+                <div className="min-h-[var(--console-min-height)] flex-1 overflow-hidden">
                   <ConsolePanel
                     output={consoleOutput}
                     running={runSessionId !== null}

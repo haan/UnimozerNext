@@ -142,13 +142,15 @@ fn ensure_eclipse_metadata(project_root: &std::path::Path) -> Result<(), String>
 }
 
 pub struct LsState {
-    inner: Mutex<Option<LsProcess>>,
+    inner: Arc<Mutex<Option<LsProcess>>>,
+    run_id: Arc<AtomicU64>,
 }
 
 impl Default for LsState {
     fn default() -> Self {
         Self {
-            inner: Mutex::new(None),
+            inner: Arc::new(Mutex::new(None)),
+            run_id: Arc::new(AtomicU64::new(0)),
         }
     }
 }
@@ -310,6 +312,9 @@ fn initialize_ls(client: &LsClient, project_root: &PathBuf) -> Result<(), String
                     "willSave": false,
                     "willSaveWaitUntil": false,
                     "dynamicRegistration": false
+                },
+                "formatting": {
+                    "dynamicRegistration": false
                 }
             }
         },
@@ -370,6 +375,7 @@ pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: Stri
 
     ensure_eclipse_metadata(&root_path)?;
 
+    let run_id = state.run_id.fetch_add(1, Ordering::SeqCst) + 1;
     let mut guard = state
         .inner
         .lock()
@@ -384,14 +390,18 @@ pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: Stri
 
     let app_handle = app.clone();
     let log_path_value = log_path.to_string_lossy().to_string();
+    let inner = Arc::clone(&state.inner);
+    let run_id_ref = Arc::clone(&state.run_id);
+    let init_root = root_path.clone();
+    let ready_root = root_path.to_string_lossy().to_string();
     thread::spawn(move || {
-        let result = initialize_ls(&client, &root_path);
+        let result = initialize_ls(&client, &init_root);
         match result {
             Ok(()) => {
                 let _ = app_handle.emit(
                     "ls_ready",
                     json!({
-                        "projectRoot": root_path.to_string_lossy(),
+                        "projectRoot": ready_root,
                         "logPath": log_path_value
                     }),
                 );
@@ -400,11 +410,56 @@ pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: Stri
                 let _ = app_handle.emit(
                     "ls_error",
                     json!({
-                        "projectRoot": root_path.to_string_lossy(),
+                        "projectRoot": ready_root,
                         "error": error,
                         "logPath": log_path_value
                     }),
                 );
+            }
+        }
+    });
+
+    let crash_app = app.clone();
+    let crash_root = root_path.to_string_lossy().to_string();
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(500));
+        if run_id_ref.load(Ordering::SeqCst) != run_id {
+            return;
+        }
+        let mut guard = match inner.lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
+        let Some(process) = guard.as_mut() else {
+            return;
+        };
+        match process.child.try_wait() {
+            Ok(Some(status)) => {
+                *guard = None;
+                if run_id_ref.load(Ordering::SeqCst) == run_id {
+                    let _ = crash_app.emit(
+                        "ls_crashed",
+                        json!({
+                            "projectRoot": crash_root,
+                            "code": status.code()
+                        }),
+                    );
+                }
+                return;
+            }
+            Ok(None) => {}
+            Err(_) => {
+                *guard = None;
+                if run_id_ref.load(Ordering::SeqCst) == run_id {
+                    let _ = crash_app.emit(
+                        "ls_crashed",
+                        json!({
+                            "projectRoot": crash_root,
+                            "code": null
+                        }),
+                    );
+                }
+                return;
             }
         }
     });
@@ -414,6 +469,7 @@ pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: Stri
 
 #[tauri::command]
 pub fn ls_stop(state: tauri::State<LsState>) -> Result<(), String> {
+    state.run_id.fetch_add(1, Ordering::SeqCst);
     let mut guard = state
         .inner
         .lock()
@@ -469,4 +525,32 @@ pub fn ls_did_close(state: tauri::State<LsState>, uri: String) -> Result<(), Str
         }
     });
     with_client(&state, |client| client.send_notification("textDocument/didClose", params))
+}
+
+#[tauri::command]
+pub fn ls_format_document(
+    state: tauri::State<LsState>,
+    uri: String,
+    tab_size: u32,
+    insert_spaces: bool,
+) -> Result<Value, String> {
+    let params = json!({
+        "textDocument": {
+            "uri": uri
+        },
+        "options": {
+            "tabSize": tab_size,
+            "insertSpaces": insert_spaces
+        }
+    });
+    let response = with_client(&state, |client| {
+        client.send_request("textDocument/formatting", params)
+    })?;
+    if let Some(error) = response.get("error") {
+        return Err(error.to_string());
+    }
+    Ok(response
+        .get("result")
+        .cloned()
+        .unwrap_or_else(|| json!([])))
 }

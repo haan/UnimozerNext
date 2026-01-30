@@ -108,8 +108,69 @@ struct UmlSettings {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct EditorSettings {
+    #[serde(default = "default_font_size")]
+    font_size: u32,
+    #[serde(default = "default_tab_size")]
+    tab_size: u32,
+    #[serde(default = "default_insert_spaces")]
+    insert_spaces: bool,
+    #[serde(default = "default_false")]
+    auto_close_brackets: bool,
+    #[serde(default = "default_false")]
+    auto_close_quotes: bool,
+    #[serde(default = "default_false")]
+    auto_close_comments: bool,
+    #[serde(default = "default_true")]
+    word_wrap: bool,
+    #[serde(default = "default_false")]
+    dark_theme: bool,
+    #[serde(default = "default_true")]
+    auto_format_on_save: bool,
+}
+
+impl Default for EditorSettings {
+    fn default() -> Self {
+        Self {
+            font_size: default_font_size(),
+            tab_size: default_tab_size(),
+            insert_spaces: default_insert_spaces(),
+            auto_close_brackets: default_false(),
+            auto_close_quotes: default_false(),
+            auto_close_comments: default_false(),
+            word_wrap: default_true(),
+            dark_theme: default_false(),
+            auto_format_on_save: default_true(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct LayoutSettings {
+    #[serde(default = "default_split_ratio")]
+    uml_split_ratio: f32,
+    #[serde(default = "default_console_split_ratio")]
+    console_split_ratio: f32,
+}
+
+impl Default for LayoutSettings {
+    fn default() -> Self {
+        Self {
+            uml_split_ratio: default_split_ratio(),
+            console_split_ratio: default_console_split_ratio(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct AppSettings {
     uml: UmlSettings,
+    #[serde(default)]
+    editor: EditorSettings,
+    #[serde(default)]
+    layout: LayoutSettings,
 }
 
 impl Default for AppSettings {
@@ -119,8 +180,51 @@ impl Default for AppSettings {
                 show_dependencies: true,
                 panel_background: None,
             },
+            editor: EditorSettings {
+                font_size: default_font_size(),
+                tab_size: default_tab_size(),
+                insert_spaces: default_insert_spaces(),
+                auto_close_brackets: default_false(),
+                auto_close_quotes: default_false(),
+                auto_close_comments: default_false(),
+                word_wrap: default_true(),
+                dark_theme: default_false(),
+                auto_format_on_save: default_true(),
+            },
+            layout: LayoutSettings {
+                uml_split_ratio: default_split_ratio(),
+                console_split_ratio: default_console_split_ratio(),
+            },
         }
     }
+}
+
+fn default_font_size() -> u32 {
+    14
+}
+
+fn default_tab_size() -> u32 {
+    4
+}
+
+fn default_insert_spaces() -> bool {
+    true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_split_ratio() -> f32 {
+    0.5
+}
+
+fn default_console_split_ratio() -> f32 {
+    0.7
 }
 
 #[derive(Serialize, Deserialize)]
@@ -839,7 +943,8 @@ fn main() {
             ls::ls_stop,
             ls::ls_did_open,
             ls::ls_did_change,
-            ls::ls_did_close
+            ls::ls_did_close,
+            ls::ls_format_document
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

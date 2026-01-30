@@ -79,6 +79,7 @@ body,
     --uml-class-compiled-border: rgba(110, 180, 110, 0.6);
     --console-bg: #0b0b0b;
     --console-fg: #f5f5f5;
+    --console-min-height: 60px;
   }
 
   body {
