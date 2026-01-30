@@ -11,5 +11,7 @@ commands.allow = [
   "run_main",
   "cancel_run",
   "read_settings",
-  "write_settings"
+  "write_settings",
+  "ls_start",
+  "ls_stop"
 ]

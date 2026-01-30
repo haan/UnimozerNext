@@ -16,6 +16,8 @@ use std::sync::{
 use std::time::Duration;
 use tauri::{Emitter, Manager};
 
+mod ls;
+
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -706,7 +708,7 @@ fn jdk_relative_dir() -> &'static str {
     }
 }
 
-fn java_executable_name() -> String {
+pub fn java_executable_name() -> String {
     if cfg!(target_os = "windows") {
         format!("{}/bin/java.exe", jdk_relative_dir())
     } else {
@@ -819,6 +821,7 @@ fn main() {
             current: Arc::new(Mutex::new(None)),
             run_id: AtomicU64::new(0),
         })
+        .manage(ls::LsState::default())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
@@ -831,7 +834,9 @@ fn main() {
             cancel_run,
             read_settings,
             write_settings,
-            parse_uml_graph
+            parse_uml_graph,
+            ls::ls_start,
+            ls::ls_stop
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
