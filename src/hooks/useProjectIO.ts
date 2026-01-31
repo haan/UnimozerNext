@@ -37,6 +37,7 @@ type UseProjectIOArgs = {
 
 type UseProjectIOResult = {
   handleOpenProject: () => Promise<void>;
+  handleNewProject: () => Promise<void>;
   openFileByPath: (path: string) => Promise<void>;
   handleSave: () => Promise<void>;
   handleExportProject: () => Promise<void>;
@@ -218,6 +219,58 @@ export const useProjectIO = ({
     setUmlGraph
   ]);
 
+  const handleNewProject = useCallback(async () => {
+    setStatus("Creating project...");
+    const selection = await save({
+      title: "Create new project",
+      defaultPath: projectPath ?? undefined
+    });
+
+    if (!selection || typeof selection !== "string") {
+      setStatus("New project cancelled.");
+      return;
+    }
+
+    setBusy(true);
+    try {
+      await invoke("create_netbeans_project", { target: selection });
+      await refreshTree(selection);
+      setProjectPath(selection);
+      setUmlGraph(null);
+      lastGoodGraphRef.current = null;
+      setDiagramState(null);
+      setDiagramPath(null);
+      setOpenFile(null);
+      setFileDrafts({});
+      setContent("");
+      setLastSavedContent("");
+      setCompileStatus(null);
+      resetLsState();
+      setStatus(`Project created: ${selection}`);
+    } catch (error) {
+      setStatus(`Failed to create project: ${formatStatus(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  }, [
+    formatStatus,
+    lastGoodGraphRef,
+    projectPath,
+    refreshTree,
+    resetLsState,
+    setBusy,
+    setCompileStatus,
+    setContent,
+    setDiagramPath,
+    setDiagramState,
+    setFileDrafts,
+    setLastSavedContent,
+    setOpenFile,
+    setProjectPath,
+    setStatus,
+    setUmlGraph
+  ]);
+
   const handleSave = useCallback(async () => {
     setBusy(true);
     try {
@@ -323,6 +376,7 @@ export const useProjectIO = ({
 
   return {
     handleOpenProject,
+    handleNewProject,
     openFileByPath,
     handleSave,
     handleExportProject,

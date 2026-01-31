@@ -7,6 +7,19 @@ import { ConsolePanel } from "./components/console/ConsolePanel";
 import { DiagramPanel } from "./components/diagram/DiagramPanel";
 import { CodePanel } from "./components/editor/CodePanel";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
+import { AddClassDialog, type AddClassForm } from "./components/wizards/AddClassDialog";
+import { AddFieldDialog, type AddFieldForm } from "./components/wizards/AddFieldDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle
+} from "./components/ui/alert-dialog";
 import {
   Menubar,
   MenubarContent,
@@ -18,7 +31,7 @@ import {
 } from "./components/ui/menubar";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
-import type { UmlGraph } from "./models/uml";
+import type { UmlGraph, UmlNode } from "./models/uml";
 import type { OpenFile } from "./models/openFile";
 import { buildMockGraph, parseUmlGraph } from "./services/uml";
 import { useAppSettings } from "./hooks/useAppSettings";
@@ -27,7 +40,7 @@ import { useRunConsole } from "./hooks/useRunConsole";
 import { useLanguageServer } from "./hooks/useLanguageServer";
 import { toFileUri } from "./services/lsp";
 import { useDrafts } from "./hooks/useDrafts";
-import { basename, toFqnFromPath } from "./services/paths";
+import { basename, joinPath, toFqnFromPath } from "./services/paths";
 import { useProjectIO } from "./hooks/useProjectIO";
 
 const formatStatus = (input: unknown) =>
@@ -47,6 +60,14 @@ export default function App() {
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [status, setStatus] = useState("Open a Java project to begin.");
   const [busy, setBusy] = useState(false);
+  const [addClassOpen, setAddClassOpen] = useState(false);
+  const [addFieldOpen, setAddFieldOpen] = useState(false);
+  const [removeClassOpen, setRemoveClassOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
+  const [confirmProjectActionOpen, setConfirmProjectActionOpen] = useState(false);
+  const [pendingProjectAction, setPendingProjectAction] = useState<"open" | "new" | null>(null);
+  const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [fieldTarget, setFieldTarget] = useState<UmlNode | null>(null);
   const {
     settings,
     settingsOpen,
@@ -120,6 +141,12 @@ export default function App() {
   }, [content, lastSavedContent, openFile]);
   const editDisabled = !openFile || busy;
   const zoomDisabled = !umlGraph || !diagramState;
+  const canAddClass = Boolean(projectPath) && !busy;
+  const selectedNode = useMemo(() => {
+    if (!selectedClassId) return null;
+    return umlGraph?.nodes.find((node) => node.id === selectedClassId) ?? null;
+  }, [selectedClassId, umlGraph]);
+  const canAddField = Boolean(selectedNode) && !busy;
 
   const isMac = useMemo(
     () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
@@ -169,6 +196,18 @@ export default function App() {
     }
   }, [openFile]);
 
+  useEffect(() => {
+    if (!addFieldOpen) {
+      setFieldTarget(null);
+    }
+  }, [addFieldOpen]);
+
+  useEffect(() => {
+    if (selectedClassId && !selectedNode) {
+      setSelectedClassId(null);
+    }
+  }, [selectedClassId, selectedNode]);
+
   const projectName = useMemo(
     () => (projectPath ? basename(projectPath) : ""),
     [projectPath]
@@ -193,6 +232,7 @@ export default function App() {
 
   const {
     handleOpenProject,
+    handleNewProject,
     openFileByPath,
     handleSave,
     handleExportProject,
@@ -384,6 +424,125 @@ export default function App() {
   }, [projectPath, umlGraph, loadDiagramState]);
 
 
+  const handleNodePositionChange = (id: string, x: number, y: number, commit: boolean) => {
+    setDiagramState((prev) => {
+      if (!prev) return prev;
+      const next = {
+        ...prev,
+        nodes: {
+          ...prev.nodes,
+          [id]: { x, y }
+        }
+      };
+      if (commit && diagramPath) {
+        void invoke("write_text_file", {
+          path: diagramPath,
+          contents: JSON.stringify(next, null, 2)
+        });
+      }
+      return next;
+    });
+  };
+
+  const getNodeById = useCallback(
+    (id: string) => umlGraph?.nodes.find((item) => item.id === id) ?? null,
+    [umlGraph]
+  );
+
+  const handleNodeSelect = (id: string) => {
+    const node = getNodeById(id);
+    if (!node) return;
+    setSelectedClassId(node.id);
+    void openFileByPath(node.path);
+  };
+
+  const handleRemoveClass = useCallback(
+    async (node: UmlNode) => {
+      if (!projectPath) {
+        setStatus("Open a project before removing a class.");
+        return;
+      }
+      setBusy(true);
+      try {
+        const name = basename(node.path);
+        await invoke("remove_text_file", { path: node.path });
+        const nextTree = await invoke<FileNode>("list_project_tree", { root: projectPath });
+        setTree(nextTree);
+        if (openFilePath && openFilePath === node.path) {
+          setOpenFile(null);
+          setContent("");
+          setLastSavedContent("");
+        }
+        setFileDrafts((prev) => {
+          const next = { ...prev };
+          delete next[node.path];
+          return next;
+        });
+        setCompileStatus(null);
+        setStatus(`Removed ${name}`);
+        if (selectedClassId === node.id) {
+          setSelectedClassId(null);
+        }
+      } catch (error) {
+        setStatus(`Failed to remove class: ${formatStatus(error)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      openFilePath,
+      projectPath,
+      selectedClassId,
+      setBusy,
+      setCompileStatus,
+      setContent,
+      setFileDrafts,
+      setLastSavedContent,
+      setOpenFile,
+      setStatus,
+      setTree
+    ]
+  );
+
+  const requestRemoveClass = useCallback((node: UmlNode) => {
+    setRemoveTarget(node);
+    setRemoveClassOpen(true);
+  }, []);
+
+  const confirmRemoveClass = useCallback(async () => {
+    if (!removeTarget) return;
+    setRemoveClassOpen(false);
+    await handleRemoveClass(removeTarget);
+    setRemoveTarget(null);
+  }, [handleRemoveClass, removeTarget]);
+
+  const requestProjectAction = useCallback(
+    (action: "open" | "new") => {
+      if (!hasUnsavedChanges) {
+        if (action === "open") {
+          void handleOpenProject();
+        } else {
+          void handleNewProject();
+        }
+        return;
+      }
+      setPendingProjectAction(action);
+      setConfirmProjectActionOpen(true);
+    },
+    [hasUnsavedChanges, handleOpenProject, handleNewProject]
+  );
+
+  const confirmProjectAction = useCallback(() => {
+    const action = pendingProjectAction;
+    setConfirmProjectActionOpen(false);
+    setPendingProjectAction(null);
+    if (action === "open") {
+      void handleOpenProject();
+    } else if (action === "new") {
+      void handleNewProject();
+    }
+  }, [pendingProjectAction, handleOpenProject, handleNewProject]);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey)) return;
@@ -391,7 +550,14 @@ export default function App() {
       if (key === "o") {
         event.preventDefault();
         if (!busy) {
-          void handleOpenProject();
+          requestProjectAction("open");
+        }
+        return;
+      }
+      if (key === "n") {
+        event.preventDefault();
+        if (!busy) {
+          requestProjectAction("new");
         }
         return;
       }
@@ -420,34 +586,170 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [hasUnsavedChanges, busy, handleSave, handleOpenProject]);
+  }, [hasUnsavedChanges, busy, handleSave, requestProjectAction]);
 
-  const handleNodePositionChange = (id: string, x: number, y: number, commit: boolean) => {
-    setDiagramState((prev) => {
-      if (!prev) return prev;
-      const next = {
-        ...prev,
-        nodes: {
-          ...prev.nodes,
-          [id]: { x, y }
-        }
-      };
-      if (commit && diagramPath) {
-        void invoke("write_text_file", {
-          path: diagramPath,
-          contents: JSON.stringify(next, null, 2)
-        });
+  const handleOpenAddField = useCallback((node: UmlNode) => {
+    setSelectedClassId(node.id);
+    setFieldTarget(node);
+    setAddFieldOpen(true);
+  }, []);
+
+  const buildClassSource = useCallback((form: AddClassForm) => {
+    const name = form.name.trim().replace(/\.java$/i, "");
+    const packageName = form.packageName.trim();
+    const extendsName = form.extendsName.trim();
+    const tokens: string[] = [];
+    tokens.push("public");
+    if (!form.isInterface && form.isAbstract) tokens.push("abstract");
+    if (!form.isInterface && form.isFinal) tokens.push("final");
+    tokens.push(form.isInterface ? "interface" : "class");
+    tokens.push(name);
+    if (extendsName) {
+      tokens.push("extends", extendsName);
+    }
+
+    const classHeader = tokens.join(" ");
+    const docBlock = form.includeJavadoc ? "/**\n *\n */\n" : "";
+    const mainDoc = form.includeJavadoc
+      ? "  /**\n   * @param args the command line arguments\n   */\n"
+      : "";
+    const mainMethod =
+      form.includeMain && !form.isInterface
+        ? `${mainDoc}  public static void main(String[] args) {\n  }\n\n`
+        : "";
+    const packageLine = packageName ? `package ${packageName};\n\n` : "";
+
+    return `${packageLine}${docBlock}${classHeader} {\n\n${mainMethod}}\n`;
+  }, []);
+
+  const handleCreateClass = useCallback(
+    async (form: AddClassForm) => {
+      if (!projectPath) {
+        setStatus("Open a project before creating a class.");
+        return;
       }
-      return next;
-    });
-  };
 
-  const handleNodeSelect = (id: string) => {
-    if (!umlGraph) return;
-    const node = umlGraph.nodes.find((item) => item.id === id);
-    if (!node) return;
-    void openFileByPath(node.path);
-  };
+      const name = form.name.trim().replace(/\.java$/i, "");
+      if (!name) {
+        setStatus("Class name is required.");
+        return;
+      }
+
+      const srcRoot = joinPath(projectPath, "src");
+      const separator = projectPath.includes("\\") ? "\\" : "/";
+      const packageName = form.packageName.trim();
+      const packagePath = packageName ? packageName.split(".").join(separator) : "";
+      const dirPath = packagePath ? joinPath(srcRoot, packagePath) : srcRoot;
+      const filePath = joinPath(dirPath, `${name}.java`);
+      const source = buildClassSource(form);
+
+      setBusy(true);
+      try {
+        try {
+          await invoke<string>("read_text_file", { path: filePath });
+          setStatus(`Class already exists: ${name}.java`);
+          return;
+        } catch {
+          // File does not exist, continue.
+        }
+
+        await invoke("write_text_file", { path: filePath, contents: source });
+        const nextTree = await invoke<FileNode>("list_project_tree", { root: projectPath });
+        setTree(nextTree);
+        setCompileStatus(null);
+        await openFileByPath(filePath);
+        setStatus(`Created ${name}.java`);
+      } catch (error) {
+        setStatus(`Failed to create class: ${formatStatus(error)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      projectPath,
+      setStatus,
+      setBusy,
+      openFileByPath,
+      setTree,
+      setCompileStatus,
+      buildClassSource
+    ]
+  );
+
+  const handleCreateField = useCallback(
+    async (form: AddFieldForm) => {
+      const target = fieldTarget ?? selectedNode;
+      if (!projectPath) {
+        setStatus("Open a project before adding a field.");
+        return;
+      }
+      if (!target) {
+        setStatus("Select a class before adding a field.");
+        return;
+      }
+
+      setBusy(true);
+      try {
+        const existingDraft = fileDrafts[target.path];
+        const originalContent = existingDraft
+          ? existingDraft.content
+          : await invoke<string>("read_text_file", { path: target.path });
+        const savedBaseline = existingDraft?.lastSavedContent ?? originalContent;
+        const payload = {
+          action: "addField",
+          path: target.path,
+          classId: target.id,
+          content: originalContent,
+          field: {
+            name: form.name.trim(),
+            fieldType: form.type.trim(),
+            visibility: form.visibility,
+            isStatic: form.isStatic,
+            isFinal: form.isFinal
+          },
+          includeGetter: form.includeGetter,
+          includeSetter: form.includeSetter,
+          useParamPrefix: form.useParamPrefix,
+          includeJavadoc: form.includeJavadoc
+        };
+
+        const updated = await invoke<string>("add_field_to_class", { request: payload });
+        updateDraftForPath(target.path, updated, savedBaseline);
+        if (openFilePath === target.path) {
+          setContent(updated);
+          setLastSavedContent(savedBaseline);
+          notifyLsChange(target.path, updated);
+        } else {
+          setOpenFile({ name: basename(target.path), path: target.path });
+          setContent(updated);
+          setLastSavedContent(savedBaseline);
+          notifyLsOpen(target.path, updated);
+        }
+        setCompileStatus(null);
+        setStatus(`Added field to ${basename(target.path)}`);
+      } catch (error) {
+        setStatus(`Failed to add field: ${formatStatus(error)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      fieldTarget,
+      selectedNode,
+      projectPath,
+      fileDrafts,
+      openFilePath,
+      notifyLsChange,
+      notifyLsOpen,
+      setBusy,
+      setCompileStatus,
+      setContent,
+      setLastSavedContent,
+      setOpenFile,
+      setStatus,
+      updateDraftForPath
+    ]
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -463,7 +765,11 @@ export default function App() {
           <MenubarMenu>
             <MenubarTrigger>File</MenubarTrigger>
             <MenubarContent>
-              <MenubarItem onClick={handleOpenProject} disabled={busy}>
+              <MenubarItem onClick={() => requestProjectAction("new")} disabled={busy}>
+                New Project
+                <MenubarShortcut>{isMac ? "⌘N" : "Ctrl+N"}</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem onClick={() => requestProjectAction("open")} disabled={busy}>
                 Open
                 <MenubarShortcut>
                   {isMac ? "⌘O" : "Ctrl+O"}
@@ -491,6 +797,28 @@ export default function App() {
                 disabled={busy}
               >
                 Exit
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>Add</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem
+                onClick={() => setAddClassOpen(true)}
+                disabled={!canAddClass}
+              >
+                Class
+              </MenubarItem>
+              <MenubarItem
+                onClick={() => {
+                  if (selectedNode) {
+                    setFieldTarget(selectedNode);
+                    setAddFieldOpen(true);
+                  }
+                }}
+                disabled={!canAddField}
+              >
+                Field
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
@@ -592,9 +920,12 @@ export default function App() {
                 onNodeSelect={handleNodeSelect}
                 onCompileClass={handleCompileClass}
                 onRunMain={handleRunMain}
+                onRemoveClass={requestRemoveClass}
+                onAddField={handleOpenAddField}
                 onRegisterZoom={(controls) => {
                   zoomControlsRef.current = controls;
                 }}
+                onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
               />
             </section>
 
@@ -671,6 +1002,109 @@ export default function App() {
         settings={settings}
         onChange={handleSettingsChange}
       />
+      <AddClassDialog
+        open={addClassOpen}
+        onOpenChange={setAddClassOpen}
+        onSubmit={handleCreateClass}
+        busy={busy}
+      />
+      <AddFieldDialog
+        open={addFieldOpen}
+        onOpenChange={setAddFieldOpen}
+        onSubmit={handleCreateField}
+        busy={busy}
+      />
+      <AlertDialog
+        open={removeClassOpen}
+        onOpenChange={(open) => {
+          setRemoveClassOpen(open);
+          if (!open) {
+            setRemoveTarget(null);
+          }
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader className="items-center text-center">
+            <AlertDialogMedia className="bg-destructive/10 text-destructive">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth="1.5"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
+                />
+              </svg>
+            </AlertDialogMedia>
+            <AlertDialogTitle>Remove class?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
+              This will delete{" "}
+              <strong>{removeTarget ? removeTarget.name : "this class"}</strong>. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+            <AlertDialogCancel
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20"
+              disabled={busy || !removeTarget}
+              onClick={() => {
+                void confirmRemoveClass();
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={confirmProjectActionOpen}
+        onOpenChange={(open) => {
+          setConfirmProjectActionOpen(open);
+          if (!open) {
+            setPendingProjectAction(null);
+          }
+        }}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader className="items-center text-center">
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
+              You have unsaved changes. Continuing will discard them.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+            <AlertDialogCancel
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="w-full"
+              disabled={busy || !pendingProjectAction}
+              onClick={() => {
+                confirmProjectAction();
+              }}
+            >
+              Continue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,5 +1,11 @@
 import type { DiagramState } from "../../models/diagram";
 import type { UmlGraph, UmlNode } from "../../models/uml";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from "../ui/context-menu";
 import { UmlDiagram, type ZoomControls } from "./UmlDiagram";
 
 export type DiagramPanelProps = {
@@ -12,6 +18,9 @@ export type DiagramPanelProps = {
   onCompileClass: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
+  onAddClass?: () => void;
+  onRemoveClass?: (node: UmlNode) => void;
+  onAddField?: (node: UmlNode) => void;
 };
 
 export const DiagramPanel = ({
@@ -23,29 +32,43 @@ export const DiagramPanel = ({
   onNodeSelect,
   onCompileClass,
   onRunMain,
-  onRegisterZoom
+  onRegisterZoom,
+  onAddClass,
+  onRemoveClass,
+  onAddField
 }: DiagramPanelProps) => (
-  <div className="flex h-full flex-col">
-    <div
-      className="flex-1 bg-muted/20"
-      style={backgroundColor ? { backgroundColor } : undefined}
-    >
-      {graph && diagram ? (
-        <UmlDiagram
-          graph={graph}
-          diagram={diagram}
-          compiled={compiled}
-          onNodePositionChange={onNodePositionChange}
-          onNodeSelect={onNodeSelect}
-          onCompileClass={onCompileClass}
-          onRunMain={onRunMain}
-          onRegisterZoom={onRegisterZoom}
-        />
-      ) : (
-        <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          Open a project to generate the UML view.
+  <ContextMenu>
+    <ContextMenuTrigger asChild>
+      <div className="flex h-full flex-col">
+        <div
+          className="flex-1 bg-muted/20"
+          style={backgroundColor ? { backgroundColor } : undefined}
+        >
+          {graph && diagram ? (
+            <UmlDiagram
+              graph={graph}
+              diagram={diagram}
+              compiled={compiled}
+              onNodePositionChange={onNodePositionChange}
+              onNodeSelect={onNodeSelect}
+              onCompileClass={onCompileClass}
+              onRunMain={onRunMain}
+              onRemoveClass={onRemoveClass}
+              onAddField={onAddField}
+              onRegisterZoom={onRegisterZoom}
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              Open a project to generate the UML view.
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  </div>
+      </div>
+    </ContextMenuTrigger>
+    <ContextMenuContent>
+      <ContextMenuItem disabled={!onAddClass} onSelect={onAddClass}>
+        Add Class
+      </ContextMenuItem>
+    </ContextMenuContent>
+  </ContextMenu>
 );

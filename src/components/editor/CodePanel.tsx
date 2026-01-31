@@ -47,7 +47,7 @@ export const CodePanel = memo(
           key={openFile.path}
           language="java"
           theme={darkTheme ? "vs-dark" : "vs"}
-          defaultValue={content}
+          value={content}
           path={fileUri ?? undefined}
           onMount={(editor) => {
             onEditorMount?.(editor);

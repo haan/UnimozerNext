@@ -182,6 +182,8 @@ export type UmlDiagramProps = {
   onNodeSelect?: (id: string) => void;
   onCompileClass?: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
+  onRemoveClass?: (node: UmlNode) => void;
+  onAddField?: (node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
 };
 
@@ -216,6 +218,8 @@ export const UmlDiagram = ({
   onNodeSelect,
   onCompileClass,
   onRunMain,
+  onRemoveClass,
+  onAddField,
   onRegisterZoom
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -359,6 +363,11 @@ export const UmlDiagram = ({
       ref={svgRef}
       className="h-full w-full select-none touch-none"
       role="img"
+      onContextMenu={(event) => {
+        if (event.target !== svgRef.current) {
+          event.stopPropagation();
+        }
+      }}
       onPointerDown={(event) => {
         if (event.button !== 0) return;
         if (event.target !== svgRef.current) return;
@@ -519,6 +528,8 @@ export const UmlDiagram = ({
             }}
             onCompile={() => onCompileClass?.(node)}
             onRunMain={() => onRunMain?.(node)}
+            onRemove={() => onRemoveClass?.(node)}
+            onAddField={() => onAddField?.(node)}
           />
         ))}
 

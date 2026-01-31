@@ -3,8 +3,7 @@
 
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2"),
-    url("/fonts/JetBrainsMono-Regular.woff") format("woff");
+  src: url("/fonts/JetBrainsMono-Regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
@@ -12,8 +11,7 @@
 
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff2"),
-    url("/fonts/JetBrainsMono-SemiBold.woff") format("woff");
+  src: url("/fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
@@ -21,8 +19,7 @@
 
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-Italic.woff2") format("woff2"),
-    url("/fonts/JetBrainsMono-Italic.woff") format("woff");
+  src: url("/fonts/JetBrainsMono-Italic.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
@@ -30,8 +27,7 @@
 
 @font-face {
   font-family: "JetBrains Mono";
-  src: url("/fonts/JetBrainsMono-SemiBoldItalic.woff2") format("woff2"),
-    url("/fonts/JetBrainsMono-SemiBoldItalic.woff") format("woff");
+  src: url("/fonts/JetBrainsMono-SemiBoldItalic.woff2") format("woff2");
   font-weight: 600;
   font-style: italic;
   font-display: swap;

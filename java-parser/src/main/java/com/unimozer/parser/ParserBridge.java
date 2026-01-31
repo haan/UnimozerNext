@@ -1,17 +1,20 @@
 package com.unimozer.parser;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ParseStart;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.Providers;
+import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.ConstructorDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
@@ -97,6 +100,32 @@ public class ParserBridge {
     public String kind;
   }
 
+  static class AddFieldRequest {
+    public String action;
+    public String path;
+    public String classId;
+    public String content;
+    public FieldSpec field;
+    public boolean includeGetter;
+    public boolean includeSetter;
+    public boolean useParamPrefix;
+    public boolean includeJavadoc;
+  }
+
+  static class FieldSpec {
+    public String name;
+    public String fieldType;
+    public String visibility;
+    public boolean isStatic;
+    public boolean isFinal;
+  }
+
+  static class AddFieldResponse {
+    public boolean ok;
+    public String content;
+    public String error;
+  }
+
   static class Context {
     public String pkg;
     public Map<String, String> explicitImports = new HashMap<>();
@@ -114,8 +143,25 @@ public class ParserBridge {
 
   public static void main(String[] args) throws Exception {
     ObjectMapper mapper = new ObjectMapper();
-    Request request = mapper.readValue(System.in, Request.class);
+    JsonNode rootNode = mapper.readTree(System.in);
+    if (rootNode == null || rootNode.isNull()) {
+      throw new IllegalArgumentException("Missing request body");
+    }
 
+    String action = rootNode.has("action") ? rootNode.get("action").asText() : "parseGraph";
+    if ("addField".equals(action)) {
+      AddFieldRequest request = mapper.treeToValue(rootNode, AddFieldRequest.class);
+      AddFieldResponse response = addField(request);
+      mapper.writeValue(System.out, response);
+      return;
+    }
+
+    Request request = mapper.treeToValue(rootNode, Request.class);
+    Graph graph = parseGraph(request);
+    mapper.writeValue(System.out, graph);
+  }
+
+  static Graph parseGraph(Request request) throws IOException {
     if (request == null || request.root == null || request.root.isBlank()) {
       throw new IllegalArgumentException("Missing root in request");
     }
@@ -162,7 +208,179 @@ public class ParserBridge {
 
     Graph graph = buildGraph(parsedTypes);
     graph.failedFiles = failedFiles;
-    mapper.writeValue(System.out, graph);
+    return graph;
+  }
+
+  static AddFieldResponse addField(AddFieldRequest request) {
+    AddFieldResponse response = new AddFieldResponse();
+    if (request == null || request.path == null || request.path.isBlank()) {
+      response.ok = false;
+      response.error = "Missing file path";
+      return response;
+    }
+    if (request.field == null || request.field.name == null || request.field.name.isBlank()) {
+      response.ok = false;
+      response.error = "Missing field name";
+      return response;
+    }
+    if (request.field.fieldType == null || request.field.fieldType.isBlank()) {
+      response.ok = false;
+      response.error = "Missing field type";
+      return response;
+    }
+
+    String source;
+    try {
+      source = request.content != null && !request.content.isBlank()
+        ? request.content
+        : Files.readString(Paths.get(request.path));
+    } catch (IOException ex) {
+      response.ok = false;
+      response.error = "Failed to read source file";
+      return response;
+    }
+
+    ParserConfiguration config = new ParserConfiguration();
+    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    JavaParser parser = new JavaParser(config);
+
+    ParseResult<CompilationUnit> parseResult = parser.parse(
+      ParseStart.COMPILATION_UNIT,
+      Providers.provider(source)
+    );
+
+    if (!parseResult.isSuccessful() || parseResult.getResult().isEmpty()) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    CompilationUnit cu = parseResult.getResult().orElse(null);
+    if (cu == null) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    Context ctx = buildContext(cu);
+    TypeDeclaration<?> targetType = null;
+    String classId = request.classId != null ? request.classId : "";
+    for (TypeDeclaration<?> typeDecl : cu.getTypes()) {
+      String name = typeDecl.getNameAsString();
+      String id = ctx.pkg.isEmpty() ? name : ctx.pkg + "." + name;
+      if (!classId.isBlank()) {
+        if (id.equals(classId)) {
+          targetType = typeDecl;
+          break;
+        }
+      } else if (targetType == null) {
+        targetType = typeDecl;
+      }
+    }
+
+    if (targetType == null) {
+      response.ok = false;
+      response.error = "Target class not found";
+      return response;
+    }
+
+    boolean isInterface = targetType.isClassOrInterfaceDeclaration()
+      && targetType.asClassOrInterfaceDeclaration().isInterface();
+
+    String visibility = request.field.visibility == null ? "private" : request.field.visibility;
+    FieldDeclaration fieldDecl = new FieldDeclaration();
+    if ("public".equals(visibility)) fieldDecl.addModifier(Modifier.Keyword.PUBLIC);
+    if ("protected".equals(visibility)) fieldDecl.addModifier(Modifier.Keyword.PROTECTED);
+    if ("private".equals(visibility)) fieldDecl.addModifier(Modifier.Keyword.PRIVATE);
+    if (request.field.isStatic || isInterface) fieldDecl.addModifier(Modifier.Keyword.STATIC);
+    if (request.field.isFinal || isInterface) fieldDecl.addModifier(Modifier.Keyword.FINAL);
+
+    try {
+      fieldDecl.addVariable(
+        new VariableDeclarator(StaticJavaParser.parseType(request.field.fieldType), request.field.name)
+      );
+    } catch (Exception ex) {
+      response.ok = false;
+      response.error = "Invalid field type";
+      return response;
+    }
+
+    if (request.includeJavadoc) {
+      fieldDecl.setJavadocComment("\n *\n ");
+    }
+
+    List<BodyDeclaration<?>> members = targetType.getMembers();
+    int insertIndex = 0;
+    for (int i = 0; i < members.size(); i++) {
+      if (members.get(i) instanceof FieldDeclaration) {
+        insertIndex = i + 1;
+      }
+    }
+    members.add(insertIndex, fieldDecl);
+
+    boolean includeGetter = request.includeGetter;
+    boolean includeSetter = request.includeSetter && !request.field.isFinal && !isInterface;
+    String fieldName = request.field.name;
+    String capitalized = capitalize(fieldName);
+    String getterName = "get" + capitalized;
+    String setterName = "set" + capitalized;
+    String paramName = request.useParamPrefix ? "p" + capitalized : fieldName;
+
+    if (includeGetter) {
+      MethodDeclaration getter = new MethodDeclaration();
+      if ("public".equals(visibility)) getter.addModifier(Modifier.Keyword.PUBLIC);
+      if ("protected".equals(visibility)) getter.addModifier(Modifier.Keyword.PROTECTED);
+      if ("private".equals(visibility)) getter.addModifier(Modifier.Keyword.PRIVATE);
+      if (request.field.isStatic || isInterface) getter.addModifier(Modifier.Keyword.STATIC);
+      try {
+        getter.setType(StaticJavaParser.parseType(request.field.fieldType));
+      } catch (Exception ex) {
+        response.ok = false;
+        response.error = "Invalid field type";
+        return response;
+      }
+      getter.setName(getterName);
+      getter.setBody(StaticJavaParser.parseBlock("{ return " + fieldName + "; }"));
+      if (request.includeJavadoc) {
+        getter.setJavadocComment("\n *\n ");
+      }
+      members.add(getter);
+    }
+
+    if (includeSetter) {
+      MethodDeclaration setter = new MethodDeclaration();
+      if ("public".equals(visibility)) setter.addModifier(Modifier.Keyword.PUBLIC);
+      if ("protected".equals(visibility)) setter.addModifier(Modifier.Keyword.PROTECTED);
+      if ("private".equals(visibility)) setter.addModifier(Modifier.Keyword.PRIVATE);
+      if (request.field.isStatic) setter.addModifier(Modifier.Keyword.STATIC);
+      setter.setType("void");
+      try {
+        setter.addParameter(StaticJavaParser.parseType(request.field.fieldType), paramName);
+      } catch (Exception ex) {
+        response.ok = false;
+        response.error = "Invalid field type";
+        return response;
+      }
+      setter.setName(setterName);
+      String assignment = request.field.isStatic
+        ? fieldName + " = " + paramName + ";"
+        : "this." + fieldName + " = " + paramName + ";";
+      setter.setBody(StaticJavaParser.parseBlock("{ " + assignment + " }"));
+      if (request.includeJavadoc) {
+        setter.setJavadocComment("\n *\n ");
+      }
+      members.add(setter);
+    }
+
+    response.ok = true;
+    response.content = cu.toString();
+    return response;
+  }
+
+  static String capitalize(String name) {
+    if (name == null || name.isBlank()) return "";
+    if (name.length() == 1) return name.toUpperCase();
+    return name.substring(0, 1).toUpperCase() + name.substring(1);
   }
 
   static Path resolveSrcRoot(Path root, String srcRoot) {
