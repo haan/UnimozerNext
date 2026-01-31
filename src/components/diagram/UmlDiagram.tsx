@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DiagramState } from "../../models/diagram";
 import type { UmlGraph, UmlNode } from "../../models/uml";
@@ -182,6 +182,13 @@ export type UmlDiagramProps = {
   onNodeSelect?: (id: string) => void;
   onCompileClass?: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
+  onRegisterZoom?: (controls: ZoomControls | null) => void;
+};
+
+export type ZoomControls = {
+  zoomIn: () => void;
+  zoomOut: () => void;
+  resetZoom: () => void;
 };
 
 type DragState = {
@@ -208,13 +215,35 @@ export const UmlDiagram = ({
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
-  onRunMain
+  onRunMain,
+  onRegisterZoom
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const [fontReady, setFontReady] = useState(false);
+  const zoomAt = useCallback((factor: number, clientX?: number, clientY?: number) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    const sx =
+      typeof clientX === "number" ? clientX - rect.left : rect.width / 2;
+    const sy =
+      typeof clientY === "number" ? clientY - rect.top : rect.height / 2;
+    setView((current) => {
+      const nextScale = Math.min(2.5, Math.max(0.4, current.scale * factor));
+      const worldX = sx / current.scale - current.x;
+      const worldY = sy / current.scale - current.y;
+      const nextX = sx / nextScale - worldX;
+      const nextY = sy / nextScale - worldY;
+      return { x: nextX, y: nextY, scale: nextScale };
+    });
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setView({ x: 0, y: 0, scale: 1 });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +266,18 @@ export const UmlDiagram = ({
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!onRegisterZoom) return;
+    onRegisterZoom({
+      zoomIn: () => zoomAt(1.1),
+      zoomOut: () => zoomAt(0.9),
+      resetZoom
+    });
+    return () => {
+      onRegisterZoom(null);
+    };
+  }, [onRegisterZoom, resetZoom, zoomAt]);
 
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
@@ -332,18 +373,8 @@ export const UmlDiagram = ({
       }}
       onWheel={(event) => {
         event.preventDefault();
-        const svg = svgRef.current;
-        if (!svg) return;
-        const rect = svg.getBoundingClientRect();
-        const sx = event.clientX - rect.left;
-        const sy = event.clientY - rect.top;
-        const worldX = sx / view.scale - view.x;
-        const worldY = sy / view.scale - view.y;
         const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
-        const nextScale = Math.min(2.5, Math.max(0.4, view.scale * zoomFactor));
-        const nextX = sx / nextScale - worldX;
-        const nextY = sy / nextScale - worldY;
-        setView({ x: nextX, y: nextY, scale: nextScale });
+        zoomAt(zoomFactor, event.clientX, event.clientY);
       }}
     >
       <defs>

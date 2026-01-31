@@ -1,6 +1,6 @@
 import type { DiagramState } from "../../models/diagram";
 import type { UmlGraph, UmlNode } from "../../models/uml";
-import { UmlDiagram } from "./UmlDiagram";
+import { UmlDiagram, type ZoomControls } from "./UmlDiagram";
 
 export type DiagramPanelProps = {
   graph: UmlGraph | null;
@@ -11,6 +11,7 @@ export type DiagramPanelProps = {
   onNodeSelect: (id: string) => void;
   onCompileClass: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
+  onRegisterZoom?: (controls: ZoomControls | null) => void;
 };
 
 export const DiagramPanel = ({
@@ -21,7 +22,8 @@ export const DiagramPanel = ({
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
-  onRunMain
+  onRunMain,
+  onRegisterZoom
 }: DiagramPanelProps) => (
   <div className="flex h-full flex-col">
     <div
@@ -37,6 +39,7 @@ export const DiagramPanel = ({
           onNodeSelect={onNodeSelect}
           onCompileClass={onCompileClass}
           onRunMain={onRunMain}
+          onRegisterZoom={onRegisterZoom}
         />
       ) : (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

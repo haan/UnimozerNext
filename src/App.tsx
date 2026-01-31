@@ -74,6 +74,11 @@ export default function App() {
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
+  const zoomControlsRef = useRef<{
+    zoomIn: () => void;
+    zoomOut: () => void;
+    resetZoom: () => void;
+  } | null>(null);
   const {
     monacoRef,
     lsReadyRef,
@@ -114,6 +119,7 @@ export default function App() {
     return content !== lastSavedContent;
   }, [content, lastSavedContent, openFile]);
   const editDisabled = !openFile || busy;
+  const zoomDisabled = !umlGraph || !diagramState;
 
   const isMac = useMemo(
     () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
@@ -380,18 +386,35 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const isSave = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s";
-      const isOpen = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "o";
-      if (!isSave && !isOpen) return;
-      event.preventDefault();
-      if (isOpen) {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const key = event.key.toLowerCase();
+      if (key === "o") {
+        event.preventDefault();
         if (!busy) {
           void handleOpenProject();
         }
         return;
       }
-      if (!hasUnsavedChanges || busy) return;
-      void handleSave();
+      if (key === "s") {
+        event.preventDefault();
+        if (!hasUnsavedChanges || busy) return;
+        void handleSave();
+        return;
+      }
+      if (key === "+" || key === "=") {
+        event.preventDefault();
+        zoomControlsRef.current?.zoomIn();
+        return;
+      }
+      if (key === "-" || key === "_") {
+        event.preventDefault();
+        zoomControlsRef.current?.zoomOut();
+        return;
+      }
+      if (key === "0") {
+        event.preventDefault();
+        zoomControlsRef.current?.resetZoom();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
@@ -517,9 +540,27 @@ export default function App() {
           <MenubarMenu>
             <MenubarTrigger>View</MenubarTrigger>
             <MenubarContent>
-              <MenubarItem disabled>Zoom In</MenubarItem>
-              <MenubarItem disabled>Zoom Out</MenubarItem>
-              <MenubarItem disabled>Reset Zoom</MenubarItem>
+              <MenubarItem
+                onClick={() => zoomControlsRef.current?.zoomIn()}
+                disabled={zoomDisabled}
+              >
+                Zoom In
+                <MenubarShortcut>{isMac ? "⌘+" : "Ctrl++"}</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem
+                onClick={() => zoomControlsRef.current?.zoomOut()}
+                disabled={zoomDisabled}
+              >
+                Zoom Out
+                <MenubarShortcut>{isMac ? "⌘-" : "Ctrl+-"}</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem
+                onClick={() => zoomControlsRef.current?.resetZoom()}
+                disabled={zoomDisabled}
+              >
+                Reset Zoom
+                <MenubarShortcut>{isMac ? "⌘0" : "Ctrl+0"}</MenubarShortcut>
+              </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
           </Menubar>
@@ -551,6 +592,9 @@ export default function App() {
                 onNodeSelect={handleNodeSelect}
                 onCompileClass={handleCompileClass}
                 onRunMain={handleRunMain}
+                onRegisterZoom={(controls) => {
+                  zoomControlsRef.current = controls;
+                }}
               />
             </section>
 
