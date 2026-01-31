@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { editor as MonacoEditorType } from "monaco-editor";
 
 import { ConsolePanel } from "./components/console/ConsolePanel";
 import { DiagramPanel } from "./components/diagram/DiagramPanel";
@@ -72,6 +73,7 @@ export default function App() {
   });
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
+  const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const {
     monacoRef,
     lsReadyRef,
@@ -111,6 +113,55 @@ export default function App() {
     if (!openFile) return false;
     return content !== lastSavedContent;
   }, [content, lastSavedContent, openFile]);
+  const editDisabled = !openFile || busy;
+
+  const isMac = useMemo(
+    () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
+    []
+  );
+
+  const triggerEditorAction = useCallback((actionId: string) => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    editor.trigger("menu", actionId, null);
+  }, []);
+
+  const handlePaste = useCallback(async () => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    editor.focus();
+    let text = "";
+    try {
+      const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
+      text = await readText();
+    } catch {
+      text = "";
+    }
+    if (text.length > 0) {
+      const model = editor.getModel();
+      if (!model) return;
+      const selections = editor.getSelections() ?? [];
+      const edits = (selections.length ? selections : [editor.getSelection()])
+        .filter(Boolean)
+        .map((selection) => ({
+          range: selection!,
+          text,
+          forceMoveMarkers: true
+        }));
+      if (edits.length) {
+        editor.executeEdits("clipboard", edits);
+        return;
+      }
+    }
+    editor.trigger("menu", "editor.action.clipboardPasteAction", null);
+  }, []);
+
+  useEffect(() => {
+    if (!openFile) {
+      editorRef.current = null;
+    }
+  }, [openFile]);
 
   const projectName = useMemo(
     () => (projectPath ? basename(projectPath) : ""),
@@ -392,13 +443,13 @@ export default function App() {
               <MenubarItem onClick={handleOpenProject} disabled={busy}>
                 Open
                 <MenubarShortcut>
-                  {navigator.platform.toLowerCase().includes("mac") ? "⌘O" : "Ctrl+O"}
+                  {isMac ? "⌘O" : "Ctrl+O"}
                 </MenubarShortcut>
               </MenubarItem>
               <MenubarItem onClick={handleSave} disabled={!hasUnsavedChanges || busy}>
                 Save
                 <MenubarShortcut>
-                  {navigator.platform.toLowerCase().includes("mac") ? "⌘S" : "Ctrl+S"}
+                  {isMac ? "⌘S" : "Ctrl+S"}
                 </MenubarShortcut>
               </MenubarItem>
               <MenubarItem onClick={handleExportProject} disabled={busy || !projectPath}>
@@ -423,12 +474,44 @@ export default function App() {
           <MenubarMenu>
             <MenubarTrigger>Edit</MenubarTrigger>
             <MenubarContent>
-              <MenubarItem disabled>Undo</MenubarItem>
-              <MenubarItem disabled>Redo</MenubarItem>
+              <MenubarItem
+                onClick={() => triggerEditorAction("undo")}
+                disabled={editDisabled}
+              >
+                Undo
+                <MenubarShortcut>{isMac ? "⌘Z" : "Ctrl+Z"}</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem
+                onClick={() => triggerEditorAction("redo")}
+                disabled={editDisabled}
+              >
+                Redo
+                <MenubarShortcut>{isMac ? "⇧⌘Z" : "Ctrl+Y"}</MenubarShortcut>
+              </MenubarItem>
               <MenubarSeparator />
-              <MenubarItem disabled>Cut</MenubarItem>
-              <MenubarItem disabled>Copy</MenubarItem>
-              <MenubarItem disabled>Paste</MenubarItem>
+              <MenubarItem
+                onClick={() => triggerEditorAction("editor.action.clipboardCutAction")}
+                disabled={editDisabled}
+              >
+                Cut
+                <MenubarShortcut>{isMac ? "⌘X" : "Ctrl+X"}</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem
+                onClick={() => triggerEditorAction("editor.action.clipboardCopyAction")}
+                disabled={editDisabled}
+              >
+                Copy
+                <MenubarShortcut>{isMac ? "⌘C" : "Ctrl+C"}</MenubarShortcut>
+              </MenubarItem>
+              <MenubarItem
+                onClick={() => {
+                  void handlePaste();
+                }}
+                disabled={editDisabled}
+              >
+                Paste
+                <MenubarShortcut>{isMac ? "⌘V" : "Ctrl+V"}</MenubarShortcut>
+              </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
           <MenubarMenu>
@@ -505,6 +588,9 @@ export default function App() {
                     wordWrap={settings.editor.wordWrap}
                     darkTheme={settings.editor.darkTheme}
                     onChange={handleContentChange}
+                    onEditorMount={(editor) => {
+                      editorRef.current = editor;
+                    }}
                   />
                 </div>
                 <div

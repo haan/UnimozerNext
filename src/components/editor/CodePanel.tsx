@@ -1,4 +1,5 @@
 import MonacoEditor from "@monaco-editor/react";
+import type { editor as MonacoEditorType } from "monaco-editor";
 import { memo } from "react";
 
 type OpenFile = {
@@ -20,6 +21,7 @@ export type CodePanelProps = {
   wordWrap: boolean;
   darkTheme: boolean;
   onChange: (value: string) => void;
+  onEditorMount?: (editor: MonacoEditorType.IStandaloneCodeEditor) => void;
 };
 
 export const CodePanel = memo(
@@ -35,7 +37,8 @@ export const CodePanel = memo(
     autoCloseComments,
     wordWrap,
     darkTheme,
-    onChange
+    onChange,
+    onEditorMount
   }: CodePanelProps) => (
   <div className="flex h-full flex-col overflow-hidden">
     <div className="flex-1 min-h-0">
@@ -46,6 +49,9 @@ export const CodePanel = memo(
           theme={darkTheme ? "vs-dark" : "vs"}
           defaultValue={content}
           path={fileUri ?? undefined}
+          onMount={(editor) => {
+            onEditorMount?.(editor);
+          }}
           onChange={(value) => {
             const next = value ?? "";
             onChange(next);
