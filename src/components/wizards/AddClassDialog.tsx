@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { isValidJavaIdentifier } from "../../services/java";
 
 export type AddClassForm = {
   name: string;
@@ -67,6 +68,7 @@ export const AddClassDialog = ({
 
   const disabled = busy || submitting;
   const nameValue = form.name.trim();
+  const isNameValid = isValidJavaIdentifier(nameValue);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,8 +84,9 @@ export const AddClassDialog = ({
             <div className="grid grid-cols-[90px_1fr] items-center gap-3">
               <label className="text-sm font-medium">Name:</label>
               <input
-                className="h-8 w-full rounded border border-input bg-background px-2 text-sm"
+                className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={form.name}
+                aria-invalid={nameValue ? !isNameValid : false}
                 onChange={(event) => update({ name: event.target.value })}
               />
             </div>
@@ -207,7 +210,7 @@ export const AddClassDialog = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={disabled || !nameValue}>
+            <Button type="submit" disabled={disabled || !nameValue || !isNameValid}>
               OK
             </Button>
           </div>

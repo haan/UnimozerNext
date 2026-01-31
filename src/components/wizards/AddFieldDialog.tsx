@@ -13,6 +13,7 @@ import {
   SelectValue
 } from "../ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
+import { isValidJavaIdentifier } from "../../services/java";
 
 export type AddFieldForm = {
   name: string;
@@ -20,7 +21,6 @@ export type AddFieldForm = {
   visibility: "private" | "public" | "protected" | "package";
   isStatic: boolean;
   isFinal: boolean;
-  isAbstract: boolean;
   includeSetter: boolean;
   useParamPrefix: boolean;
   includeGetter: boolean;
@@ -40,73 +40,10 @@ const defaultForm: AddFieldForm = {
   visibility: "private",
   isStatic: false,
   isFinal: false,
-  isAbstract: false,
   includeSetter: false,
   useParamPrefix: false,
   includeGetter: false,
   includeJavadoc: false
-};
-
-const JAVA_KEYWORDS = new Set([
-  "abstract",
-  "assert",
-  "boolean",
-  "break",
-  "byte",
-  "case",
-  "catch",
-  "char",
-  "class",
-  "const",
-  "continue",
-  "default",
-  "do",
-  "double",
-  "else",
-  "enum",
-  "extends",
-  "final",
-  "finally",
-  "float",
-  "for",
-  "goto",
-  "if",
-  "implements",
-  "import",
-  "instanceof",
-  "int",
-  "interface",
-  "long",
-  "native",
-  "new",
-  "package",
-  "private",
-  "protected",
-  "public",
-  "return",
-  "short",
-  "static",
-  "strictfp",
-  "super",
-  "switch",
-  "synchronized",
-  "this",
-  "throw",
-  "throws",
-  "transient",
-  "try",
-  "void",
-  "volatile",
-  "while",
-  "true",
-  "false",
-  "null"
-]);
-
-const isValidJavaIdentifier = (value: string) => {
-  if (!value) return false;
-  if (JAVA_KEYWORDS.has(value)) return false;
-  return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value);
 };
 
 export const AddFieldDialog = ({
@@ -166,7 +103,6 @@ export const AddFieldDialog = ({
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={form.name}
                 aria-invalid={Boolean(nameError)}
-                aria-describedby={nameError ? "add-field-name-error" : undefined}
                 onChange={(event) => update({ name: event.target.value })}
               />
             </div>
