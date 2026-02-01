@@ -36,6 +36,7 @@ type UseRunConsoleResult = {
   compileStatus: "success" | "failed" | null;
   setCompileStatus: Dispatch<SetStateAction<"success" | "failed" | null>>;
   runSessionId: number | null;
+  appendConsoleOutput: (text: string) => void;
   handleCompileClass: (node: UmlNode) => Promise<void>;
   handleRunMain: (node: UmlNode) => Promise<void>;
   handleCancelRun: () => Promise<void>;
@@ -265,6 +266,7 @@ export const useRunConsole = ({
     compileStatus,
     setCompileStatus,
     runSessionId,
+    appendConsoleOutput: appendConsole,
     handleCompileClass,
     handleRunMain,
     handleCancelRun

@@ -7,6 +7,7 @@ import com.github.javaparser.ParseStart;
 import com.github.javaparser.ParseResult;
 import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.Providers;
+import com.github.javaparser.Range;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.ImportDeclaration;
@@ -71,10 +72,18 @@ public class ParserBridge {
     public List<MethodInfo> methods = new ArrayList<>();
   }
 
+  static class SourceRange {
+    public int startLine;
+    public int startColumn;
+    public int endLine;
+    public int endColumn;
+  }
+
   static class FieldInfo {
     public String signature;
     public boolean isStatic;
     public String visibility;
+    public SourceRange range;
   }
 
   static class MethodInfo {
@@ -86,6 +95,7 @@ public class ParserBridge {
     public boolean isMain;
     public boolean isStatic;
     public String visibility;
+    public SourceRange range;
   }
 
   static class ParamInfo {
@@ -882,6 +892,18 @@ public class ParserBridge {
     return false;
   }
 
+  static SourceRange toSourceRange(com.github.javaparser.ast.Node node) {
+    if (node == null) return null;
+    return node.getRange().map(range -> {
+      SourceRange info = new SourceRange();
+      info.startLine = range.begin.line;
+      info.startColumn = range.begin.column;
+      info.endLine = range.end.line;
+      info.endColumn = range.end.column;
+      return info;
+    }).orElse(null);
+  }
+
   static List<FieldInfo> collectFieldInfo(TypeDeclaration<?> typeDecl) {
     List<FieldInfo> fields = new ArrayList<>();
     for (FieldDeclaration field : typeDecl.getFields()) {
@@ -893,6 +915,7 @@ public class ParserBridge {
         info.signature = variable.getNameAsString() + ": " + typeName;
         info.isStatic = isStatic;
         info.visibility = visibility;
+        info.range = toSourceRange(variable);
         fields.add(info);
       }
     }
@@ -929,6 +952,7 @@ public class ParserBridge {
       info.isMain = isMain;
       info.isStatic = isStatic;
       info.visibility = visibility;
+      info.range = toSourceRange(method);
       methods.add(info);
     }
     for (ConstructorDeclaration ctor : typeDecl.getConstructors()) {
@@ -952,6 +976,7 @@ public class ParserBridge {
       info.isMain = false;
       info.isStatic = false;
       info.visibility = visibility;
+      info.range = toSourceRange(ctor);
       methods.add(info);
     }
     return methods;

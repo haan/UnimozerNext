@@ -64,7 +64,7 @@ export const SettingsDialog = ({
 
             {activeGroup === "UML" ? (
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show dependencies</p>
                     <p className="text-xs text-muted-foreground">
@@ -85,7 +85,28 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Code highlight</p>
+                    <p className="text-xs text-muted-foreground">
+                      Jump to and highlight code when selecting UML members.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.uml.codeHighlight}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        uml: {
+                          ...settings.uml,
+                          codeHighlight: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">UML panel background</p>
                     <p className="text-xs text-muted-foreground">
@@ -317,6 +338,29 @@ export const SettingsDialog = ({
                         editor: {
                           ...settings.editor,
                           wordWrap: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            ) : activeGroup === "Advanced" ? (
+              <div className="mt-4 grid gap-2">
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Debug logging</p>
+                    <p className="text-xs text-muted-foreground">
+                      Show internal diagnostics in the console.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.advanced.debugLogging}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        advanced: {
+                          ...settings.advanced,
+                          debugLogging: checked
                         }
                       })
                     }

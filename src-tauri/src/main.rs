@@ -32,12 +32,23 @@ struct FileNode {
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct UmlSourceRange {
+    start_line: u32,
+    start_column: u32,
+    end_line: u32,
+    end_column: u32,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct UmlField {
     signature: String,
     #[serde(default)]
     is_static: bool,
     #[serde(default)]
     visibility: String,
+    #[serde(default)]
+    range: Option<UmlSourceRange>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -58,6 +69,8 @@ struct UmlMethod {
     is_static: bool,
     #[serde(default)]
     visibility: String,
+    #[serde(default)]
+    range: Option<UmlSourceRange>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -104,6 +117,8 @@ struct UmlSettings {
     show_dependencies: bool,
     #[serde(default)]
     panel_background: Option<String>,
+    #[serde(default = "default_true")]
+    code_highlight: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -147,6 +162,21 @@ impl Default for EditorSettings {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct AdvancedSettings {
+    #[serde(default = "default_false")]
+    debug_logging: bool,
+}
+
+impl Default for AdvancedSettings {
+    fn default() -> Self {
+        Self {
+            debug_logging: default_false(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct LayoutSettings {
     #[serde(default = "default_split_ratio")]
     uml_split_ratio: f32,
@@ -170,6 +200,8 @@ struct AppSettings {
     #[serde(default)]
     editor: EditorSettings,
     #[serde(default)]
+    advanced: AdvancedSettings,
+    #[serde(default)]
     layout: LayoutSettings,
 }
 
@@ -179,6 +211,7 @@ impl Default for AppSettings {
             uml: UmlSettings {
                 show_dependencies: true,
                 panel_background: None,
+                code_highlight: default_true(),
             },
             editor: EditorSettings {
                 font_size: default_font_size(),
@@ -190,6 +223,9 @@ impl Default for AppSettings {
                 word_wrap: default_true(),
                 dark_theme: default_false(),
                 auto_format_on_save: default_true(),
+            },
+            advanced: AdvancedSettings {
+                debug_logging: default_false(),
             },
             layout: LayoutSettings {
                 uml_split_ratio: default_split_ratio(),
@@ -548,8 +584,8 @@ fn add_field_to_class(app: tauri::AppHandle, request: AddFieldRequest) -> Result
         .wait_with_output()
         .map_err(|error| error.to_string())?;
 
+    let stderr = String::from_utf8_lossy(&output.stderr);
     if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
         return Err(format!("Parser bridge failed: {}", stderr.trim()));
     }
 

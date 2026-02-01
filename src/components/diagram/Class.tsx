@@ -29,6 +29,8 @@ export type ClassProps = {
   onAddField?: () => void;
   onAddConstructor?: () => void;
   onAddMethod?: () => void;
+  onFieldSelect?: (field: UmlNode["fields"][number], node: UmlNode) => void;
+  onMethodSelect?: (method: UmlNode["methods"][number], node: UmlNode) => void;
 };
 
 export const Class = ({
@@ -41,7 +43,9 @@ export const Class = ({
   onRemove,
   onAddField,
   onAddConstructor,
-  onAddMethod
+  onAddMethod,
+  onFieldSelect,
+  onMethodSelect
 }: ClassProps) => {
   const fields = diagram.showFields ? node.fields : [];
   const methods = diagram.showMethods ? node.methods : [];
@@ -81,6 +85,7 @@ export const Class = ({
           key={`${node.id}-field-${field.signature}-${index}`}
           field={field}
           y={y}
+          onSelect={onFieldSelect ? () => onFieldSelect(field, node) : undefined}
         />
       );
       cursorY += ROW_HEIGHT;
@@ -110,6 +115,7 @@ export const Class = ({
           key={`${node.id}-method-${method.signature}-${index}`}
           method={method}
           y={y}
+          onSelect={onMethodSelect ? () => onMethodSelect(method, node) : undefined}
         />
       );
       cursorY += ROW_HEIGHT;

@@ -48,6 +48,8 @@ import { useDrafts } from "./hooks/useDrafts";
 import { basename, joinPath, toFqnFromPath } from "./services/paths";
 import { useProjectIO } from "./hooks/useProjectIO";
 
+const UML_HIGHLIGHT_SECONDS = 2;
+
 const formatStatus = (input: unknown) =>
   typeof input === "string" ? input : JSON.stringify(input);
 
@@ -85,6 +87,8 @@ export default function App() {
     updateUmlSplitRatioSetting,
     updateConsoleSplitRatioSetting
   } = useAppSettings();
+  const debugLogging = settings.advanced?.debugLogging ?? false;
+  const codeHighlightEnabled = settings.uml.codeHighlight ?? true;
   const [umlStatus, setUmlStatus] = useState<string | null>(null);
   const parseSeq = useRef(0);
   const lastGoodGraph = useRef<UmlGraph | null>(null);
@@ -104,6 +108,14 @@ export default function App() {
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
+  const highlightDecorationRef = useRef<string[]>([]);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRevealRef = useRef<{
+    path: string;
+    line: number;
+    column: number;
+    durationSeconds: number;
+  } | null>(null);
   const zoomControlsRef = useRef<{
     zoomIn: () => void;
     zoomOut: () => void;
@@ -170,6 +182,86 @@ export default function App() {
     editor.focus();
     editor.trigger("menu", actionId, null);
   }, []);
+
+  const highlightEditorLine = useCallback(
+    (lineNumber: number, durationSeconds: number) => {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      if (!editor || !monaco) return;
+      const model = editor.getModel();
+      if (!model) return;
+      const safeLine = Math.min(Math.max(lineNumber, 1), model.getLineCount());
+      highlightDecorationRef.current = model.deltaDecorations(
+        highlightDecorationRef.current,
+        [
+          {
+            range: new monaco.Range(safeLine, 1, safeLine, 1),
+            options: {
+              isWholeLine: true,
+              className: "uml-line-highlight"
+            }
+          }
+        ]
+      );
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+      highlightTimeoutRef.current = setTimeout(() => {
+        const editorNow = editorRef.current;
+        if (!editorNow) return;
+        const currentModel = editorNow.getModel();
+        if (!currentModel) return;
+        highlightDecorationRef.current = currentModel.deltaDecorations(
+          highlightDecorationRef.current,
+          []
+        );
+      }, durationSeconds * 1000);
+    },
+    [monacoRef]
+  );
+
+  const applyPendingReveal = useCallback(() => {
+    const pending = pendingRevealRef.current;
+    if (!pending) return;
+    const editor = editorRef.current;
+    const monaco = monacoRef.current;
+    if (!editor || !monaco) return;
+    const model = editor.getModel();
+    if (!model) return;
+    const modelPath = model.uri?.fsPath ?? "";
+    if (modelPath && modelPath.toLowerCase() !== pending.path.toLowerCase()) return;
+    const maxLine = model.getLineCount();
+    const line = Math.min(Math.max(pending.line, 1), maxLine);
+    const maxColumn = model.getLineMaxColumn(line);
+    const column = Math.min(Math.max(pending.column, 1), maxColumn);
+    editor.setPosition({ lineNumber: line, column });
+    editor.revealPositionInCenter({ lineNumber: line, column });
+    editor.focus();
+    highlightEditorLine(line, pending.durationSeconds);
+    pendingRevealRef.current = null;
+  }, [highlightEditorLine, monacoRef]);
+
+  useEffect(() => {
+    applyPendingReveal();
+  }, [applyPendingReveal, openFilePath, content]);
+
+  useEffect(() => {
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (pendingRevealRef.current) return;
+    const model = editor.getModel();
+    if (!model) return;
+    if (highlightDecorationRef.current.length > 0) {
+      highlightDecorationRef.current = model.deltaDecorations(
+        highlightDecorationRef.current,
+        []
+      );
+    }
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
+  }, [openFilePath]);
 
   const handlePaste = useCallback(async () => {
     const editor = editorRef.current;
@@ -241,6 +333,7 @@ export default function App() {
     compileStatus,
     setCompileStatus,
     runSessionId,
+    appendConsoleOutput,
     handleCompileClass,
     handleRunMain,
     handleCancelRun
@@ -252,6 +345,14 @@ export default function App() {
     setStatus,
     formatStatus
   });
+
+  const appendDebugOutput = useCallback(
+    (text: string) => {
+      if (!debugLogging) return;
+      appendConsoleOutput(text);
+    },
+    [appendConsoleOutput, debugLogging]
+  );
 
   const {
     handleOpenProject,
@@ -405,6 +506,9 @@ export default function App() {
         const result = await parseUmlGraph(projectPath, "src", overrides);
         const graph = result.graph;
         if (currentSeq === parseSeq.current) {
+          appendDebugOutput(
+            `[UML] ${new Date().toLocaleTimeString()}\n${result.raw}`
+          );
           const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraph.current);
           const withFailedNodes = ensureFailedNodes(mergedGraph, graph.failedFiles, projectPath, "src");
           const nextGraph = applyInvalidFlags(withFailedNodes, graph.failedFiles);
@@ -433,7 +537,7 @@ export default function App() {
     return () => {
       window.clearTimeout(timer);
     };
-  }, [projectPath, tree, fileDrafts]);
+  }, [projectPath, tree, fileDrafts, appendDebugOutput, debugLogging]);
 
   useEffect(() => {
     const window = getCurrentWindow();
@@ -472,12 +576,66 @@ export default function App() {
     [umlGraph]
   );
 
+  const queueEditorReveal = useCallback(
+    async (
+      path: string,
+      range: { startLine: number; startColumn: number },
+      durationSeconds = UML_HIGHLIGHT_SECONDS
+    ) => {
+      if (!range?.startLine) return;
+      pendingRevealRef.current = {
+        path,
+        line: range.startLine,
+        column: range.startColumn ?? 1,
+        durationSeconds
+      };
+      appendDebugOutput(
+        `[UML] Reveal ${basename(path)} @ ${range.startLine}:${range.startColumn ?? 1}`
+      );
+      if (openFilePath !== path) {
+        await openFileByPath(path);
+      }
+      applyPendingReveal();
+    },
+    [appendDebugOutput, applyPendingReveal, openFileByPath, openFilePath]
+  );
+
   const handleNodeSelect = (id: string) => {
     const node = getNodeById(id);
     if (!node) return;
     setSelectedClassId(node.id);
     void openFileByPath(node.path);
   };
+
+  const handleFieldSelect = useCallback(
+    (field: UmlNode["fields"][number], node: UmlNode) => {
+      setSelectedClassId(node.id);
+      appendDebugOutput(
+        `[UML] Field click ${node.name} :: ${field.signature} (${field.range ? "has range" : "no range"})`
+      );
+      if (field.range) {
+        void queueEditorReveal(node.path, field.range);
+      } else {
+        void openFileByPath(node.path);
+      }
+    },
+    [appendDebugOutput, openFileByPath, queueEditorReveal]
+  );
+
+  const handleMethodSelect = useCallback(
+    (method: UmlNode["methods"][number], node: UmlNode) => {
+      setSelectedClassId(node.id);
+      appendDebugOutput(
+        `[UML] Method click ${node.name} :: ${method.signature} (${method.range ? "has range" : "no range"})`
+      );
+      if (method.range) {
+        void queueEditorReveal(node.path, method.range);
+      } else {
+        void openFileByPath(node.path);
+      }
+    },
+    [appendDebugOutput, openFileByPath, queueEditorReveal]
+  );
 
   const handleRemoveClass = useCallback(
     async (node: UmlNode) => {
@@ -1130,6 +1288,8 @@ export default function App() {
                 onAddField={handleOpenAddField}
                 onAddConstructor={handleOpenAddConstructor}
                 onAddMethod={handleOpenAddMethod}
+                onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
+                onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
                 onRegisterZoom={(controls) => {
                   zoomControlsRef.current = controls;
                 }}
@@ -1173,6 +1333,7 @@ export default function App() {
                     onChange={handleContentChange}
                     onEditorMount={(editor) => {
                       editorRef.current = editor;
+                      applyPendingReveal();
                     }}
                   />
                 </div>

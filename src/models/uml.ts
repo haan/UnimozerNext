@@ -15,12 +15,21 @@ export type UmlMethod = {
   isAbstract?: boolean;
   isStatic?: boolean;
   visibility?: string;
+  range?: UmlSourceRange;
 };
 
 export type UmlField = {
   signature: string;
   isStatic?: boolean;
   visibility?: string;
+  range?: UmlSourceRange;
+};
+
+export type UmlSourceRange = {
+  startLine: number;
+  startColumn: number;
+  endLine: number;
+  endColumn: number;
 };
 
 export type UmlNode = {

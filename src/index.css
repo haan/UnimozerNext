@@ -73,6 +73,8 @@ body,
     --uml-class-invalid-border: hsl(36 85% 45% / 0.55);
     --uml-class-compiled-bg: #e7f7e7;
     --uml-class-compiled-border: rgba(110, 180, 110, 0.6);
+    --uml-line-highlight: hsl(var(--primary) / 0.6);
+    --uml-line-highlight-duration: 4s;
     --console-bg: #0b0b0b;
     --console-fg: #f5f5f5;
     --console-min-height: 60px;
@@ -86,5 +88,22 @@ body,
 /* Hide Monaco hover status bar row (e.g. "View Problem") */
 .monaco-editor .monaco-hover .hover-row.status-bar {
   display: none !important;
+}
+
+@keyframes uml-line-highlight {
+  0% {
+    background-color: transparent;
+  }
+  20% {
+    background-color: var(--uml-line-highlight);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.monaco-editor .uml-line-highlight {
+  background-color: var(--uml-line-highlight);
+  animation: uml-line-highlight var(--uml-line-highlight-duration) ease-in-out;
 }
 

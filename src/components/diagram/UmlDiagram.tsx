@@ -186,6 +186,8 @@ export type UmlDiagramProps = {
   onAddField?: (node: UmlNode) => void;
   onAddConstructor?: (node: UmlNode) => void;
   onAddMethod?: (node: UmlNode) => void;
+  onFieldSelect?: (field: UmlNode["fields"][number], node: UmlNode) => void;
+  onMethodSelect?: (method: UmlNode["methods"][number], node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
 };
 
@@ -224,6 +226,8 @@ export const UmlDiagram = ({
   onAddField,
   onAddConstructor,
   onAddMethod,
+  onFieldSelect,
+  onMethodSelect,
   onRegisterZoom
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -536,6 +540,8 @@ export const UmlDiagram = ({
             onAddField={() => onAddField?.(node)}
             onAddConstructor={() => onAddConstructor?.(node)}
             onAddMethod={() => onAddMethod?.(node)}
+            onFieldSelect={onFieldSelect}
+            onMethodSelect={onMethodSelect}
           />
         ))}
 

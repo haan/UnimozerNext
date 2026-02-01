@@ -36,6 +36,10 @@ export const useAppSettings = (): AppSettingsHook => {
             ...defaults.editor,
             ...(stored as AppSettings).editor
           },
+          advanced: {
+            ...defaults.advanced,
+            ...(stored as AppSettings).advanced
+          },
           layout: {
             ...defaults.layout,
             ...(stored as AppSettings).layout
