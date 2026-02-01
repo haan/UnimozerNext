@@ -27,6 +27,8 @@ export type ClassProps = {
   onRunMain?: () => void;
   onRemove?: () => void;
   onAddField?: () => void;
+  onAddConstructor?: () => void;
+  onAddMethod?: () => void;
 };
 
 export const Class = ({
@@ -37,7 +39,9 @@ export const Class = ({
   onCompile,
   onRunMain,
   onRemove,
-  onAddField
+  onAddField,
+  onAddConstructor,
+  onAddMethod
 }: ClassProps) => {
   const fields = diagram.showFields ? node.fields : [];
   const methods = diagram.showMethods ? node.methods : [];
@@ -244,6 +248,22 @@ export const Class = ({
           </span>
         </ContextMenuItem>
         <ContextMenuSeparator />
+        <ContextMenuItem disabled={!onAddConstructor} onSelect={onAddConstructor}>
+          <span className="inline-flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Constructor
+          </span>
+        </ContextMenuItem>
         <ContextMenuItem disabled={!onAddField} onSelect={onAddField}>
           <span className="inline-flex items-center gap-2">
             <svg
@@ -258,6 +278,22 @@ export const Class = ({
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
             Add Field
+          </span>
+        </ContextMenuItem>
+        <ContextMenuItem disabled={!onAddMethod} onSelect={onAddMethod}>
+          <span className="inline-flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Add Method
           </span>
         </ContextMenuItem>
       </ContextMenuContent>

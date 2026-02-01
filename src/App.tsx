@@ -10,6 +10,11 @@ import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { AddClassDialog, type AddClassForm } from "./components/wizards/AddClassDialog";
 import { AddFieldDialog, type AddFieldForm } from "./components/wizards/AddFieldDialog";
 import {
+  AddConstructorDialog,
+  type AddConstructorForm
+} from "./components/wizards/AddConstructorDialog";
+import { AddMethodDialog, type AddMethodForm } from "./components/wizards/AddMethodDialog";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -62,12 +67,16 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [addClassOpen, setAddClassOpen] = useState(false);
   const [addFieldOpen, setAddFieldOpen] = useState(false);
+  const [addConstructorOpen, setAddConstructorOpen] = useState(false);
+  const [addMethodOpen, setAddMethodOpen] = useState(false);
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
   const [confirmProjectActionOpen, setConfirmProjectActionOpen] = useState(false);
   const [pendingProjectAction, setPendingProjectAction] = useState<"open" | "new" | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [fieldTarget, setFieldTarget] = useState<UmlNode | null>(null);
+  const [constructorTarget, setConstructorTarget] = useState<UmlNode | null>(null);
+  const [methodTarget, setMethodTarget] = useState<UmlNode | null>(null);
   const {
     settings,
     settingsOpen,
@@ -147,6 +156,8 @@ export default function App() {
     return umlGraph?.nodes.find((node) => node.id === selectedClassId) ?? null;
   }, [selectedClassId, umlGraph]);
   const canAddField = Boolean(selectedNode) && !busy;
+  const canAddConstructor = Boolean(selectedNode) && !busy;
+  const canAddMethod = Boolean(selectedNode) && !busy;
 
   const isMac = useMemo(
     () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
@@ -201,6 +212,18 @@ export default function App() {
       setFieldTarget(null);
     }
   }, [addFieldOpen]);
+
+  useEffect(() => {
+    if (!addConstructorOpen) {
+      setConstructorTarget(null);
+    }
+  }, [addConstructorOpen]);
+
+  useEffect(() => {
+    if (!addMethodOpen) {
+      setMethodTarget(null);
+    }
+  }, [addMethodOpen]);
 
   useEffect(() => {
     if (selectedClassId && !selectedNode) {
@@ -594,6 +617,18 @@ export default function App() {
     setAddFieldOpen(true);
   }, []);
 
+  const handleOpenAddConstructor = useCallback((node: UmlNode) => {
+    setSelectedClassId(node.id);
+    setConstructorTarget(node);
+    setAddConstructorOpen(true);
+  }, []);
+
+  const handleOpenAddMethod = useCallback((node: UmlNode) => {
+    setSelectedClassId(node.id);
+    setMethodTarget(node);
+    setAddMethodOpen(true);
+  }, []);
+
   const buildClassSource = useCallback((form: AddClassForm) => {
     const name = form.name.trim().replace(/\.java$/i, "");
     const packageName = form.packageName.trim();
@@ -609,9 +644,11 @@ export default function App() {
     }
 
     const classHeader = tokens.join(" ");
-    const docBlock = form.includeJavadoc ? "/**\n *\n */\n" : "";
+    const docBlock = form.includeJavadoc
+      ? "/**\n * write your javadoc description here\n */\n"
+      : "";
     const mainDoc = form.includeJavadoc
-      ? "  /**\n   * @param args the command line arguments\n   */\n"
+      ? "  /**\n   * write your javadoc description here\n   * @param args the command line arguments\n   */\n"
       : "";
     const mainMethod =
       form.includeMain && !form.isInterface
@@ -705,7 +742,8 @@ export default function App() {
             fieldType: form.type.trim(),
             visibility: form.visibility,
             isStatic: form.isStatic,
-            isFinal: form.isFinal
+            isFinal: form.isFinal,
+            initialValue: form.initialValue.trim()
           },
           includeGetter: form.includeGetter,
           includeSetter: form.includeSetter,
@@ -735,6 +773,151 @@ export default function App() {
     },
     [
       fieldTarget,
+      selectedNode,
+      projectPath,
+      fileDrafts,
+      openFilePath,
+      notifyLsChange,
+      notifyLsOpen,
+      setBusy,
+      setCompileStatus,
+      setContent,
+      setLastSavedContent,
+      setOpenFile,
+      setStatus,
+      updateDraftForPath
+    ]
+  );
+
+  const handleCreateConstructor = useCallback(
+    async (form: AddConstructorForm) => {
+      const target = constructorTarget ?? selectedNode;
+      if (!projectPath) {
+        setStatus("Open a project before adding a constructor.");
+        return;
+      }
+      if (!target) {
+        setStatus("Select a class before adding a constructor.");
+        return;
+      }
+
+      setBusy(true);
+      try {
+        const existingDraft = fileDrafts[target.path];
+        const originalContent = existingDraft
+          ? existingDraft.content
+          : await invoke<string>("read_text_file", { path: target.path });
+        const savedBaseline = existingDraft?.lastSavedContent ?? originalContent;
+        const payload = {
+          action: "addConstructor",
+          path: target.path,
+          classId: target.id,
+          content: originalContent,
+          params: form.params.map((param) => ({
+            name: param.name.trim(),
+            paramType: param.type.trim()
+          })),
+          includeJavadoc: form.includeJavadoc
+        };
+
+        const updated = await invoke<string>("add_constructor_to_class", { request: payload });
+        updateDraftForPath(target.path, updated, savedBaseline);
+        if (openFilePath === target.path) {
+          setContent(updated);
+          setLastSavedContent(savedBaseline);
+          notifyLsChange(target.path, updated);
+        } else {
+          setOpenFile({ name: basename(target.path), path: target.path });
+          setContent(updated);
+          setLastSavedContent(savedBaseline);
+          notifyLsOpen(target.path, updated);
+        }
+        setCompileStatus(null);
+        setStatus(`Added constructor to ${basename(target.path)}`);
+      } catch (error) {
+        setStatus(`Failed to add constructor: ${formatStatus(error)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      constructorTarget,
+      selectedNode,
+      projectPath,
+      fileDrafts,
+      openFilePath,
+      notifyLsChange,
+      notifyLsOpen,
+      setBusy,
+      setCompileStatus,
+      setContent,
+      setLastSavedContent,
+      setOpenFile,
+      setStatus,
+      updateDraftForPath
+    ]
+  );
+
+  const handleCreateMethod = useCallback(
+    async (form: AddMethodForm) => {
+      const target = methodTarget ?? selectedNode;
+      if (!projectPath) {
+        setStatus("Open a project before adding a method.");
+        return;
+      }
+      if (!target) {
+        setStatus("Select a class before adding a method.");
+        return;
+      }
+
+      setBusy(true);
+      try {
+        const existingDraft = fileDrafts[target.path];
+        const originalContent = existingDraft
+          ? existingDraft.content
+          : await invoke<string>("read_text_file", { path: target.path });
+        const savedBaseline = existingDraft?.lastSavedContent ?? originalContent;
+        const payload = {
+          action: "addMethod",
+          path: target.path,
+          classId: target.id,
+          content: originalContent,
+          method: {
+            name: form.name.trim(),
+            returnType: form.returnType.trim(),
+            visibility: form.visibility,
+            isStatic: form.isStatic,
+            isAbstract: form.isAbstract,
+            includeJavadoc: form.includeJavadoc
+          },
+          params: form.params.map((param) => ({
+            name: param.name.trim(),
+            paramType: param.type.trim()
+          }))
+        };
+
+        const updated = await invoke<string>("add_method_to_class", { request: payload });
+        updateDraftForPath(target.path, updated, savedBaseline);
+        if (openFilePath === target.path) {
+          setContent(updated);
+          setLastSavedContent(savedBaseline);
+          notifyLsChange(target.path, updated);
+        } else {
+          setOpenFile({ name: basename(target.path), path: target.path });
+          setContent(updated);
+          setLastSavedContent(savedBaseline);
+          notifyLsOpen(target.path, updated);
+        }
+        setCompileStatus(null);
+        setStatus(`Added method to ${basename(target.path)}`);
+      } catch (error) {
+        setStatus(`Failed to add method: ${formatStatus(error)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      methodTarget,
       selectedNode,
       projectPath,
       fileDrafts,
@@ -799,32 +982,10 @@ export default function App() {
                 Exit
               </MenubarItem>
             </MenubarContent>
-          </MenubarMenu>
-          <MenubarMenu>
-            <MenubarTrigger>Add</MenubarTrigger>
-            <MenubarContent>
-              <MenubarItem
-                onClick={() => setAddClassOpen(true)}
-                disabled={!canAddClass}
-              >
-                Class
-              </MenubarItem>
-              <MenubarItem
-                onClick={() => {
-                  if (selectedNode) {
-                    setFieldTarget(selectedNode);
-                    setAddFieldOpen(true);
-                  }
-                }}
-                disabled={!canAddField}
-              >
-                Field
-              </MenubarItem>
-            </MenubarContent>
-          </MenubarMenu>
-          <MenubarMenu>
-            <MenubarTrigger>Edit</MenubarTrigger>
-            <MenubarContent>
+            </MenubarMenu>
+            <MenubarMenu>
+              <MenubarTrigger>Edit</MenubarTrigger>
+              <MenubarContent>
               <MenubarItem
                 onClick={() => triggerEditorAction("undo")}
                 disabled={editDisabled}
@@ -888,9 +1049,54 @@ export default function App() {
               >
                 Reset Zoom
                 <MenubarShortcut>{isMac ? "⌘0" : "Ctrl+0"}</MenubarShortcut>
-              </MenubarItem>
-            </MenubarContent>
-          </MenubarMenu>
+                </MenubarItem>
+              </MenubarContent>
+            </MenubarMenu>
+            <MenubarMenu>
+              <MenubarTrigger>Insert</MenubarTrigger>
+              <MenubarContent>
+                <MenubarItem
+                  onClick={() => setAddClassOpen(true)}
+                  disabled={!canAddClass}
+                >
+                  Class
+                </MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem
+                  onClick={() => {
+                    if (selectedNode) {
+                      setConstructorTarget(selectedNode);
+                      setAddConstructorOpen(true);
+                    }
+                  }}
+                  disabled={!canAddConstructor}
+                >
+                  Constructor
+                </MenubarItem>
+                <MenubarItem
+                  onClick={() => {
+                    if (selectedNode) {
+                      setFieldTarget(selectedNode);
+                      setAddFieldOpen(true);
+                    }
+                  }}
+                  disabled={!canAddField}
+                >
+                  Field
+                </MenubarItem>
+                <MenubarItem
+                  onClick={() => {
+                    if (selectedNode) {
+                      setMethodTarget(selectedNode);
+                      setAddMethodOpen(true);
+                    }
+                  }}
+                  disabled={!canAddMethod}
+                >
+                  Method
+                </MenubarItem>
+              </MenubarContent>
+            </MenubarMenu>
           </Menubar>
         </div>
 
@@ -922,6 +1128,8 @@ export default function App() {
                 onRunMain={handleRunMain}
                 onRemoveClass={requestRemoveClass}
                 onAddField={handleOpenAddField}
+                onAddConstructor={handleOpenAddConstructor}
+                onAddMethod={handleOpenAddMethod}
                 onRegisterZoom={(controls) => {
                   zoomControlsRef.current = controls;
                 }}
@@ -1012,6 +1220,20 @@ export default function App() {
         open={addFieldOpen}
         onOpenChange={setAddFieldOpen}
         onSubmit={handleCreateField}
+        busy={busy}
+      />
+      <AddConstructorDialog
+        open={addConstructorOpen}
+        onOpenChange={setAddConstructorOpen}
+        onSubmit={handleCreateConstructor}
+        className={constructorTarget?.name ?? selectedNode?.name}
+        busy={busy}
+      />
+      <AddMethodDialog
+        open={addMethodOpen}
+        onOpenChange={setAddMethodOpen}
+        onSubmit={handleCreateMethod}
+        className={methodTarget?.name ?? selectedNode?.name}
         busy={busy}
       />
       <AlertDialog

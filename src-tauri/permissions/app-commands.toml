@@ -9,6 +9,8 @@ commands.allow = [
   "remove_text_file",
   "export_netbeans_project",
   "add_field_to_class",
+  "add_constructor_to_class",
+  "add_method_to_class",
   "create_netbeans_project",
   "compile_project",
   "run_main",

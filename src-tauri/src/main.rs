@@ -249,6 +249,8 @@ struct AddFieldSpec {
     visibility: String,
     is_static: bool,
     is_final: bool,
+    #[serde(default)]
+    initial_value: Option<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -263,6 +265,70 @@ struct AddFieldRequest {
     include_setter: bool,
     use_param_prefix: bool,
     include_javadoc: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddConstructorParam {
+    name: String,
+    param_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddConstructorRequest {
+    action: String,
+    path: String,
+    class_id: String,
+    content: String,
+    params: Vec<AddConstructorParam>,
+    #[serde(default)]
+    include_javadoc: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddConstructorResponse {
+    ok: bool,
+    content: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddMethodSpec {
+    name: String,
+    return_type: String,
+    visibility: String,
+    is_static: bool,
+    is_abstract: bool,
+    include_javadoc: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddMethodParam {
+    name: String,
+    param_type: String,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddMethodRequest {
+    action: String,
+    path: String,
+    class_id: String,
+    content: String,
+    method: AddMethodSpec,
+    params: Vec<AddMethodParam>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AddMethodResponse {
+    ok: bool,
+    content: Option<String>,
+    error: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -496,6 +562,115 @@ fn add_field_to_class(app: tauri::AppHandle, request: AddFieldRequest) -> Result
     response
         .content
         .ok_or_else(|| "Field update returned empty content".to_string())
+}
+
+#[tauri::command]
+fn add_constructor_to_class(
+    app: tauri::AppHandle,
+    request: AddConstructorRequest,
+) -> Result<String, String> {
+    let java_rel = java_executable_name();
+    let java_path = resolve_resource(&app, &java_rel)
+        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
+    let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
+        .ok_or_else(|| "Java parser bridge not found".to_string())?;
+
+    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(java_path);
+    command
+        .arg("-jar")
+        .arg(jar_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin
+            .write_all(&payload)
+            .map_err(|error| error.to_string())?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| error.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Parser bridge failed: {}", stderr.trim()));
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+    let response: AddConstructorResponse =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    if !response.ok {
+        return Err(
+            response
+                .error
+                .unwrap_or_else(|| "Failed to add constructor".to_string()),
+        );
+    }
+    response
+        .content
+        .ok_or_else(|| "Constructor update returned empty content".to_string())
+}
+
+#[tauri::command]
+fn add_method_to_class(app: tauri::AppHandle, request: AddMethodRequest) -> Result<String, String> {
+    let java_rel = java_executable_name();
+    let java_path = resolve_resource(&app, &java_rel)
+        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
+    let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
+        .ok_or_else(|| "Java parser bridge not found".to_string())?;
+
+    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
+
+    let mut command = Command::new(java_path);
+    command
+        .arg("-jar")
+        .arg(jar_path)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        stdin
+            .write_all(&payload)
+            .map_err(|error| error.to_string())?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| error.to_string())?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Parser bridge failed: {}", stderr.trim()));
+    }
+
+    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+    let response: AddMethodResponse =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    if !response.ok {
+        return Err(response.error.unwrap_or_else(|| "Failed to add method".to_string()));
+    }
+    response
+        .content
+        .ok_or_else(|| "Method update returned empty content".to_string())
 }
 
 #[tauri::command]
@@ -1084,6 +1259,8 @@ fn main() {
             write_settings,
             parse_uml_graph,
             add_field_to_class,
+            add_constructor_to_class,
+            add_method_to_class,
             create_netbeans_project,
             ls::ls_start,
             ls::ls_stop,

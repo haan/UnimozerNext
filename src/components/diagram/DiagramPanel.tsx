@@ -21,6 +21,8 @@ export type DiagramPanelProps = {
   onAddClass?: () => void;
   onRemoveClass?: (node: UmlNode) => void;
   onAddField?: (node: UmlNode) => void;
+  onAddConstructor?: (node: UmlNode) => void;
+  onAddMethod?: (node: UmlNode) => void;
 };
 
 export const DiagramPanel = ({
@@ -35,7 +37,9 @@ export const DiagramPanel = ({
   onRegisterZoom,
   onAddClass,
   onRemoveClass,
-  onAddField
+  onAddField,
+  onAddConstructor,
+  onAddMethod
 }: DiagramPanelProps) => (
   <ContextMenu>
     <ContextMenuTrigger asChild>
@@ -55,6 +59,8 @@ export const DiagramPanel = ({
               onRunMain={onRunMain}
               onRemoveClass={onRemoveClass}
               onAddField={onAddField}
+              onAddConstructor={onAddConstructor}
+              onAddMethod={onAddMethod}
               onRegisterZoom={onRegisterZoom}
             />
           ) : (
@@ -67,7 +73,20 @@ export const DiagramPanel = ({
     </ContextMenuTrigger>
     <ContextMenuContent>
       <ContextMenuItem disabled={!onAddClass} onSelect={onAddClass}>
-        Add Class
+        <span className="inline-flex items-center gap-2">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="16"
+            height="16"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth="1.5"
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Add Class
+        </span>
       </ContextMenuItem>
     </ContextMenuContent>
   </ContextMenu>

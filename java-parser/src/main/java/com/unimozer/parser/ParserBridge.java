@@ -118,6 +118,7 @@ public class ParserBridge {
     public String visibility;
     public boolean isStatic;
     public boolean isFinal;
+    public String initialValue;
   }
 
   static class AddFieldResponse {
@@ -126,6 +127,49 @@ public class ParserBridge {
     public String error;
   }
 
+  static class AddConstructorRequest {
+    public String action;
+    public String path;
+    public String classId;
+    public String content;
+    public List<ParamSpec> params = new ArrayList<>();
+    public boolean includeJavadoc;
+  }
+
+  static class ParamSpec {
+    public String name;
+    public String paramType;
+  }
+
+  static class AddConstructorResponse {
+    public boolean ok;
+    public String content;
+    public String error;
+  }
+
+  static class AddMethodRequest {
+    public String action;
+    public String path;
+    public String classId;
+    public String content;
+    public MethodSpec method;
+    public List<ParamSpec> params = new ArrayList<>();
+  }
+
+  static class MethodSpec {
+    public String name;
+    public String returnType;
+    public String visibility;
+    public boolean isStatic;
+    public boolean isAbstract;
+    public boolean includeJavadoc;
+  }
+
+  static class AddMethodResponse {
+    public boolean ok;
+    public String content;
+    public String error;
+  }
   static class Context {
     public String pkg;
     public Map<String, String> explicitImports = new HashMap<>();
@@ -152,6 +196,18 @@ public class ParserBridge {
     if ("addField".equals(action)) {
       AddFieldRequest request = mapper.treeToValue(rootNode, AddFieldRequest.class);
       AddFieldResponse response = addField(request);
+      mapper.writeValue(System.out, response);
+      return;
+    }
+    if ("addConstructor".equals(action)) {
+      AddConstructorRequest request = mapper.treeToValue(rootNode, AddConstructorRequest.class);
+      AddConstructorResponse response = addConstructor(request);
+      mapper.writeValue(System.out, response);
+      return;
+    }
+    if ("addMethod".equals(action)) {
+      AddMethodRequest request = mapper.treeToValue(rootNode, AddMethodRequest.class);
+      AddMethodResponse response = addMethod(request);
       mapper.writeValue(System.out, response);
       return;
     }
@@ -295,9 +351,11 @@ public class ParserBridge {
     if (request.field.isStatic || isInterface) fieldDecl.addModifier(Modifier.Keyword.STATIC);
     if (request.field.isFinal || isInterface) fieldDecl.addModifier(Modifier.Keyword.FINAL);
 
+    VariableDeclarator variable;
     try {
-      fieldDecl.addVariable(
-        new VariableDeclarator(StaticJavaParser.parseType(request.field.fieldType), request.field.name)
+      variable = new VariableDeclarator(
+        StaticJavaParser.parseType(request.field.fieldType),
+        request.field.name
       );
     } catch (Exception ex) {
       response.ok = false;
@@ -305,8 +363,20 @@ public class ParserBridge {
       return response;
     }
 
+    if (request.field.initialValue != null && !request.field.initialValue.isBlank()) {
+      try {
+        variable.setInitializer(StaticJavaParser.parseExpression(request.field.initialValue));
+      } catch (Exception ex) {
+        response.ok = false;
+        response.error = "Invalid initial value";
+        return response;
+      }
+    }
+
+    fieldDecl.addVariable(variable);
+
     if (request.includeJavadoc) {
-      fieldDecl.setJavadocComment("\n *\n ");
+      fieldDecl.setJavadocComment("write your javadoc description here");
     }
 
     List<BodyDeclaration<?>> members = targetType.getMembers();
@@ -342,7 +412,7 @@ public class ParserBridge {
       getter.setName(getterName);
       getter.setBody(StaticJavaParser.parseBlock("{ return " + fieldName + "; }"));
       if (request.includeJavadoc) {
-        getter.setJavadocComment("\n *\n ");
+        getter.setJavadocComment(buildMethodJavadoc(List.of(), true));
       }
       members.add(getter);
     }
@@ -367,7 +437,7 @@ public class ParserBridge {
         : "this." + fieldName + " = " + paramName + ";";
       setter.setBody(StaticJavaParser.parseBlock("{ " + assignment + " }"));
       if (request.includeJavadoc) {
-        setter.setJavadocComment("\n *\n ");
+        setter.setJavadocComment(buildMethodJavadoc(List.of(paramName), false));
       }
       members.add(setter);
     }
@@ -375,6 +445,338 @@ public class ParserBridge {
     response.ok = true;
     response.content = cu.toString();
     return response;
+  }
+
+  static AddConstructorResponse addConstructor(AddConstructorRequest request) {
+    AddConstructorResponse response = new AddConstructorResponse();
+    if (request == null || request.path == null || request.path.isBlank()) {
+      response.ok = false;
+      response.error = "Missing file path";
+      return response;
+    }
+
+    String source;
+    try {
+      source = request.content != null && !request.content.isBlank()
+        ? request.content
+        : Files.readString(Paths.get(request.path));
+    } catch (IOException ex) {
+      response.ok = false;
+      response.error = "Failed to read source file";
+      return response;
+    }
+
+    ParserConfiguration config = new ParserConfiguration();
+    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    JavaParser parser = new JavaParser(config);
+
+    ParseResult<CompilationUnit> parseResult = parser.parse(
+      ParseStart.COMPILATION_UNIT,
+      Providers.provider(source)
+    );
+
+    if (!parseResult.isSuccessful() || parseResult.getResult().isEmpty()) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    CompilationUnit cu = parseResult.getResult().orElse(null);
+    if (cu == null) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    Context ctx = buildContext(cu);
+    TypeDeclaration<?> targetType = null;
+    String classId = request.classId != null ? request.classId : "";
+    for (TypeDeclaration<?> typeDecl : cu.getTypes()) {
+      String name = typeDecl.getNameAsString();
+      String id = ctx.pkg.isEmpty() ? name : ctx.pkg + "." + name;
+      if (!classId.isBlank()) {
+        if (id.equals(classId)) {
+          targetType = typeDecl;
+          break;
+        }
+      } else if (targetType == null) {
+        targetType = typeDecl;
+      }
+    }
+
+    if (targetType == null) {
+      response.ok = false;
+      response.error = "Target class not found";
+      return response;
+    }
+
+    if (targetType.isClassOrInterfaceDeclaration()
+      && targetType.asClassOrInterfaceDeclaration().isInterface()
+    ) {
+      response.ok = false;
+      response.error = "Cannot add constructor to an interface";
+      return response;
+    }
+
+    ConstructorDeclaration ctor = new ConstructorDeclaration();
+    ctor.setName(targetType.getNameAsString());
+    ctor.addModifier(Modifier.Keyword.PUBLIC);
+
+    if (request.params != null) {
+      for (ParamSpec param : request.params) {
+        if (param == null) continue;
+        if (param.name == null || param.name.isBlank()) {
+          response.ok = false;
+          response.error = "Invalid parameter name";
+          return response;
+        }
+        if (param.paramType == null || param.paramType.isBlank()) {
+          response.ok = false;
+          response.error = "Invalid parameter type";
+          return response;
+        }
+        try {
+          ctor.addParameter(StaticJavaParser.parseType(param.paramType), param.name);
+        } catch (Exception ex) {
+          response.ok = false;
+          response.error = "Invalid parameter type";
+          return response;
+        }
+      }
+    }
+
+    ctor.setBody(StaticJavaParser.parseBlock("{\n}"));
+
+    if (request.includeJavadoc) {
+      List<String> paramNames = new ArrayList<>();
+      if (request.params != null) {
+        for (ParamSpec param : request.params) {
+          if (param != null && param.name != null && !param.name.isBlank()) {
+            paramNames.add(param.name);
+          }
+        }
+      }
+      ctor.setJavadocComment(buildMethodJavadoc(paramNames, false));
+    }
+
+    List<BodyDeclaration<?>> members = targetType.getMembers();
+    int insertIndex = 0;
+    for (int i = 0; i < members.size(); i++) {
+      if (members.get(i) instanceof FieldDeclaration) {
+        insertIndex = i + 1;
+      }
+    }
+    members.add(insertIndex, ctor);
+
+    response.ok = true;
+    response.content = cu.toString();
+    return response;
+  }
+
+  static AddMethodResponse addMethod(AddMethodRequest request) {
+    AddMethodResponse response = new AddMethodResponse();
+    if (request == null || request.path == null || request.path.isBlank()) {
+      response.ok = false;
+      response.error = "Missing file path";
+      return response;
+    }
+    if (request.method == null || request.method.name == null || request.method.name.isBlank()) {
+      response.ok = false;
+      response.error = "Missing method name";
+      return response;
+    }
+    if (request.method.returnType == null || request.method.returnType.isBlank()) {
+      response.ok = false;
+      response.error = "Missing return type";
+      return response;
+    }
+
+    String source;
+    try {
+      source = request.content != null && !request.content.isBlank()
+        ? request.content
+        : Files.readString(Paths.get(request.path));
+    } catch (IOException ex) {
+      response.ok = false;
+      response.error = "Failed to read source file";
+      return response;
+    }
+
+    ParserConfiguration config = new ParserConfiguration();
+    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    JavaParser parser = new JavaParser(config);
+
+    ParseResult<CompilationUnit> parseResult = parser.parse(
+      ParseStart.COMPILATION_UNIT,
+      Providers.provider(source)
+    );
+
+    if (!parseResult.isSuccessful() || parseResult.getResult().isEmpty()) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    CompilationUnit cu = parseResult.getResult().orElse(null);
+    if (cu == null) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    Context ctx = buildContext(cu);
+    TypeDeclaration<?> targetType = null;
+    String classId = request.classId != null ? request.classId : "";
+    for (TypeDeclaration<?> typeDecl : cu.getTypes()) {
+      String name = typeDecl.getNameAsString();
+      String id = ctx.pkg.isEmpty() ? name : ctx.pkg + "." + name;
+      if (!classId.isBlank()) {
+        if (id.equals(classId)) {
+          targetType = typeDecl;
+          break;
+        }
+      } else if (targetType == null) {
+        targetType = typeDecl;
+      }
+    }
+
+    if (targetType == null) {
+      response.ok = false;
+      response.error = "Target class not found";
+      return response;
+    }
+
+    boolean isInterface = targetType.isClassOrInterfaceDeclaration()
+      && targetType.asClassOrInterfaceDeclaration().isInterface();
+    boolean targetAbstract = isAbstractType(targetType);
+    if (request.method.isAbstract && request.method.isStatic) {
+      response.ok = false;
+      response.error = "Method cannot be abstract and static";
+      return response;
+    }
+    if (request.method.isAbstract && !targetAbstract && !isInterface) {
+      response.ok = false;
+      response.error = "Abstract methods require an abstract class";
+      return response;
+    }
+
+    MethodDeclaration method = new MethodDeclaration();
+    method.setName(request.method.name);
+    try {
+      method.setType(StaticJavaParser.parseType(request.method.returnType));
+    } catch (Exception ex) {
+      response.ok = false;
+      response.error = "Invalid return type";
+      return response;
+    }
+
+    String visibility = request.method.visibility == null ? "public" : request.method.visibility;
+    if ("public".equals(visibility)) method.addModifier(Modifier.Keyword.PUBLIC);
+    if ("protected".equals(visibility)) method.addModifier(Modifier.Keyword.PROTECTED);
+    if ("private".equals(visibility)) method.addModifier(Modifier.Keyword.PRIVATE);
+
+    if (request.method.isStatic) {
+      method.addModifier(Modifier.Keyword.STATIC);
+    }
+
+    boolean shouldBeAbstract = request.method.isAbstract || (isInterface && !request.method.isStatic);
+    if (shouldBeAbstract) {
+      method.addModifier(Modifier.Keyword.ABSTRACT);
+    }
+
+    if (request.params != null) {
+      for (ParamSpec param : request.params) {
+        if (param == null) continue;
+        if (param.name == null || param.name.isBlank()) {
+          response.ok = false;
+          response.error = "Invalid parameter name";
+          return response;
+        }
+        if (param.paramType == null || param.paramType.isBlank()) {
+          response.ok = false;
+          response.error = "Invalid parameter type";
+          return response;
+        }
+        try {
+          method.addParameter(StaticJavaParser.parseType(param.paramType), param.name);
+        } catch (Exception ex) {
+          response.ok = false;
+          response.error = "Invalid parameter type";
+          return response;
+        }
+      }
+    }
+
+    if (request.method.includeJavadoc) {
+      List<String> paramNames = new ArrayList<>();
+      if (request.params != null) {
+        for (ParamSpec param : request.params) {
+          if (param != null && param.name != null && !param.name.isBlank()) {
+            paramNames.add(param.name);
+          }
+        }
+      }
+      method.setJavadocComment(buildMethodJavadoc(paramNames, !method.getType().isVoidType()));
+    }
+
+    if (!shouldBeAbstract) {
+      String body = buildDefaultMethodBody(method.getType());
+      method.setBody(StaticJavaParser.parseBlock(body));
+    }
+
+    List<BodyDeclaration<?>> members = targetType.getMembers();
+    members.add(method);
+
+    response.ok = true;
+    response.content = cu.toString();
+    return response;
+  }
+
+  static String buildDefaultMethodBody(Type type) {
+    if (type == null || type.isVoidType()) {
+      return "{\n}";
+    }
+
+    String returnExpr = "null";
+    if (type.isPrimitiveType()) {
+      switch (type.asPrimitiveType().getType()) {
+        case BOOLEAN:
+          returnExpr = "false";
+          break;
+        case CHAR:
+          returnExpr = "'\\0'";
+          break;
+        case DOUBLE:
+        case FLOAT:
+          returnExpr = "0.0";
+          break;
+        default:
+          returnExpr = "0";
+          break;
+      }
+    }
+
+    return "{\n  return " + returnExpr + ";\n}";
+  }
+
+
+  static String buildMethodJavadoc(List<String> params, boolean includeReturn) {
+    StringBuilder builder = new StringBuilder();
+    builder.append("\n * write your javadoc description here\n");
+    if ((params != null && params.stream().anyMatch(name -> name != null && !name.isBlank())) || includeReturn) {
+      builder.append(" *\n");
+    }
+    if (params != null) {
+      for (String name : params) {
+        if (name == null || name.isBlank()) continue;
+        builder.append(" * @param ").append(name).append(" param description\n");
+      }
+    }
+    if (includeReturn) {
+      builder.append(" * @return return value\n");
+    }
+    builder.append(" ");
+    return builder.toString();
   }
 
   static String capitalize(String name) {

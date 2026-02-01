@@ -95,7 +95,7 @@ export const AddClassDialog = ({
             <legend className="px-1 text-xs font-medium text-muted-foreground">
               Code generation
             </legend>
-            <div className="space-y-1">
+            <div className="space-y-2">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -150,7 +150,7 @@ export const AddClassDialog = ({
                 <legend className="px-1 text-xs font-medium text-muted-foreground">
                   Type & Modifiers
                 </legend>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"

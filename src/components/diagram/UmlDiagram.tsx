@@ -184,6 +184,8 @@ export type UmlDiagramProps = {
   onRunMain?: (node: UmlNode) => void;
   onRemoveClass?: (node: UmlNode) => void;
   onAddField?: (node: UmlNode) => void;
+  onAddConstructor?: (node: UmlNode) => void;
+  onAddMethod?: (node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
 };
 
@@ -220,6 +222,8 @@ export const UmlDiagram = ({
   onRunMain,
   onRemoveClass,
   onAddField,
+  onAddConstructor,
+  onAddMethod,
   onRegisterZoom
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -530,6 +534,8 @@ export const UmlDiagram = ({
             onRunMain={() => onRunMain?.(node)}
             onRemove={() => onRemoveClass?.(node)}
             onAddField={() => onAddField?.(node)}
+            onAddConstructor={() => onAddConstructor?.(node)}
+            onAddMethod={() => onAddMethod?.(node)}
           />
         ))}
 
