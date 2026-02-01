@@ -1,11 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AppSettings } from "../../models/settings";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Slider } from "../ui/slider";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "../ui/select";
 import { Switch } from "../ui/switch";
 import { cn } from "../../lib/utils";
 import { ChromePicker } from "react-color";
+import { loadEditorThemeOptions, type ThemeOption } from "../../services/monacoThemes";
 
 type SettingsDialogProps = {
   open: boolean;
@@ -24,6 +32,9 @@ export const SettingsDialog = ({
   onChange
 }: SettingsDialogProps) => {
   const [activeGroup, setActiveGroup] = useState<SettingsGroup>("General");
+  const [themeOptions, setThemeOptions] = useState<ThemeOption[]>([
+    { value: "default", label: "Default" }
+  ]);
 
   const options = useMemo(
     () =>
@@ -33,6 +44,18 @@ export const SettingsDialog = ({
       })),
     []
   );
+
+  useEffect(() => {
+    let active = true;
+    const loadThemes = async () => {
+      const loaded = await loadEditorThemeOptions();
+      if (active) setThemeOptions(loaded);
+    };
+    void loadThemes();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -174,23 +197,36 @@ export const SettingsDialog = ({
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium">Dark editor theme</p>
+                    <p className="text-sm font-medium">Editor theme</p>
                     <p className="text-xs text-muted-foreground">
-                      Use dark theme for the editor.
+                      Choose a color theme for Monaco.
                     </p>
                   </div>
-                  <Switch
-                    checked={settings.editor.darkTheme}
-                    onCheckedChange={(checked) =>
-                      onChange({
-                        ...settings,
-                        editor: {
-                          ...settings.editor,
-                          darkTheme: checked
-                        }
-                      })
-                    }
-                  />
+                  <div className="w-56">
+                    <Select
+                      value={settings.editor.theme}
+                      onValueChange={(value) =>
+                        onChange({
+                          ...settings,
+                          editor: {
+                            ...settings.editor,
+                            theme: value
+                          }
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {themeOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">

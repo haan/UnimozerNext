@@ -6,13 +6,13 @@ export type UmlSettings = {
 
 export type EditorSettings = {
   fontSize: number;
+  theme: string;
   tabSize: number;
   insertSpaces: boolean;
   autoCloseBrackets: boolean;
   autoCloseQuotes: boolean;
   autoCloseComments: boolean;
   wordWrap: boolean;
-  darkTheme: boolean;
   autoFormatOnSave: boolean;
 };
 
@@ -38,13 +38,13 @@ export const createDefaultSettings = (): AppSettings => ({
   },
   editor: {
     fontSize: 14,
+    theme: "default",
     tabSize: 4,
     insertSpaces: true,
     autoCloseBrackets: false,
     autoCloseQuotes: false,
     autoCloseComments: false,
     wordWrap: true,
-    darkTheme: false,
     autoFormatOnSave: true
   },
   advanced: {

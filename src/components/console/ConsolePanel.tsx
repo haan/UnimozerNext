@@ -2,11 +2,12 @@ import { useEffect, useRef } from "react";
 
 type ConsolePanelProps = {
   output: string;
+  fontSize: number;
   running?: boolean;
   onStop?: () => void;
 };
 
-export const ConsolePanel = ({ output, running, onStop }: ConsolePanelProps) => {
+export const ConsolePanel = ({ output, fontSize, running, onStop }: ConsolePanelProps) => {
   const scrollRef = useRef<HTMLPreElement | null>(null);
 
   useEffect(() => {
@@ -32,10 +33,14 @@ export const ConsolePanel = ({ output, running, onStop }: ConsolePanelProps) => 
       ) : null}
       <pre
         ref={scrollRef}
-        className={`flex-1 overflow-auto whitespace-pre-wrap px-4 py-3 text-xs leading-relaxed ${
+        className={`flex-1 overflow-auto whitespace-pre-wrap px-4 py-3 leading-relaxed ${
           running ? "pr-16 pt-8" : ""
         }`}
-        style={{ color: "var(--console-fg)" }}
+        style={{
+          color: "var(--console-fg)",
+          fontFamily: "var(--editor-font)",
+          fontSize
+        }}
       >
         {output}
       </pre>

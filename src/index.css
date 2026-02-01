@@ -47,6 +47,7 @@ body,
   :root {
     --uml-font: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
       "Liberation Mono", "Courier New", monospace;
+    --editor-font: var(--uml-font);
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
@@ -106,4 +107,3 @@ body,
   background-color: var(--uml-line-highlight);
   animation: uml-line-highlight var(--uml-line-highlight-duration) ease-in-out;
 }
-

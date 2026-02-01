@@ -47,6 +47,7 @@ import { toFileUri } from "./services/lsp";
 import { useDrafts } from "./hooks/useDrafts";
 import { basename, joinPath, toFqnFromPath } from "./services/paths";
 import { useProjectIO } from "./hooks/useProjectIO";
+import { getThemeColors } from "./services/monacoThemes";
 
 const UML_HIGHLIGHT_SECONDS = 2;
 
@@ -121,6 +122,7 @@ export default function App() {
     zoomOut: () => void;
     resetZoom: () => void;
   } | null>(null);
+  const consoleThemeDefaults = useRef<{ bg: string; fg: string } | null>(null);
   const {
     monacoRef,
     lsReadyRef,
@@ -544,6 +546,48 @@ export default function App() {
     const nextTitle = projectPath ? `${defaultTitle} - ${projectPath}` : defaultTitle;
     window.setTitle(nextTitle).catch(() => undefined);
   }, [projectPath]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!consoleThemeDefaults.current) {
+      const styles = getComputedStyle(root);
+      consoleThemeDefaults.current = {
+        bg: styles.getPropertyValue("--console-bg").trim(),
+        fg: styles.getPropertyValue("--console-fg").trim()
+      };
+    }
+    const defaults = consoleThemeDefaults.current;
+    if (settings.editor.theme === "default") {
+      if (defaults) {
+        root.style.setProperty("--console-bg", defaults.bg);
+        root.style.setProperty("--console-fg", defaults.fg);
+      }
+      return;
+    }
+
+    let cancelled = false;
+    const applyTheme = async () => {
+      const colors = await getThemeColors(settings.editor.theme);
+      if (cancelled) return;
+      if (!colors || (!colors.background && !colors.foreground)) {
+        if (defaults) {
+          root.style.setProperty("--console-bg", defaults.bg);
+          root.style.setProperty("--console-fg", defaults.fg);
+        }
+        return;
+      }
+      if (colors.background) {
+        root.style.setProperty("--console-bg", colors.background);
+      }
+      if (colors.foreground) {
+        root.style.setProperty("--console-fg", colors.foreground);
+      }
+    };
+    void applyTheme();
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.editor.theme]);
 
   useEffect(() => {
     if (!projectPath || !umlGraph) return;
@@ -1323,13 +1367,13 @@ export default function App() {
                     content={content}
                     dirty={dirty}
                     fontSize={settings.editor.fontSize}
+                    theme={settings.editor.theme}
                     tabSize={settings.editor.tabSize}
                     insertSpaces={settings.editor.insertSpaces}
                     autoCloseBrackets={settings.editor.autoCloseBrackets}
                     autoCloseQuotes={settings.editor.autoCloseQuotes}
                     autoCloseComments={settings.editor.autoCloseComments}
                     wordWrap={settings.editor.wordWrap}
-                    darkTheme={settings.editor.darkTheme}
                     onChange={handleContentChange}
                     onEditorMount={(editor) => {
                       editorRef.current = editor;
@@ -1350,6 +1394,7 @@ export default function App() {
                 <div className="min-h-[var(--console-min-height)] flex-1 overflow-hidden">
                   <ConsolePanel
                     output={consoleOutput}
+                    fontSize={settings.editor.fontSize}
                     running={runSessionId !== null}
                     onStop={handleCancelRun}
                   />

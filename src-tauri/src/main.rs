@@ -126,6 +126,8 @@ struct UmlSettings {
 struct EditorSettings {
     #[serde(default = "default_font_size")]
     font_size: u32,
+    #[serde(default = "default_editor_theme")]
+    theme: String,
     #[serde(default = "default_tab_size")]
     tab_size: u32,
     #[serde(default = "default_insert_spaces")]
@@ -138,8 +140,6 @@ struct EditorSettings {
     auto_close_comments: bool,
     #[serde(default = "default_true")]
     word_wrap: bool,
-    #[serde(default = "default_false")]
-    dark_theme: bool,
     #[serde(default = "default_true")]
     auto_format_on_save: bool,
 }
@@ -148,13 +148,13 @@ impl Default for EditorSettings {
     fn default() -> Self {
         Self {
             font_size: default_font_size(),
+            theme: default_editor_theme(),
             tab_size: default_tab_size(),
             insert_spaces: default_insert_spaces(),
             auto_close_brackets: default_false(),
             auto_close_quotes: default_false(),
             auto_close_comments: default_false(),
             word_wrap: default_true(),
-            dark_theme: default_false(),
             auto_format_on_save: default_true(),
         }
     }
@@ -215,13 +215,13 @@ impl Default for AppSettings {
             },
             editor: EditorSettings {
                 font_size: default_font_size(),
+                theme: default_editor_theme(),
                 tab_size: default_tab_size(),
                 insert_spaces: default_insert_spaces(),
                 auto_close_brackets: default_false(),
                 auto_close_quotes: default_false(),
                 auto_close_comments: default_false(),
                 word_wrap: default_true(),
-                dark_theme: default_false(),
                 auto_format_on_save: default_true(),
             },
             advanced: AdvancedSettings {
@@ -237,6 +237,10 @@ impl Default for AppSettings {
 
 fn default_font_size() -> u32 {
     14
+}
+
+fn default_editor_theme() -> String {
+    "default".to_string()
 }
 
 fn default_tab_size() -> u32 {
