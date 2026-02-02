@@ -27,10 +27,13 @@ import { useLanguageServer } from "./hooks/useLanguageServer";
 import { toFileUri } from "./services/lsp";
 import { useDrafts } from "./hooks/useDrafts";
 import { useUmlGraph } from "./hooks/useUmlGraph";
+import { useJshellActions } from "./hooks/useJshellActions";
 import { basename, joinPath } from "./services/paths";
 import { useProjectIO } from "./hooks/useProjectIO";
 import { getThemeColors } from "./services/monacoThemes";
-import { jshellEval, jshellInspect, jshellStart, jshellStop } from "./services/jshell";
+import { jshellStart, jshellStop } from "./services/jshell";
+import { buildClassSource } from "./services/javaCodegen";
+import { getUmlSignature } from "./services/umlGraph";
 
 const UML_HIGHLIGHT_SECONDS = 2;
 
@@ -39,73 +42,6 @@ const formatStatus = (input: unknown) =>
 
 const trimStatus = (input: string, max = 200) =>
   input.length > max ? `${input.slice(0, max)}...` : input;
-
-const escapeJavaString = (value: string) =>
-  value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
-
-const escapeJavaChar = (value: string) =>
-  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
-
-const normalizeConstructorArg = (raw: string, type: string) => {
-  const trimmed = raw.trim();
-  if (!trimmed) return trimmed;
-  const normalizedType = type.replace(/\s+/g, "");
-  if (normalizedType === "String") {
-    if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
-      return trimmed;
-    }
-    return `"${escapeJavaString(trimmed)}"`;
-  }
-  if (normalizedType === "char") {
-    if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
-      return trimmed;
-    }
-    return `'${escapeJavaChar(trimmed)}'`;
-  }
-  return trimmed;
-};
-
-const resolveConstructorParamClass = (type: string) => {
-  const normalizedType = type.replace(/\s+/g, "");
-  switch (normalizedType) {
-    case "int":
-    case "long":
-    case "float":
-    case "double":
-    case "boolean":
-    case "char":
-      return `${normalizedType}.class`;
-    case "String":
-      return "java.lang.String.class";
-    default:
-      return `Class.forName("${normalizedType}")`;
-  }
-};
-
-const isBrokenPipe = (message: string) => {
-  const normalized = message.toLowerCase();
-  return (
-    normalized.includes("pipe is being closed") ||
-    normalized.includes("broken pipe") ||
-    normalized.includes("closed unexpectedly")
-  );
-};
-
-const getUmlSignature = (graph: UmlGraph | null) => {
-  if (!graph) return "";
-  const nodes = [...graph.nodes]
-    .map((node) => ({
-      id: node.id,
-      isInvalid: Boolean(node.isInvalid),
-      fields: [...node.fields.map((field) => field.signature)].sort(),
-      methods: [...node.methods.map((method) => method.signature)].sort()
-    }))
-    .sort((a, b) => a.id.localeCompare(b.id));
-  const edges = [...graph.edges]
-    .map((edge) => `${edge.from}:${edge.kind}:${edge.to}`)
-    .sort();
-  return JSON.stringify({ nodes, edges });
-};
 
 export default function App() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
@@ -134,7 +70,6 @@ export default function App() {
   const [methodReturnValue, setMethodReturnValue] = useState<string | null>(null);
   const [methodReturnLabel, setMethodReturnLabel] = useState("");
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
-  const objectBenchRef = useRef<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
@@ -249,9 +184,9 @@ export default function App() {
     if (!selectedClassId) return null;
     return umlGraph?.nodes.find((node) => node.id === selectedClassId) ?? null;
   }, [selectedClassId, umlGraph]);
-  const canAddField = Boolean(selectedNode) && !busy;
-  const canAddConstructor = Boolean(selectedNode) && !busy;
-  const canAddMethod = Boolean(selectedNode) && !busy;
+  const canAddField = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
+  const canAddConstructor = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
+  const canAddMethod = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
 
   const isMac = useMemo(
     () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
@@ -408,10 +343,6 @@ export default function App() {
   }, [methodReturnOpen]);
 
   useEffect(() => {
-    objectBenchRef.current = objectBench;
-  }, [objectBench]);
-
-  useEffect(() => {
     if (selectedClassId && !selectedNode) {
       setSelectedClassId(null);
     }
@@ -518,56 +449,26 @@ export default function App() {
     formatStatus
   });
 
-  const resolveUmlNodeForObject = useCallback(
-    (object: ObjectInstance) => {
-      if (!umlGraph) return null;
-      return (
-        umlGraph.nodes.find((node) => node.id === object.type) ??
-        umlGraph.nodes.find((node) => node.name === object.type) ??
-        null
-      );
-    },
-    [umlGraph]
-  );
-
-  const getPublicMethodsForObject = useCallback(
-    (object: ObjectInstance) => {
-      const node = resolveUmlNodeForObject(object);
-      if (!node) return [];
-      const constructorName = node.name;
-      return node.methods.filter(
-        (method) =>
-          (method.visibility === "+" || !method.visibility) &&
-          method.name !== constructorName
-      );
-    },
-    [resolveUmlNodeForObject]
-  );
-
-  const refreshObjectBench = useCallback(
-    async (objects: ObjectInstance[]) => {
-      const fallback = new Map(objects.map((obj) => [obj.name, obj]));
-      const refreshed: ObjectInstance[] = [];
-      for (const obj of objects) {
-        const inspect = await jshellInspect(obj.name);
-        if (!inspect.ok) {
-          const message = trimStatus(inspect.error || "Unknown error");
-          appendDebugOutput(
-            `[${new Date().toLocaleTimeString()}] JShell inspect failed for ${obj.name}\n${message}`
-          );
-          refreshed.push(fallback.get(obj.name) ?? obj);
-          continue;
-        }
-        refreshed.push({
-          name: obj.name,
-          type: inspect.typeName || obj.type,
-          fields: inspect.fields ?? []
-        });
-      }
-      return refreshed;
-    },
-    [appendDebugOutput]
-  );
+  const {
+    getPublicMethodsForObject,
+    handleCreateObject: createObjectWithJshell,
+    executeMethodCall
+  } = useJshellActions({
+    projectPath,
+    umlGraph,
+    jshellReady,
+    setJshellReady,
+    objectBench,
+    setObjectBench,
+    lastCompileOutDirRef,
+    appendConsoleOutput,
+    resetConsoleOutput,
+    appendDebugOutput,
+    setStatus,
+    setBusy,
+    formatStatus,
+    trimStatus
+  });
 
   const {
     handleOpenProject,
@@ -963,141 +864,6 @@ export default function App() {
     [jshellReady, setStatus]
   );
 
-  const executeMethodCall = useCallback(
-    async (target: ObjectInstance, method: UmlMethod, paramValues: string[]) => {
-      if (!projectPath) {
-        setStatus("Open a project before calling methods.");
-        return;
-      }
-      if (!jshellReady) {
-        setStatus("Compile the project before calling methods.");
-        return;
-      }
-
-      const methodName =
-        method.name ?? method.signature.split("(")[0].split(":")[0].trim();
-      const params = method.params ?? [];
-      const args = params.map((param, index) =>
-        normalizeConstructorArg(paramValues[index] ?? "", param.type)
-      );
-      const ownerNode = resolveUmlNodeForObject(target);
-      const className = ownerNode?.id || target.type;
-      const usesDefaultPackage = !className.includes(".");
-      const buildMethodSelector = () => {
-        if (params.length === 0) {
-          return `getDeclaredMethod("${methodName}")`;
-        }
-        const typeArgs = params
-          .map((param) => resolveConstructorParamClass(param.type))
-          .join(", ");
-        return `getDeclaredMethod("${methodName}", ${typeArgs})`;
-      };
-      const callExpression = usesDefaultPackage
-        ? `Class.forName("${className}").${buildMethodSelector()}.invoke(${method.isStatic ? "null" : target.name}${args.length ? `, ${args.join(", ")}` : ""});`
-        : `${method.isStatic ? className : target.name}.${methodName}(${args.join(", ")});`;
-
-      setBusy(true);
-      const startedAt = new Date().toLocaleTimeString();
-      resetConsoleOutput();
-      appendConsoleOutput(
-        `[${startedAt}] Call method requested for ${target.name}.${methodName}`
-      );
-
-      const handleOutput = (stdout?: string | null, stderr?: string | null) => {
-        if (stdout?.trim()) {
-          appendConsoleOutput(stdout.trim());
-        }
-        if (stderr?.trim()) {
-          appendConsoleOutput(stderr.trim());
-        }
-      };
-
-      const returnsVoid =
-        !method.returnType ||
-        method.returnType.trim() === "" ||
-        method.returnType.trim() === "void";
-
-      const invokeMethod = async () => {
-        const result = await jshellEval(callExpression);
-        handleOutput(result.stdout, result.stderr);
-        if (!result.ok) {
-          const message = trimStatus(
-            result.error || result.stderr || "Unknown error"
-          );
-          appendConsoleOutput(`Method call failed: ${message}`);
-          setStatus("Method call failed.");
-          return false;
-        }
-        if (!returnsVoid) {
-          const valueText =
-            result.value === undefined || result.value === null
-              ? "null"
-              : String(result.value);
-          if (valueText.trim() !== "") {
-            appendConsoleOutput(`Return value: ${valueText}`);
-          } else {
-            appendConsoleOutput("Return value: (empty)");
-          }
-          setMethodReturnLabel(
-            method.signature
-              ? `${target.name}.${method.signature}`
-              : `${target.name}.${methodName}`
-          );
-          setMethodReturnValue(valueText);
-          setMethodReturnOpen(true);
-        }
-        const refreshed = await refreshObjectBench(objectBenchRef.current);
-        setObjectBench(refreshed);
-        appendConsoleOutput("Method call finished.");
-        setStatus(`Called ${methodName}.`);
-        return true;
-      };
-
-      try {
-        await invokeMethod();
-      } catch (error) {
-        const message = formatStatus(error);
-        appendDebugOutput(
-          `[${new Date().toLocaleTimeString()}] JShell error\n${message}`
-        );
-        if (isBrokenPipe(message)) {
-          setJshellReady(false);
-          const outDir = lastCompileOutDirRef.current;
-          if (projectPath && outDir) {
-            try {
-              await jshellStop();
-              await jshellStart(projectPath, outDir);
-              setJshellReady(true);
-              const retryOk = await invokeMethod();
-              if (retryOk) return;
-            } catch (restartError) {
-              appendDebugOutput(
-                `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
-                  restartError
-                )}`
-              );
-            }
-          }
-        }
-        setStatus(`Failed to call method: ${trimStatus(message)}`);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [
-      appendConsoleOutput,
-      appendDebugOutput,
-      jshellReady,
-      projectPath,
-      refreshObjectBench,
-      resetConsoleOutput,
-      resolveUmlNodeForObject,
-      setBusy,
-      setJshellReady,
-      setStatus
-    ]
-  );
-
   const handleOpenCallMethod = useCallback(
     (object: ObjectInstance, method: UmlMethod) => {
       if (!jshellReady) {
@@ -1106,7 +872,16 @@ export default function App() {
       }
       const params = method.params ?? [];
       if (params.length === 0) {
-        void executeMethodCall(object, method, []);
+        void executeMethodCall({
+          target: object,
+          method,
+          paramValues: [],
+          onReturn: (label, value) => {
+            setMethodReturnLabel(label);
+            setMethodReturnValue(value);
+            setMethodReturnOpen(true);
+          }
+        });
         return;
       }
       setCallMethodTarget(object);
@@ -1115,36 +890,6 @@ export default function App() {
     },
     [executeMethodCall, jshellReady, setStatus]
   );
-
-  const buildClassSource = useCallback((form: AddClassForm) => {
-    const name = form.name.trim().replace(/\.java$/i, "");
-    const packageName = form.packageName.trim();
-    const extendsName = form.extendsName.trim();
-    const tokens: string[] = [];
-    tokens.push("public");
-    if (!form.isInterface && form.isAbstract) tokens.push("abstract");
-    if (!form.isInterface && form.isFinal) tokens.push("final");
-    tokens.push(form.isInterface ? "interface" : "class");
-    tokens.push(name);
-    if (extendsName) {
-      tokens.push("extends", extendsName);
-    }
-
-    const classHeader = tokens.join(" ");
-    const docBlock = form.includeJavadoc
-      ? "/**\n * write your javadoc description here\n */\n"
-      : "";
-    const mainDoc = form.includeJavadoc
-      ? "  /**\n   * write your javadoc description here\n   * @param args the command line arguments\n   */\n"
-      : "";
-    const mainMethod =
-      form.includeMain && !form.isInterface
-        ? `${mainDoc}  public static void main(String[] args) {\n  }\n\n`
-        : "";
-    const packageLine = packageName ? `package ${packageName};\n\n` : "";
-
-    return `${packageLine}${docBlock}${classHeader} {\n\n${mainMethod}}\n`;
-  }, []);
 
   const handleCreateClass = useCallback(
     async (form: AddClassForm) => {
@@ -1200,7 +945,6 @@ export default function App() {
       openFileByPath,
       setTree,
       setCompileStatus,
-      buildClassSource,
       updateDraftForPath,
       bumpEditorResetKey
     ]
@@ -1440,140 +1184,13 @@ export default function App() {
     async (form: CreateObjectForm) => {
       const target = createObjectTarget;
       const constructor = createObjectConstructor;
-      if (!projectPath) {
-        setStatus("Open a project before creating objects.");
-        return;
-      }
       if (!target || !constructor) {
         setStatus("Select a constructor before creating an object.");
         return;
       }
-      if (!jshellReady) {
-        setStatus("Compile the project before creating objects.");
-        return;
-      }
-
-      setBusy(true);
-      const args = constructor.params.map((param, index) =>
-        normalizeConstructorArg(form.paramValues[index] ?? "", param.type)
-      );
-      const usesDefaultPackage = !target.id.includes(".");
-      const ctorParams = constructor.params.map((param) =>
-        resolveConstructorParamClass(param.type)
-      );
-      const constructorSelector =
-        ctorParams.length === 0
-          ? "getDeclaredConstructor()"
-          : `getDeclaredConstructor(${ctorParams.join(", ")})`;
-      const code = usesDefaultPackage
-        ? `var ${form.objectName} = Class.forName("${target.id}").${constructorSelector}.newInstance(${args.join(", ")});`
-        : `var ${form.objectName} = new ${target.id}(${args.join(", ")});`;
-      appendDebugOutput(
-        `[${new Date().toLocaleTimeString()}] JShell eval\n${code}`
-      );
-      const startedAt = new Date().toLocaleTimeString();
-      resetConsoleOutput();
-      appendConsoleOutput(
-        `[${startedAt}] Create object requested for ${form.objectName}`
-      );
-
-      const logJshellOutput = (stdout?: string, stderr?: string) => {
-        const jshellTime = new Date().toLocaleTimeString();
-        if (stdout) {
-          appendDebugOutput(
-            `[${jshellTime}] JShell output\n${stdout.trim()}`
-          );
-        }
-        if (stderr) {
-          appendDebugOutput(
-            `[${jshellTime}] JShell error output\n${stderr.trim()}`
-          );
-        }
-      };
-
-      const createInstance = async (): Promise<ObjectInstance | null> => {
-        const result = await jshellEval(code);
-        logJshellOutput(result.stdout, result.stderr);
-        if (!result.ok) {
-          const message = `Failed to create ${form.objectName}: ${trimStatus(
-            result.error || result.stderr || "Unknown error"
-          )}`;
-          appendConsoleOutput(message);
-          setStatus("Object creation failed.");
-          return null;
-        }
-
-        const inspect = await jshellInspect(form.objectName);
-        if (!inspect.ok) {
-          const message = `Failed to inspect ${form.objectName}: ${trimStatus(
-            inspect.error || "Unknown error"
-          )}`;
-          appendConsoleOutput(message);
-          setStatus("Object creation failed.");
-          return null;
-        }
-        return {
-          name: form.objectName,
-          type: target.name || inspect.typeName || target.id,
-          fields: inspect.fields ?? []
-        };
-      };
-
-      const createAndRefresh = async () => {
-        const entry = await createInstance();
-        if (!entry) return false;
-        const baseObjects = objectBenchRef.current.filter((item) => item.name !== entry.name);
-        const refreshed = await refreshObjectBench([...baseObjects, entry]);
-        setObjectBench(refreshed);
-        appendConsoleOutput("Object created.");
-        setStatus(`Created ${entry.name}.`);
-        return true;
-      };
-
-      try {
-        await createAndRefresh();
-      } catch (error) {
-        const message = formatStatus(error);
-        appendDebugOutput(
-          `[${new Date().toLocaleTimeString()}] JShell error\n${message}`
-        );
-        if (isBrokenPipe(message)) {
-          setJshellReady(false);
-          const outDir = lastCompileOutDirRef.current;
-          if (projectPath && outDir) {
-            try {
-              await jshellStop();
-              await jshellStart(projectPath, outDir);
-              setJshellReady(true);
-              const retryOk = await createAndRefresh();
-              if (retryOk) return;
-            } catch (restartError) {
-              appendDebugOutput(
-                `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
-                  restartError
-                )}`
-              );
-            }
-          }
-        }
-        setStatus(`Failed to create object: ${trimStatus(message)}`);
-      } finally {
-        setBusy(false);
-      }
+      await createObjectWithJshell({ form, target, constructor });
     },
-    [
-      appendDebugOutput,
-      appendConsoleOutput,
-      createObjectConstructor,
-      createObjectTarget,
-      jshellReady,
-      projectPath,
-      refreshObjectBench,
-      resetConsoleOutput,
-      setBusy,
-      setJshellReady,
-      setStatus
-    ]
+    [createObjectConstructor, createObjectTarget, createObjectWithJshell, setStatus]
   );
 
   const handleCallMethod = useCallback(
@@ -1584,7 +1201,16 @@ export default function App() {
         setStatus("Select a method before calling it.");
         return;
       }
-      await executeMethodCall(target, method, form.paramValues);
+      await executeMethodCall({
+        target,
+        method,
+        paramValues: form.paramValues,
+        onReturn: (label, value) => {
+          setMethodReturnLabel(label);
+          setMethodReturnValue(value);
+          setMethodReturnOpen(true);
+        }
+      });
     },
     [callMethodInfo, callMethodTarget, executeMethodCall, setStatus]
   );

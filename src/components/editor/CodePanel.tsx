@@ -51,6 +51,7 @@ export const CodePanel = memo(
     const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
     const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
     const subscriptionsRef = useRef<Disposable[]>([]);
+    const lastEditorValueRef = useRef<string | null>(null);
     const resolvedTheme = resolveMonacoTheme(theme);
 
     const logEvent = useCallback(
@@ -84,6 +85,41 @@ export const CodePanel = memo(
         subscriptionsRef.current = [];
       };
     }, []);
+
+    const syncExternalContent = useCallback(
+      (editor: MonacoEditorType.IStandaloneCodeEditor | null) => {
+        if (!editor || !openFile) return;
+        const model = editor.getModel();
+        if (!model) return;
+        const modelValue = model.getValue();
+        if (content === modelValue) {
+          lastEditorValueRef.current = content;
+          return;
+        }
+        if (content === lastEditorValueRef.current) return;
+        const selection = editor.getSelection();
+        logEvent(
+          `prop content differs from model (len ${content.length} vs ${modelValue.length})`
+        );
+        editor.executeEdits("external", [
+          {
+            range: model.getFullModelRange(),
+            text: content,
+            forceMoveMarkers: true
+          }
+        ]);
+        if (selection) {
+          editor.setSelection(selection);
+        }
+        lastEditorValueRef.current = content;
+        logEvent(`synced content into model (len ${content.length})`);
+      },
+      [content, logEvent, openFile]
+    );
+
+    useEffect(() => {
+      syncExternalContent(editorRef.current);
+    }, [syncExternalContent]);
 
     return (
       <div className="flex h-full flex-col overflow-hidden">
@@ -130,9 +166,11 @@ export const CodePanel = memo(
                   })
                 ];
                 onEditorMount?.(editor);
+                syncExternalContent(editor);
               }}
               onChange={(value) => {
                 const next = value ?? "";
+                lastEditorValueRef.current = next;
                 onChange(next);
               }}
               options={{

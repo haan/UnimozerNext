@@ -1,4 +1,10 @@
 import { useEffect, useRef } from "react";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from "../ui/tooltip";
 
 type ConsolePanelProps = {
   output: string;
@@ -21,20 +27,26 @@ export const ConsolePanel = ({ output, fontSize, running, onStop }: ConsolePanel
       style={{ background: "var(--console-bg)" }}
     >
       {running ? (
-        <button
-          type="button"
-          onClick={onStop}
-          className="absolute right-6 top-2 z-10 inline-flex h-5 w-5 items-center justify-center rounded-[3px] bg-red-500 text-[0px] shadow-sm transition hover:bg-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
-          aria-label="Stop"
-          title="Stop"
-        >
-          Stop
-        </button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onStop}
+                className="absolute right-6 top-2 z-10 inline-flex h-5 w-5 items-center justify-center rounded-[3px] bg-red-500 text-[0px] shadow-sm transition hover:bg-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+                aria-label="Stop"
+              >
+                Stop
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="left">Stop</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       ) : null}
       <pre
         ref={scrollRef}
         className={`flex-1 overflow-auto whitespace-pre-wrap px-4 py-3 leading-relaxed ${
-          running ? "pr-16 pt-8" : ""
+          running ? "pr-16" : ""
         }`}
         style={{
           color: "var(--console-fg)",
