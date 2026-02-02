@@ -4,49 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { editor as MonacoEditorType } from "monaco-editor";
 
 import { ConsolePanel } from "./components/console/ConsolePanel";
-import { DiagramPanel } from "./components/diagram/DiagramPanel";
-import { ObjectBenchPanel } from "./components/objectBench/ObjectBenchPanel";
 import { CodePanel } from "./components/editor/CodePanel";
-import { SettingsDialog } from "./components/settings/SettingsDialog";
-import { AddClassDialog, type AddClassForm } from "./components/wizards/AddClassDialog";
-import { AddFieldDialog, type AddFieldForm } from "./components/wizards/AddFieldDialog";
-import {
-  AddConstructorDialog,
-  type AddConstructorForm
-} from "./components/wizards/AddConstructorDialog";
-import { AddMethodDialog, type AddMethodForm } from "./components/wizards/AddMethodDialog";
-import { CreateObjectDialog, type CreateObjectForm } from "./components/wizards/CreateObjectDialog";
-import { CallMethodDialog, type CallMethodForm } from "./components/wizards/CallMethodDialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle
-} from "./components/ui/alert-dialog";
-import {
-  Menubar,
-  MenubarCheckboxItem,
-  MenubarContent,
-  MenubarItem,
-  MenubarMenu,
-  MenubarSeparator,
-  MenubarShortcut,
-  MenubarSub,
-  MenubarSubContent,
-  MenubarSubTrigger,
-  MenubarTrigger
-} from "./components/ui/menubar";
+import { AppMenu } from "./components/app/AppMenu";
+import { ObjectBenchSection } from "./components/app/ObjectBenchSection";
+import { AppDialogs } from "./components/app/AppDialogs";
+import type { AddClassForm } from "./components/wizards/AddClassDialog";
+import type { AddFieldForm } from "./components/wizards/AddFieldDialog";
+import type { AddConstructorForm } from "./components/wizards/AddConstructorDialog";
+import type { AddMethodForm } from "./components/wizards/AddMethodDialog";
+import type { CreateObjectForm } from "./components/wizards/CreateObjectDialog";
+import type { CallMethodForm } from "./components/wizards/CallMethodDialog";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "./models/uml";
 import type { ObjectInstance } from "./models/objectBench";
 import type { OpenFile } from "./models/openFile";
-import { buildMockGraph, parseUmlGraph } from "./services/uml";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useSplitRatios } from "./hooks/useSplitRatios";
 import { useVerticalSplit } from "./hooks/useVerticalSplit";
@@ -54,7 +26,8 @@ import { useRunConsole } from "./hooks/useRunConsole";
 import { useLanguageServer } from "./hooks/useLanguageServer";
 import { toFileUri } from "./services/lsp";
 import { useDrafts } from "./hooks/useDrafts";
-import { basename, joinPath, toFqnFromPath } from "./services/paths";
+import { useUmlGraph } from "./hooks/useUmlGraph";
+import { basename, joinPath } from "./services/paths";
 import { useProjectIO } from "./hooks/useProjectIO";
 import { getThemeColors } from "./services/monacoThemes";
 import { jshellEval, jshellInspect, jshellStart, jshellStop } from "./services/jshell";
@@ -189,9 +162,6 @@ export default function App() {
   const showPrivateObjectFields = settings.view.showPrivateObjectFields ?? true;
   const showInheritedObjectFields = settings.view.showInheritedObjectFields ?? true;
   const showStaticObjectFields = settings.view.showStaticObjectFields ?? true;
-  const [umlStatus, setUmlStatus] = useState<string | null>(null);
-  const parseSeq = useRef(0);
-  const lastGoodGraph = useRef<UmlGraph | null>(null);
   const {
     containerRef,
     consoleContainerRef,
@@ -362,6 +332,36 @@ export default function App() {
     editor.trigger("menu", "editor.action.clipboardPasteAction", null);
   }, []);
 
+  const handleExit = useCallback(() => {
+    const window = getCurrentWindow();
+    window.close().catch(() => undefined);
+  }, []);
+
+  const handleMenuAddClass = useCallback(() => {
+    setAddClassOpen(true);
+  }, []);
+
+  const handleMenuAddConstructor = useCallback(() => {
+    if (selectedNode) {
+      setConstructorTarget(selectedNode);
+      setAddConstructorOpen(true);
+    }
+  }, [selectedNode]);
+
+  const handleMenuAddField = useCallback(() => {
+    if (selectedNode) {
+      setFieldTarget(selectedNode);
+      setAddFieldOpen(true);
+    }
+  }, [selectedNode]);
+
+  const handleMenuAddMethod = useCallback(() => {
+    if (selectedNode) {
+      setMethodTarget(selectedNode);
+      setAddMethodOpen(true);
+    }
+  }, [selectedNode]);
+
   useEffect(() => {
     if (!openFile) {
       editorRef.current = null;
@@ -509,6 +509,15 @@ export default function App() {
     [appendConsoleOutput, debugLogging]
   );
 
+  const { umlStatus, lastGoodGraphRef } = useUmlGraph({
+    projectPath,
+    tree,
+    fileDrafts,
+    setUmlGraph,
+    onDebugLog: appendDebugOutput,
+    formatStatus
+  });
+
   const resolveUmlNodeForObject = useCallback(
     (object: ObjectInstance) => {
       if (!umlGraph) return null;
@@ -571,7 +580,7 @@ export default function App() {
     projectPath,
     fileDrafts,
     openFilePath,
-    lastGoodGraphRef: lastGoodGraph,
+    lastGoodGraphRef,
     setProjectPath,
     setTree,
     setUmlGraph,
@@ -601,76 +610,6 @@ export default function App() {
     };
   }, [umlGraph, settings.uml.showDependencies]);
 
-  const mergeWithLastGoodGraph = (graph: UmlGraph, previous: UmlGraph | null): UmlGraph => {
-    const failedFiles = graph.failedFiles ?? [];
-    if (!previous || failedFiles.length === 0) return graph;
-    const failedSet = new Set(failedFiles);
-    const mergedNodes = new Map<string, UmlGraph["nodes"][number]>();
-    graph.nodes.forEach((node) => mergedNodes.set(node.id, node));
-    previous.nodes.forEach((node) => {
-      if (failedSet.has(node.path) && !mergedNodes.has(node.id)) {
-        mergedNodes.set(node.id, node);
-      }
-    });
-    const nodeIds = new Set(mergedNodes.keys());
-    const mergedEdges = new Map<string, UmlGraph["edges"][number]>();
-    graph.edges.forEach((edge) => mergedEdges.set(edge.id, edge));
-    previous.edges.forEach((edge) => {
-      if (mergedEdges.has(edge.id)) return;
-      if (!nodeIds.has(edge.from) || !nodeIds.has(edge.to)) return;
-      const fromNode = previous.nodes.find((node) => node.id === edge.from);
-      const toNode = previous.nodes.find((node) => node.id === edge.to);
-      if (!fromNode || !toNode) return;
-      if (failedSet.has(fromNode.path) || failedSet.has(toNode.path)) {
-        mergedEdges.set(edge.id, edge);
-      }
-    });
-    return {
-      ...graph,
-      nodes: Array.from(mergedNodes.values()),
-      edges: Array.from(mergedEdges.values())
-    };
-  };
-
-  const applyInvalidFlags = (graph: UmlGraph, failedFiles?: string[]): UmlGraph => {
-    const failedSet = new Set(failedFiles ?? []);
-    return {
-      ...graph,
-      nodes: graph.nodes.map((node) => ({
-        ...node,
-        isInvalid: failedSet.has(node.path)
-      }))
-    };
-  };
-
-  const ensureFailedNodes = (
-    graph: UmlGraph,
-    failedFiles: string[] | undefined,
-    root: string,
-    srcRoot: string
-  ): UmlGraph => {
-    if (!failedFiles || failedFiles.length === 0) return graph;
-    const existingPaths = new Set(graph.nodes.map((node) => node.path));
-    const nodes = [...graph.nodes];
-    for (const filePath of failedFiles) {
-      if (existingPaths.has(filePath)) continue;
-      const name = basename(filePath).replace(/\.java$/i, "") || basename(filePath);
-      const id = toFqnFromPath(root, srcRoot, filePath) || name;
-      nodes.push({
-        id,
-        name,
-        kind: "class",
-        path: filePath,
-        fields: [],
-        methods: [],
-        isInvalid: true
-      });
-    }
-    return {
-      ...graph,
-      nodes
-    };
-  };
 
   const handleContentChange = useCallback((value: string) => {
     if (compileStatus !== null && openFilePath) {
@@ -695,56 +634,6 @@ export default function App() {
     notifyLsChange
   ]);
 
-  useEffect(() => {
-    if (!projectPath || !tree) return;
-
-    const overrides = Object.entries(fileDrafts)
-      .filter(([, draft]) => draft.content !== draft.lastSavedContent)
-      .map(([path, draft]) => ({
-        path,
-        content: draft.content
-      }));
-
-    parseSeq.current += 1;
-    const currentSeq = parseSeq.current;
-    const timer = window.setTimeout(async () => {
-      setUmlStatus("Parsing UML...");
-      try {
-        const result = await parseUmlGraph(projectPath, "src", overrides);
-        const graph = result.graph;
-        if (currentSeq === parseSeq.current) {
-          appendDebugOutput(
-            `[UML] ${new Date().toLocaleTimeString()}\n${result.raw}`
-          );
-          const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraph.current);
-          const withFailedNodes = ensureFailedNodes(mergedGraph, graph.failedFiles, projectPath, "src");
-          const nextGraph = applyInvalidFlags(withFailedNodes, graph.failedFiles);
-          lastGoodGraph.current = nextGraph;
-          setUmlGraph(nextGraph);
-          if (graph.failedFiles && graph.failedFiles.length > 0) {
-            const count = graph.failedFiles.length;
-            setUmlStatus(`UML parse incomplete (${count} file${count === 1 ? "" : "s"}).`);
-          } else {
-            setUmlStatus(null);
-          }
-        }
-      } catch (error) {
-        if (currentSeq === parseSeq.current) {
-          setUmlStatus(`UML parse failed: ${trimStatus(formatStatus(error))}`);
-          if (lastGoodGraph.current) {
-            setUmlGraph(lastGoodGraph.current);
-          } else {
-            const fallback = buildMockGraph(tree, projectPath);
-            setUmlGraph(fallback);
-          }
-        }
-      }
-    }, 500);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [projectPath, tree, fileDrafts, appendDebugOutput, debugLogging]);
 
   useEffect(() => {
     const window = getCurrentWindow();
@@ -1702,266 +1591,90 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="relative flex items-center border-b border-border bg-card px-4 py-2">
-        <div className="flex items-center gap-2">
-          <img
-            src="/icon/icon.png"
-            alt="Unimozer Next icon"
-            className="h-10 w-10"
-            draggable={false}
-          />
-          <Menubar className="border-0 bg-transparent p-0 shadow-none">
-          <MenubarMenu>
-            <MenubarTrigger>File</MenubarTrigger>
-            <MenubarContent>
-              <MenubarItem onClick={() => requestProjectAction("new")} disabled={busy}>
-                New Project
-                <MenubarShortcut>{isMac ? "⌘N" : "Ctrl+N"}</MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem onClick={() => requestProjectAction("open")} disabled={busy}>
-                Open
-                <MenubarShortcut>
-                  {isMac ? "⌘O" : "Ctrl+O"}
-                </MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem onClick={handleSave} disabled={!hasUnsavedChanges || busy}>
-                Save
-                <MenubarShortcut>
-                  {isMac ? "⌘S" : "Ctrl+S"}
-                </MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem onClick={handleExportProject} disabled={busy || !projectPath}>
-                Save As
-              </MenubarItem>
-              <MenubarSeparator />
-              <MenubarItem onClick={() => setSettingsOpen(true)} disabled={busy}>
-                Settings
-              </MenubarItem>
-              <MenubarSeparator />
-              <MenubarItem
-                onClick={() => {
-                  const window = getCurrentWindow();
-                  window.close().catch(() => undefined);
-                }}
-                disabled={busy}
-              >
-                Exit
-              </MenubarItem>
-            </MenubarContent>
-            </MenubarMenu>
-            <MenubarMenu>
-              <MenubarTrigger>Edit</MenubarTrigger>
-              <MenubarContent>
-              <MenubarItem
-                onClick={() => triggerEditorAction("undo")}
-                disabled={editDisabled}
-              >
-                Undo
-                <MenubarShortcut>{isMac ? "⌘Z" : "Ctrl+Z"}</MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem
-                onClick={() => triggerEditorAction("redo")}
-                disabled={editDisabled}
-              >
-                Redo
-                <MenubarShortcut>{isMac ? "⇧⌘Z" : "Ctrl+Y"}</MenubarShortcut>
-              </MenubarItem>
-              <MenubarSeparator />
-              <MenubarItem
-                onClick={() => triggerEditorAction("editor.action.clipboardCutAction")}
-                disabled={editDisabled}
-              >
-                Cut
-                <MenubarShortcut>{isMac ? "⌘X" : "Ctrl+X"}</MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem
-                onClick={() => triggerEditorAction("editor.action.clipboardCopyAction")}
-                disabled={editDisabled}
-              >
-                Copy
-                <MenubarShortcut>{isMac ? "⌘C" : "Ctrl+C"}</MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem
-                onClick={() => {
-                  void handlePaste();
-                }}
-                disabled={editDisabled}
-              >
-                Paste
-                <MenubarShortcut>{isMac ? "⌘V" : "Ctrl+V"}</MenubarShortcut>
-              </MenubarItem>
-            </MenubarContent>
-          </MenubarMenu>
-            <MenubarMenu>
-              <MenubarTrigger>View</MenubarTrigger>
-              <MenubarContent>
-                <MenubarItem
-                  onClick={() => zoomControlsRef.current?.zoomIn()}
-                disabled={zoomDisabled}
-              >
-                Zoom In
-                <MenubarShortcut>{isMac ? "⌘+" : "Ctrl++"}</MenubarShortcut>
-              </MenubarItem>
-              <MenubarItem
-                onClick={() => zoomControlsRef.current?.zoomOut()}
-                disabled={zoomDisabled}
-              >
-                Zoom Out
-                <MenubarShortcut>{isMac ? "⌘-" : "Ctrl+-"}</MenubarShortcut>
-              </MenubarItem>
-                <MenubarItem
-                  onClick={() => zoomControlsRef.current?.resetZoom()}
-                  disabled={zoomDisabled}
-                >
-                  Reset Zoom
-                  <MenubarShortcut>{isMac ? "⌘0" : "Ctrl+0"}</MenubarShortcut>
-                </MenubarItem>
-                <MenubarSeparator />
-                <MenubarSub>
-                  <MenubarSubTrigger>Object Bench</MenubarSubTrigger>
-                  <MenubarSubContent>
-                    <MenubarCheckboxItem
-                      checked={showPrivateObjectFields}
-                      onCheckedChange={(checked) =>
-                        updateViewSettings({ showPrivateObjectFields: Boolean(checked) })
-                      }
-                    >
-                      Show private fields
-                    </MenubarCheckboxItem>
-                    <MenubarCheckboxItem
-                      checked={showInheritedObjectFields}
-                      onCheckedChange={(checked) =>
-                        updateViewSettings({ showInheritedObjectFields: Boolean(checked) })
-                      }
-                    >
-                      Show inherited fields
-                    </MenubarCheckboxItem>
-                    <MenubarCheckboxItem
-                      checked={showStaticObjectFields}
-                      onCheckedChange={(checked) =>
-                        updateViewSettings({ showStaticObjectFields: Boolean(checked) })
-                      }
-                    >
-                      Show static fields
-                    </MenubarCheckboxItem>
-                  </MenubarSubContent>
-                </MenubarSub>
-              </MenubarContent>
-            </MenubarMenu>
-            <MenubarMenu>
-              <MenubarTrigger>Insert</MenubarTrigger>
-              <MenubarContent>
-                <MenubarItem
-                  onClick={() => setAddClassOpen(true)}
-                  disabled={!canAddClass}
-                >
-                  Class
-                </MenubarItem>
-                <MenubarSeparator />
-                <MenubarItem
-                  onClick={() => {
-                    if (selectedNode) {
-                      setConstructorTarget(selectedNode);
-                      setAddConstructorOpen(true);
-                    }
-                  }}
-                  disabled={!canAddConstructor}
-                >
-                  Constructor
-                </MenubarItem>
-                <MenubarItem
-                  onClick={() => {
-                    if (selectedNode) {
-                      setFieldTarget(selectedNode);
-                      setAddFieldOpen(true);
-                    }
-                  }}
-                  disabled={!canAddField}
-                >
-                  Field
-                </MenubarItem>
-                <MenubarItem
-                  onClick={() => {
-                    if (selectedNode) {
-                      setMethodTarget(selectedNode);
-                      setAddMethodOpen(true);
-                    }
-                  }}
-                  disabled={!canAddMethod}
-                >
-                  Method
-                </MenubarItem>
-              </MenubarContent>
-            </MenubarMenu>
-          </Menubar>
-        </div>
-
-        {projectName ? (
-          <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-sm font-medium text-foreground">
-            <span className="max-w-[60vw] truncate">{projectName}</span>
-            {hasUnsavedChanges ? (
-              <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-            ) : null}
-          </div>
-        ) : null}
-      </header>
+      <AppMenu
+        busy={busy}
+        hasUnsavedChanges={hasUnsavedChanges}
+        projectName={projectName}
+        isMac={isMac}
+        editDisabled={editDisabled}
+        zoomDisabled={zoomDisabled}
+        canAddClass={canAddClass}
+        canAddConstructor={canAddConstructor}
+        canAddField={canAddField}
+        canAddMethod={canAddMethod}
+        showPrivateObjectFields={showPrivateObjectFields}
+        showInheritedObjectFields={showInheritedObjectFields}
+        showStaticObjectFields={showStaticObjectFields}
+        onRequestNewProject={() => requestProjectAction("new")}
+        onRequestOpenProject={() => requestProjectAction("open")}
+        onSave={() => {
+          void handleSave();
+        }}
+        onSaveAs={() => {
+          void handleExportProject();
+        }}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onExit={handleExit}
+        onUndo={() => triggerEditorAction("undo")}
+        onRedo={() => triggerEditorAction("redo")}
+        onCut={() => triggerEditorAction("editor.action.clipboardCutAction")}
+        onCopy={() => triggerEditorAction("editor.action.clipboardCopyAction")}
+        onPaste={() => {
+          void handlePaste();
+        }}
+        onZoomIn={() => zoomControlsRef.current?.zoomIn()}
+        onZoomOut={() => zoomControlsRef.current?.zoomOut()}
+        onZoomReset={() => zoomControlsRef.current?.resetZoom()}
+        onToggleShowPrivate={(value) =>
+          updateViewSettings({ showPrivateObjectFields: value })
+        }
+        onToggleShowInherited={(value) =>
+          updateViewSettings({ showInheritedObjectFields: value })
+        }
+        onToggleShowStatic={(value) =>
+          updateViewSettings({ showStaticObjectFields: value })
+        }
+        onAddClass={handleMenuAddClass}
+        onAddConstructor={handleMenuAddConstructor}
+        onAddField={handleMenuAddField}
+        onAddMethod={handleMenuAddMethod}
+      />
 
       <div className="flex flex-1 overflow-hidden">
         <main className="flex flex-1 flex-col bg-background">
           <div ref={containerRef} className="relative flex flex-1 overflow-hidden">
-            <section
-              className="flex flex-col border-r border-border"
-              style={{ width: `${splitRatio * 100}%` }}
-            >
-              <div ref={benchContainerRef} className="relative flex h-full flex-col">
-                <div
-                  className="min-h-0 flex-none overflow-hidden"
-                  style={{ height: `${objectBenchSplitRatio * 100}%` }}
-                >
-                  <DiagramPanel
-                    graph={visibleGraph}
-                    diagram={diagramState}
-                    compiled={compileStatus === "success"}
-                    backgroundColor={settings.uml.panelBackground}
-                    onNodePositionChange={handleNodePositionChange}
-                    onNodeSelect={handleNodeSelect}
-                    onCompileClass={handleCompileClass}
-                    onRunMain={handleRunMain}
-                    onCreateObject={handleOpenCreateObject}
-                    onRemoveClass={requestRemoveClass}
-                    onAddField={handleOpenAddField}
-                    onAddConstructor={handleOpenAddConstructor}
-                    onAddMethod={handleOpenAddMethod}
-                    onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
-                    onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
-                    onRegisterZoom={(controls) => {
-                      zoomControlsRef.current = controls;
-                    }}
-                    onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
-                  />
-                </div>
-                <div
-                  className="absolute left-0 z-10 h-3 w-full -translate-y-1.5 cursor-row-resize transition hover:bg-border/40"
-                  style={{ top: `${objectBenchSplitRatio * 100}%` }}
-                  role="separator"
-                  aria-orientation="horizontal"
-                  aria-label="Resize object bench panel"
-                  onPointerDown={startBenchResize}
-                >
-                  <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
-                </div>
-                <div className="min-h-[var(--bench-min-height)] flex-1 overflow-hidden">
-                  <ObjectBenchPanel
-                    objects={objectBench}
-                    showPrivate={showPrivateObjectFields}
-                    showInherited={showInheritedObjectFields}
-                    showStatic={showStaticObjectFields}
-                    getMethodsForObject={getPublicMethodsForObject}
-                    onCallMethod={handleOpenCallMethod}
-                  />
-                </div>
-              </div>
-            </section>
+            <div className="h-full" style={{ width: `${splitRatio * 100}%` }}>
+              <ObjectBenchSection
+                benchContainerRef={benchContainerRef}
+                objectBenchSplitRatio={objectBenchSplitRatio}
+                startBenchResize={startBenchResize}
+                graph={visibleGraph}
+                diagram={diagramState}
+                compiled={compileStatus === "success"}
+                backgroundColor={settings.uml.panelBackground}
+                onNodePositionChange={handleNodePositionChange}
+                onNodeSelect={handleNodeSelect}
+                onCompileClass={handleCompileClass}
+                onRunMain={handleRunMain}
+                onCreateObject={handleOpenCreateObject}
+                onRemoveClass={requestRemoveClass}
+                onAddField={handleOpenAddField}
+                onAddConstructor={handleOpenAddConstructor}
+                onAddMethod={handleOpenAddMethod}
+                onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
+                onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
+                onRegisterZoom={(controls) => {
+                  zoomControlsRef.current = controls;
+                }}
+                onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
+                objectBench={objectBench}
+                showPrivate={showPrivateObjectFields}
+                showInherited={showInheritedObjectFields}
+                showStatic={showStaticObjectFields}
+                getMethodsForObject={getPublicMethodsForObject}
+                onCallMethod={handleOpenCallMethod}
+              />
+            </div>
 
             <div
               className="absolute top-0 h-full w-3 -translate-x-1.5 cursor-col-resize transition hover:bg-border/40"
@@ -2035,169 +1748,64 @@ export default function App() {
         {umlStatus ? ` • ${umlStatus}` : ""}
       </footer>
 
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
+      <AppDialogs
+        settingsOpen={settingsOpen}
+        onSettingsOpenChange={setSettingsOpen}
         settings={settings}
-        onChange={handleSettingsChange}
-      />
-      <AddClassDialog
-        open={addClassOpen}
-        onOpenChange={setAddClassOpen}
-        onSubmit={handleCreateClass}
-        busy={busy}
-      />
-      <AddFieldDialog
-        open={addFieldOpen}
-        onOpenChange={setAddFieldOpen}
-        onSubmit={handleCreateField}
-        busy={busy}
-      />
-      <AddConstructorDialog
-        open={addConstructorOpen}
-        onOpenChange={setAddConstructorOpen}
-        onSubmit={handleCreateConstructor}
-        className={constructorTarget?.name ?? selectedNode?.name}
-        busy={busy}
-      />
-      <AddMethodDialog
-        open={addMethodOpen}
-        onOpenChange={setAddMethodOpen}
-        onSubmit={handleCreateMethod}
-        className={methodTarget?.name ?? selectedNode?.name}
-        busy={busy}
-      />
-      <CreateObjectDialog
-        open={createObjectOpen}
-        onOpenChange={setCreateObjectOpen}
-        onSubmit={handleCreateObject}
-        className={createObjectTarget?.name ?? selectedNode?.name ?? ""}
-        constructorLabel={createObjectConstructor?.signature ?? ""}
-        params={createObjectConstructor?.params ?? []}
-        existingNames={objectBench.map((item) => item.name)}
-        busy={busy}
-      />
-      <CallMethodDialog
-        open={callMethodOpen}
-        onOpenChange={setCallMethodOpen}
-        onSubmit={handleCallMethod}
-        objectName={callMethodTarget?.name ?? ""}
-        methodLabel={callMethodInfo?.signature ?? ""}
-        params={callMethodInfo?.params ?? []}
-        busy={busy}
-      />
-      <AlertDialog
-        open={removeClassOpen}
-        onOpenChange={(open) => {
+        onSettingsChange={handleSettingsChange}
+        addClassOpen={addClassOpen}
+        onAddClassOpenChange={setAddClassOpen}
+        onCreateClass={handleCreateClass}
+        addFieldOpen={addFieldOpen}
+        onAddFieldOpenChange={setAddFieldOpen}
+        onCreateField={handleCreateField}
+        addConstructorOpen={addConstructorOpen}
+        onAddConstructorOpenChange={setAddConstructorOpen}
+        addConstructorClassName={constructorTarget?.name ?? selectedNode?.name}
+        onCreateConstructor={handleCreateConstructor}
+        addMethodOpen={addMethodOpen}
+        onAddMethodOpenChange={setAddMethodOpen}
+        addMethodClassName={methodTarget?.name ?? selectedNode?.name}
+        onCreateMethod={handleCreateMethod}
+        createObjectOpen={createObjectOpen}
+        onCreateObjectOpenChange={setCreateObjectOpen}
+        onCreateObject={handleCreateObject}
+        createObjectClassName={createObjectTarget?.name ?? selectedNode?.name ?? ""}
+        createObjectConstructorLabel={createObjectConstructor?.signature ?? ""}
+        createObjectParams={createObjectConstructor?.params ?? []}
+        existingObjectNames={objectBench.map((item) => item.name)}
+        callMethodOpen={callMethodOpen}
+        onCallMethodOpenChange={setCallMethodOpen}
+        onCallMethod={handleCallMethod}
+        callMethodObjectName={callMethodTarget?.name ?? ""}
+        callMethodLabel={callMethodInfo?.signature ?? ""}
+        callMethodParams={callMethodInfo?.params ?? []}
+        removeClassOpen={removeClassOpen}
+        onRemoveClassOpenChange={(open) => {
           setRemoveClassOpen(open);
           if (!open) {
             setRemoveTarget(null);
           }
         }}
-      >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader className="items-center text-center">
-            <AlertDialogMedia className="bg-destructive/10 text-destructive">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="18"
-                height="18"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth="1.5"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"
-                />
-              </svg>
-            </AlertDialogMedia>
-            <AlertDialogTitle>Remove class?</AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              This will delete{" "}
-              <strong>{removeTarget ? removeTarget.name : "this class"}</strong>. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
-            <AlertDialogCancel
-              variant="outline"
-              className="w-full"
-              disabled={busy}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              className="w-full bg-destructive/10 text-destructive hover:bg-destructive/20"
-              disabled={busy || !removeTarget}
-              onClick={() => {
-                void confirmRemoveClass();
-              }}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={confirmProjectActionOpen}
-        onOpenChange={(open) => {
+        removeTargetName={removeTarget?.name ?? null}
+        onConfirmRemoveClass={() => {
+          void confirmRemoveClass();
+        }}
+        confirmProjectActionOpen={confirmProjectActionOpen}
+        onConfirmProjectActionOpenChange={(open) => {
           setConfirmProjectActionOpen(open);
           if (!open) {
             setPendingProjectAction(null);
           }
         }}
-      >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader className="items-center text-center">
-            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              You have unsaved changes. Continuing will discard them.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
-            <AlertDialogCancel
-              variant="outline"
-              className="w-full"
-              disabled={busy}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="w-full"
-              disabled={busy || !pendingProjectAction}
-              onClick={() => {
-                confirmProjectAction();
-              }}
-            >
-              Continue
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog
-        open={methodReturnOpen}
-        onOpenChange={setMethodReturnOpen}
-      >
-        <AlertDialogContent size="sm">
-          <AlertDialogHeader className="items-center text-center">
-            <AlertDialogTitle>Method return value</AlertDialogTitle>
-            {methodReturnLabel ? (
-              <AlertDialogDescription className="text-center">
-                {methodReturnLabel}
-              </AlertDialogDescription>
-            ) : null}
-          </AlertDialogHeader>
-          <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
-            {methodReturnValue ?? ""}
-          </div>
-          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
-            <AlertDialogAction className="w-full">OK</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        canConfirmProjectAction={Boolean(pendingProjectAction)}
+        onConfirmProjectAction={confirmProjectAction}
+        methodReturnOpen={methodReturnOpen}
+        onMethodReturnOpenChange={setMethodReturnOpen}
+        methodReturnLabel={methodReturnLabel}
+        methodReturnValue={methodReturnValue}
+        busy={busy}
+      />
     </div>
   );
 }
