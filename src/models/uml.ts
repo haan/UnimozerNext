@@ -18,6 +18,12 @@ export type UmlMethod = {
   range?: UmlSourceRange;
 };
 
+export type UmlConstructor = {
+  signature: string;
+  params: { name: string; type: string }[];
+  visibility?: string;
+};
+
 export type UmlField = {
   signature: string;
   isStatic?: boolean;

@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "build:parser": "cd java-parser && gradle copyBridgeJar",
+    "build:jshell": "cd jshell-bridge && gradle copyBridgeJar",
     "sync:themes": "node scripts/sync-monaco-themes.cjs",
     "tauri": "tauri",
     "tauri dev": "tauri dev",

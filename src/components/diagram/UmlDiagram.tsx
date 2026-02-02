@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { DiagramState } from "../../models/diagram";
-import type { UmlGraph, UmlNode } from "../../models/uml";
+import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
 import { Association } from "./Association";
 import { Class } from "./Class";
 import { Dependency } from "./Dependency";
@@ -182,6 +182,7 @@ export type UmlDiagramProps = {
   onNodeSelect?: (id: string) => void;
   onCompileClass?: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
+  onCreateObject?: (node: UmlNode, constructor: UmlConstructor) => void;
   onRemoveClass?: (node: UmlNode) => void;
   onAddField?: (node: UmlNode) => void;
   onAddConstructor?: (node: UmlNode) => void;
@@ -222,6 +223,7 @@ export const UmlDiagram = ({
   onNodeSelect,
   onCompileClass,
   onRunMain,
+  onCreateObject,
   onRemoveClass,
   onAddField,
   onAddConstructor,
@@ -536,6 +538,7 @@ export const UmlDiagram = ({
             }}
             onCompile={() => onCompileClass?.(node)}
             onRunMain={() => onRunMain?.(node)}
+            onCreateObject={onCreateObject ? (target, constructor) => onCreateObject(target, constructor) : undefined}
             onRemove={() => onRemoveClass?.(node)}
             onAddField={() => onAddField?.(node)}
             onAddConstructor={() => onAddConstructor?.(node)}

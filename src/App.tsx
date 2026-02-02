@@ -5,6 +5,7 @@ import type { editor as MonacoEditorType } from "monaco-editor";
 
 import { ConsolePanel } from "./components/console/ConsolePanel";
 import { DiagramPanel } from "./components/diagram/DiagramPanel";
+import { ObjectBenchPanel } from "./components/objectBench/ObjectBenchPanel";
 import { CodePanel } from "./components/editor/CodePanel";
 import { SettingsDialog } from "./components/settings/SettingsDialog";
 import { AddClassDialog, type AddClassForm } from "./components/wizards/AddClassDialog";
@@ -14,6 +15,7 @@ import {
   type AddConstructorForm
 } from "./components/wizards/AddConstructorDialog";
 import { AddMethodDialog, type AddMethodForm } from "./components/wizards/AddMethodDialog";
+import { CreateObjectDialog, type CreateObjectForm } from "./components/wizards/CreateObjectDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,20 +29,26 @@ import {
 } from "./components/ui/alert-dialog";
 import {
   Menubar,
+  MenubarCheckboxItem,
   MenubarContent,
   MenubarItem,
   MenubarMenu,
   MenubarSeparator,
   MenubarShortcut,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
   MenubarTrigger
 } from "./components/ui/menubar";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
-import type { UmlGraph, UmlNode } from "./models/uml";
+import type { UmlConstructor, UmlGraph, UmlNode } from "./models/uml";
+import type { ObjectInstance } from "./models/objectBench";
 import type { OpenFile } from "./models/openFile";
 import { buildMockGraph, parseUmlGraph } from "./services/uml";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useSplitRatios } from "./hooks/useSplitRatios";
+import { useVerticalSplit } from "./hooks/useVerticalSplit";
 import { useRunConsole } from "./hooks/useRunConsole";
 import { useLanguageServer } from "./hooks/useLanguageServer";
 import { toFileUri } from "./services/lsp";
@@ -48,6 +56,7 @@ import { useDrafts } from "./hooks/useDrafts";
 import { basename, joinPath, toFqnFromPath } from "./services/paths";
 import { useProjectIO } from "./hooks/useProjectIO";
 import { getThemeColors } from "./services/monacoThemes";
+import { jshellEval, jshellInspect, jshellStart, jshellStop } from "./services/jshell";
 
 const UML_HIGHLIGHT_SECONDS = 2;
 
@@ -56,6 +65,64 @@ const formatStatus = (input: unknown) =>
 
 const trimStatus = (input: string, max = 200) =>
   input.length > max ? `${input.slice(0, max)}...` : input;
+
+const escapeJavaString = (value: string) =>
+  value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+
+const escapeJavaChar = (value: string) =>
+  value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
+const normalizeConstructorArg = (raw: string, type: string) => {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  const normalizedType = type.replace(/\s+/g, "");
+  if (normalizedType === "String") {
+    if (trimmed.startsWith("\"") && trimmed.endsWith("\"")) {
+      return trimmed;
+    }
+    return `"${escapeJavaString(trimmed)}"`;
+  }
+  if (normalizedType === "char") {
+    if (trimmed.startsWith("'") && trimmed.endsWith("'")) {
+      return trimmed;
+    }
+    return `'${escapeJavaChar(trimmed)}'`;
+  }
+  return trimmed;
+};
+
+const resolveConstructorParamClass = (type: string) => {
+  const normalizedType = type.replace(/\s+/g, "");
+  switch (normalizedType) {
+    case "int":
+    case "long":
+    case "float":
+    case "double":
+    case "boolean":
+    case "char":
+      return `${normalizedType}.class`;
+    case "String":
+      return "java.lang.String.class";
+    default:
+      return `Class.forName("${normalizedType}")`;
+  }
+};
+
+const getUmlSignature = (graph: UmlGraph | null) => {
+  if (!graph) return "";
+  const nodes = [...graph.nodes]
+    .map((node) => ({
+      id: node.id,
+      isInvalid: Boolean(node.isInvalid),
+      fields: [...node.fields.map((field) => field.signature)].sort(),
+      methods: [...node.methods.map((method) => method.signature)].sort()
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  const edges = [...graph.edges]
+    .map((edge) => `${edge.from}:${edge.kind}:${edge.to}`)
+    .sort();
+  return JSON.stringify({ nodes, edges });
+};
 
 export default function App() {
   const [projectPath, setProjectPath] = useState<string | null>(null);
@@ -72,6 +139,13 @@ export default function App() {
   const [addFieldOpen, setAddFieldOpen] = useState(false);
   const [addConstructorOpen, setAddConstructorOpen] = useState(false);
   const [addMethodOpen, setAddMethodOpen] = useState(false);
+  const [createObjectOpen, setCreateObjectOpen] = useState(false);
+  const [createObjectTarget, setCreateObjectTarget] = useState<UmlNode | null>(null);
+  const [createObjectConstructor, setCreateObjectConstructor] = useState<UmlConstructor | null>(
+    null
+  );
+  const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
+  const [jshellReady, setJshellReady] = useState(false);
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
   const [confirmProjectActionOpen, setConfirmProjectActionOpen] = useState(false);
@@ -86,10 +160,14 @@ export default function App() {
     setSettingsOpen,
     handleSettingsChange,
     updateUmlSplitRatioSetting,
-    updateConsoleSplitRatioSetting
+    updateConsoleSplitRatioSetting,
+    updateObjectBenchSplitRatioSetting
   } = useAppSettings();
   const debugLogging = settings.advanced?.debugLogging ?? false;
   const codeHighlightEnabled = settings.uml.codeHighlight ?? true;
+  const showPrivateObjectFields = settings.view.showPrivateObjectFields ?? true;
+  const showInheritedObjectFields = settings.view.showInheritedObjectFields ?? true;
+  const showStaticObjectFields = settings.view.showStaticObjectFields ?? true;
   const [umlStatus, setUmlStatus] = useState<string | null>(null);
   const parseSeq = useRef(0);
   const lastGoodGraph = useRef<UmlGraph | null>(null);
@@ -106,6 +184,15 @@ export default function App() {
     onCommitUmlSplitRatio: updateUmlSplitRatioSetting,
     onCommitConsoleSplitRatio: updateConsoleSplitRatioSetting
   });
+  const {
+    containerRef: benchContainerRef,
+    splitRatio: objectBenchSplitRatio,
+    startResize: startBenchResize
+  } = useVerticalSplit({
+    ratio: settings.layout.objectBenchSplitRatio,
+    onCommit: updateObjectBenchSplitRatioSetting,
+    minTop: 240
+  });
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
@@ -117,6 +204,9 @@ export default function App() {
     column: number;
     durationSeconds: number;
   } | null>(null);
+  const umlSignatureRef = useRef<string>("");
+  const lastCompileOutDirRef = useRef<string | null>(null);
+  const lastCompileStatusRef = useRef<"success" | "failed" | null>(null);
   const zoomControlsRef = useRef<{
     zoomIn: () => void;
     zoomOut: () => void;
@@ -176,6 +266,19 @@ export default function App() {
   const isMac = useMemo(
     () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
     []
+  );
+
+  const updateViewSettings = useCallback(
+    (partial: Partial<typeof settings.view>) => {
+      handleSettingsChange({
+        ...settings,
+        view: {
+          ...settings.view,
+          ...partial
+        }
+      });
+    },
+    [handleSettingsChange, settings]
   );
 
   const triggerEditorAction = useCallback((actionId: string) => {
@@ -320,6 +423,13 @@ export default function App() {
   }, [addMethodOpen]);
 
   useEffect(() => {
+    if (!createObjectOpen) {
+      setCreateObjectTarget(null);
+      setCreateObjectConstructor(null);
+    }
+  }, [createObjectOpen]);
+
+  useEffect(() => {
     if (selectedClassId && !selectedNode) {
       setSelectedClassId(null);
     }
@@ -330,12 +440,61 @@ export default function App() {
     [projectPath]
   );
 
+  useEffect(() => {
+    if (!projectPath) {
+      setObjectBench([]);
+      setJshellReady(false);
+      void jshellStop();
+      return;
+    }
+    return () => {
+      void jshellStop();
+      setObjectBench([]);
+      setJshellReady(false);
+    };
+  }, [projectPath]);
+
+  useEffect(() => {
+    const signature = getUmlSignature(umlGraph);
+    if (!signature) {
+      umlSignatureRef.current = "";
+      setObjectBench([]);
+      return;
+    }
+    if (signature !== umlSignatureRef.current) {
+      umlSignatureRef.current = signature;
+      setObjectBench([]);
+    }
+  }, [umlGraph]);
+
+  const handleCompileSuccess = useCallback(
+    async (outDir: string) => {
+      if (!projectPath) return;
+      lastCompileOutDirRef.current = outDir;
+      try {
+        await jshellStop();
+      } catch {
+        // Ignore failures when restarting JShell.
+      }
+      try {
+        await jshellStart(projectPath, outDir);
+        setJshellReady(true);
+        setObjectBench([]);
+      } catch (error) {
+        setJshellReady(false);
+        setStatus(`JShell failed to start: ${trimStatus(formatStatus(error))}`);
+      }
+    },
+    [projectPath, setStatus]
+  );
+
   const {
     consoleOutput,
     compileStatus,
     setCompileStatus,
     runSessionId,
     appendConsoleOutput,
+    resetConsoleOutput,
     handleCompileClass,
     handleRunMain,
     handleCancelRun
@@ -345,8 +504,20 @@ export default function App() {
     formatAndSaveUmlFiles,
     setBusy,
     setStatus,
-    formatStatus
+    formatStatus,
+    onCompileSuccess: handleCompileSuccess,
+    onCompileRequested: () => setObjectBench([])
   });
+
+  useEffect(() => {
+    if (compileStatus !== "success") {
+      setJshellReady(false);
+    }
+    if (lastCompileStatusRef.current === "success" && compileStatus !== "success") {
+      setObjectBench([]);
+    }
+    lastCompileStatusRef.current = compileStatus;
+  }, [compileStatus]);
 
   const appendDebugOutput = useCallback(
     (text: string) => {
@@ -831,6 +1002,20 @@ export default function App() {
     setAddMethodOpen(true);
   }, []);
 
+  const handleOpenCreateObject = useCallback(
+    (node: UmlNode, constructor: UmlConstructor) => {
+      if (!jshellReady) {
+        setStatus("Compile the project before creating objects.");
+        return;
+      }
+      setSelectedClassId(node.id);
+      setCreateObjectTarget(node);
+      setCreateObjectConstructor(constructor);
+      setCreateObjectOpen(true);
+    },
+    [jshellReady, setStatus]
+  );
+
   const buildClassSource = useCallback((form: AddClassForm) => {
     const name = form.name.trim().replace(/\.java$/i, "");
     const packageName = form.packageName.trim();
@@ -897,6 +1082,9 @@ export default function App() {
         setTree(nextTree);
         setCompileStatus(null);
         await openFileByPath(filePath);
+        updateDraftForPath(filePath, source, "");
+        setContent(source);
+        setLastSavedContent("");
         setStatus(`Created ${name}.java`);
       } catch (error) {
         setStatus(`Failed to create class: ${formatStatus(error)}`);
@@ -1136,6 +1324,145 @@ export default function App() {
     ]
   );
 
+  const handleCreateObject = useCallback(
+    async (form: CreateObjectForm) => {
+      const target = createObjectTarget;
+      const constructor = createObjectConstructor;
+      if (!projectPath) {
+        setStatus("Open a project before creating objects.");
+        return;
+      }
+      if (!target || !constructor) {
+        setStatus("Select a constructor before creating an object.");
+        return;
+      }
+      if (!jshellReady) {
+        setStatus("Compile the project before creating objects.");
+        return;
+      }
+
+      setBusy(true);
+      const args = constructor.params.map((param, index) =>
+        normalizeConstructorArg(form.paramValues[index] ?? "", param.type)
+      );
+      const usesDefaultPackage = !target.id.includes(".");
+      const ctorParams = constructor.params.map((param) =>
+        resolveConstructorParamClass(param.type)
+      );
+      const constructorSelector =
+        ctorParams.length === 0
+          ? "getDeclaredConstructor()"
+          : `getDeclaredConstructor(${ctorParams.join(", ")})`;
+      const code = usesDefaultPackage
+        ? `var ${form.objectName} = Class.forName("${target.id}").${constructorSelector}.newInstance(${args.join(", ")});`
+        : `var ${form.objectName} = new ${target.id}(${args.join(", ")});`;
+      appendDebugOutput(
+        `[${new Date().toLocaleTimeString()}] JShell eval\n${code}`
+      );
+      const isBrokenPipe = (message: string) =>
+        message.toLowerCase().includes("pipe is being closed") ||
+        message.toLowerCase().includes("broken pipe") ||
+        message.toLowerCase().includes("closed unexpectedly");
+
+      const startedAt = new Date().toLocaleTimeString();
+      resetConsoleOutput();
+      appendConsoleOutput(
+        `[${startedAt}] Create object requested for ${form.objectName}`
+      );
+
+      const logJshellOutput = (stdout?: string, stderr?: string) => {
+        const jshellTime = new Date().toLocaleTimeString();
+        if (stdout) {
+          appendDebugOutput(
+            `[${jshellTime}] JShell output\n${stdout.trim()}`
+          );
+        }
+        if (stderr) {
+          appendDebugOutput(
+            `[${jshellTime}] JShell error output\n${stderr.trim()}`
+          );
+        }
+      };
+
+      const createInstance = async () => {
+        const result = await jshellEval(code);
+        logJshellOutput(result.stdout, result.stderr);
+        if (!result.ok) {
+          const message = `Failed to create ${form.objectName}: ${trimStatus(
+            result.error || result.stderr || "Unknown error"
+          )}`;
+          appendConsoleOutput(message);
+          setStatus("Object creation failed.");
+          return false;
+        }
+
+        const inspect = await jshellInspect(form.objectName);
+        if (!inspect.ok) {
+          const message = `Failed to inspect ${form.objectName}: ${trimStatus(
+            inspect.error || "Unknown error"
+          )}`;
+          appendConsoleOutput(message);
+          setStatus("Object creation failed.");
+          return false;
+        }
+        setObjectBench((prev) => [
+          ...prev.filter((item) => item.name !== form.objectName),
+          {
+            name: form.objectName,
+            type: target.name || inspect.typeName || target.id,
+            fields: inspect.fields ?? []
+          }
+        ]);
+        appendConsoleOutput("Object created.");
+        setStatus(`Created ${form.objectName}.`);
+        return true;
+      };
+
+      try {
+        await createInstance();
+      } catch (error) {
+        const message = formatStatus(error);
+        appendDebugOutput(
+          `[${new Date().toLocaleTimeString()}] JShell error\n${message}`
+        );
+        if (isBrokenPipe(message)) {
+          setJshellReady(false);
+          const outDir = lastCompileOutDirRef.current;
+          if (projectPath && outDir) {
+            try {
+              await jshellStop();
+              await jshellStart(projectPath, outDir);
+              setJshellReady(true);
+              const retryOk = await createInstance();
+              if (retryOk) return;
+            } catch (restartError) {
+              appendDebugOutput(
+                `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
+                  restartError
+                )}`
+              );
+            }
+          }
+        }
+        setStatus(`Failed to create object: ${trimStatus(message)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      appendDebugOutput,
+      appendConsoleOutput,
+      createObjectConstructor,
+      createObjectTarget,
+      jshellReady,
+      projectPath,
+      resetConsoleOutput,
+      setBusy,
+      setJshellReady,
+      setStatus
+    ]
+  );
+
   return (
     <div className="flex h-full flex-col">
       <header className="relative flex items-center border-b border-border bg-card px-4 py-2">
@@ -1228,11 +1555,11 @@ export default function App() {
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
-          <MenubarMenu>
-            <MenubarTrigger>View</MenubarTrigger>
-            <MenubarContent>
-              <MenubarItem
-                onClick={() => zoomControlsRef.current?.zoomIn()}
+            <MenubarMenu>
+              <MenubarTrigger>View</MenubarTrigger>
+              <MenubarContent>
+                <MenubarItem
+                  onClick={() => zoomControlsRef.current?.zoomIn()}
                 disabled={zoomDisabled}
               >
                 Zoom In
@@ -1245,13 +1572,43 @@ export default function App() {
                 Zoom Out
                 <MenubarShortcut>{isMac ? "⌘-" : "Ctrl+-"}</MenubarShortcut>
               </MenubarItem>
-              <MenubarItem
-                onClick={() => zoomControlsRef.current?.resetZoom()}
-                disabled={zoomDisabled}
-              >
-                Reset Zoom
-                <MenubarShortcut>{isMac ? "⌘0" : "Ctrl+0"}</MenubarShortcut>
+                <MenubarItem
+                  onClick={() => zoomControlsRef.current?.resetZoom()}
+                  disabled={zoomDisabled}
+                >
+                  Reset Zoom
+                  <MenubarShortcut>{isMac ? "⌘0" : "Ctrl+0"}</MenubarShortcut>
                 </MenubarItem>
+                <MenubarSeparator />
+                <MenubarSub>
+                  <MenubarSubTrigger>Object Bench</MenubarSubTrigger>
+                  <MenubarSubContent>
+                    <MenubarCheckboxItem
+                      checked={showPrivateObjectFields}
+                      onCheckedChange={(checked) =>
+                        updateViewSettings({ showPrivateObjectFields: Boolean(checked) })
+                      }
+                    >
+                      Show private fields
+                    </MenubarCheckboxItem>
+                    <MenubarCheckboxItem
+                      checked={showInheritedObjectFields}
+                      onCheckedChange={(checked) =>
+                        updateViewSettings({ showInheritedObjectFields: Boolean(checked) })
+                      }
+                    >
+                      Show inherited fields
+                    </MenubarCheckboxItem>
+                    <MenubarCheckboxItem
+                      checked={showStaticObjectFields}
+                      onCheckedChange={(checked) =>
+                        updateViewSettings({ showStaticObjectFields: Boolean(checked) })
+                      }
+                    >
+                      Show static fields
+                    </MenubarCheckboxItem>
+                  </MenubarSubContent>
+                </MenubarSub>
               </MenubarContent>
             </MenubarMenu>
             <MenubarMenu>
@@ -1319,26 +1676,52 @@ export default function App() {
               className="flex flex-col border-r border-border"
               style={{ width: `${splitRatio * 100}%` }}
             >
-              <DiagramPanel
-                graph={visibleGraph}
-                diagram={diagramState}
-                compiled={compileStatus === "success"}
-                backgroundColor={settings.uml.panelBackground}
-                onNodePositionChange={handleNodePositionChange}
-                onNodeSelect={handleNodeSelect}
-                onCompileClass={handleCompileClass}
-                onRunMain={handleRunMain}
-                onRemoveClass={requestRemoveClass}
-                onAddField={handleOpenAddField}
-                onAddConstructor={handleOpenAddConstructor}
-                onAddMethod={handleOpenAddMethod}
-                onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
-                onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
-                onRegisterZoom={(controls) => {
-                  zoomControlsRef.current = controls;
-                }}
-                onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
-              />
+              <div ref={benchContainerRef} className="relative flex h-full flex-col">
+                <div
+                  className="min-h-0 flex-none overflow-hidden"
+                  style={{ height: `${objectBenchSplitRatio * 100}%` }}
+                >
+                  <DiagramPanel
+                    graph={visibleGraph}
+                    diagram={diagramState}
+                    compiled={compileStatus === "success"}
+                    backgroundColor={settings.uml.panelBackground}
+                    onNodePositionChange={handleNodePositionChange}
+                    onNodeSelect={handleNodeSelect}
+                    onCompileClass={handleCompileClass}
+                    onRunMain={handleRunMain}
+                    onCreateObject={handleOpenCreateObject}
+                    onRemoveClass={requestRemoveClass}
+                    onAddField={handleOpenAddField}
+                    onAddConstructor={handleOpenAddConstructor}
+                    onAddMethod={handleOpenAddMethod}
+                    onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
+                    onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
+                    onRegisterZoom={(controls) => {
+                      zoomControlsRef.current = controls;
+                    }}
+                    onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
+                  />
+                </div>
+                <div
+                  className="absolute left-0 z-10 h-3 w-full -translate-y-1.5 cursor-row-resize transition hover:bg-border/40"
+                  style={{ top: `${objectBenchSplitRatio * 100}%` }}
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label="Resize object bench panel"
+                  onPointerDown={startBenchResize}
+                >
+                  <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
+                </div>
+                <div className="min-h-[var(--bench-min-height)] flex-1 overflow-hidden">
+                  <ObjectBenchPanel
+                    objects={objectBench}
+                    showPrivate={showPrivateObjectFields}
+                    showInherited={showInheritedObjectFields}
+                    showStatic={showStaticObjectFields}
+                  />
+                </div>
+              </div>
             </section>
 
             <div
@@ -1440,6 +1823,16 @@ export default function App() {
         onOpenChange={setAddMethodOpen}
         onSubmit={handleCreateMethod}
         className={methodTarget?.name ?? selectedNode?.name}
+        busy={busy}
+      />
+      <CreateObjectDialog
+        open={createObjectOpen}
+        onOpenChange={setCreateObjectOpen}
+        onSubmit={handleCreateObject}
+        className={createObjectTarget?.name ?? selectedNode?.name ?? ""}
+        constructorLabel={createObjectConstructor?.signature ?? ""}
+        params={createObjectConstructor?.params ?? []}
+        existingNames={objectBench.map((item) => item.name)}
         busy={busy}
       />
       <AlertDialog

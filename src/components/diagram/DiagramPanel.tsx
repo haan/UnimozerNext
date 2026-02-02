@@ -1,5 +1,5 @@
 import type { DiagramState } from "../../models/diagram";
-import type { UmlGraph, UmlNode } from "../../models/uml";
+import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -17,6 +17,7 @@ export type DiagramPanelProps = {
   onNodeSelect: (id: string) => void;
   onCompileClass: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
+  onCreateObject?: (node: UmlNode, constructor: UmlConstructor) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
   onAddClass?: () => void;
   onRemoveClass?: (node: UmlNode) => void;
@@ -36,6 +37,7 @@ export const DiagramPanel = ({
   onNodeSelect,
   onCompileClass,
   onRunMain,
+  onCreateObject,
   onRegisterZoom,
   onAddClass,
   onRemoveClass,
@@ -61,6 +63,7 @@ export const DiagramPanel = ({
               onNodeSelect={onNodeSelect}
               onCompileClass={onCompileClass}
               onRunMain={onRunMain}
+              onCreateObject={onCreateObject}
               onRemoveClass={onRemoveClass}
               onAddField={onAddField}
               onAddConstructor={onAddConstructor}

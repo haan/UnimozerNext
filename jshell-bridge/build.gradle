@@ -1,0 +1,41 @@
+plugins {
+  id 'java'
+  id 'application'
+}
+
+group = 'com.unimozer'
+version = '0.1.0'
+
+java {
+  sourceCompatibility = JavaVersion.VERSION_17
+  targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.0'
+}
+
+application {
+  mainClass = 'com.unimozer.jshell.JshellBridge'
+}
+
+jar {
+  archiveFileName = 'jshell-bridge.jar'
+  manifest {
+    attributes 'Main-Class': application.mainClass
+  }
+  from {
+    configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+  }
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.register('copyBridgeJar', Copy) {
+  dependsOn jar
+  from "$buildDir/libs/jshell-bridge.jar"
+  into "${rootProject.projectDir}/../resources/jshell-bridge"
+}

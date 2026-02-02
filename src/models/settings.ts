@@ -20,13 +20,21 @@ export type AdvancedSettings = {
   debugLogging: boolean;
 };
 
+export type ViewSettings = {
+  showPrivateObjectFields: boolean;
+  showInheritedObjectFields: boolean;
+  showStaticObjectFields: boolean;
+};
+
 export type AppSettings = {
   uml: UmlSettings;
   editor: EditorSettings;
   advanced: AdvancedSettings;
+  view: ViewSettings;
   layout: {
     umlSplitRatio: number;
     consoleSplitRatio: number;
+    objectBenchSplitRatio: number;
   };
 };
 
@@ -50,8 +58,14 @@ export const createDefaultSettings = (): AppSettings => ({
   advanced: {
     debugLogging: false
   },
+  view: {
+    showPrivateObjectFields: true,
+    showInheritedObjectFields: true,
+    showStaticObjectFields: true
+  },
   layout: {
     umlSplitRatio: 0.5,
-    consoleSplitRatio: 0.7
+    consoleSplitRatio: 0.7,
+    objectBenchSplitRatio: 0.75
   }
 });

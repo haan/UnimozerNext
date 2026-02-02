@@ -177,11 +177,34 @@ impl Default for AdvancedSettings {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct ViewSettings {
+    #[serde(default = "default_true")]
+    show_private_object_fields: bool,
+    #[serde(default = "default_true")]
+    show_inherited_object_fields: bool,
+    #[serde(default = "default_true")]
+    show_static_object_fields: bool,
+}
+
+impl Default for ViewSettings {
+    fn default() -> Self {
+        Self {
+            show_private_object_fields: default_true(),
+            show_inherited_object_fields: default_true(),
+            show_static_object_fields: default_true(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct LayoutSettings {
     #[serde(default = "default_split_ratio")]
     uml_split_ratio: f32,
     #[serde(default = "default_console_split_ratio")]
     console_split_ratio: f32,
+    #[serde(default = "default_object_bench_split_ratio")]
+    object_bench_split_ratio: f32,
 }
 
 impl Default for LayoutSettings {
@@ -189,6 +212,7 @@ impl Default for LayoutSettings {
         Self {
             uml_split_ratio: default_split_ratio(),
             console_split_ratio: default_console_split_ratio(),
+            object_bench_split_ratio: default_object_bench_split_ratio(),
         }
     }
 }
@@ -201,6 +225,8 @@ struct AppSettings {
     editor: EditorSettings,
     #[serde(default)]
     advanced: AdvancedSettings,
+    #[serde(default)]
+    view: ViewSettings,
     #[serde(default)]
     layout: LayoutSettings,
 }
@@ -227,9 +253,15 @@ impl Default for AppSettings {
             advanced: AdvancedSettings {
                 debug_logging: default_false(),
             },
+            view: ViewSettings {
+                show_private_object_fields: default_true(),
+                show_inherited_object_fields: default_true(),
+                show_static_object_fields: default_true(),
+            },
             layout: LayoutSettings {
                 uml_split_ratio: default_split_ratio(),
                 console_split_ratio: default_console_split_ratio(),
+                object_bench_split_ratio: default_object_bench_split_ratio(),
             },
         }
     }
@@ -265,6 +297,10 @@ fn default_split_ratio() -> f32 {
 
 fn default_console_split_ratio() -> f32 {
     0.7
+}
+
+fn default_object_bench_split_ratio() -> f32 {
+    0.75
 }
 
 #[derive(Serialize, Deserialize)]
@@ -410,6 +446,52 @@ struct RunStartEvent {
     run_id: u64,
 }
 
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JshellField {
+    name: String,
+    #[serde(rename = "type")]
+    type_name: String,
+    value: String,
+    visibility: String,
+    #[serde(default)]
+    is_static: bool,
+    #[serde(default)]
+    is_inherited: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JshellInspectResponse {
+    ok: bool,
+    #[serde(default)]
+    type_name: Option<String>,
+    #[serde(default)]
+    fields: Vec<JshellField>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JshellEvalResponse {
+    ok: bool,
+    #[serde(default)]
+    value: Option<String>,
+    #[serde(default)]
+    stdout: Option<String>,
+    #[serde(default)]
+    stderr: Option<String>,
+    #[serde(default)]
+    error: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JshellVarsResponse {
+    vars: Vec<JshellField>,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ParseUmlGraphResponse {
@@ -431,6 +513,18 @@ impl RunState {
     fn next_id(&self) -> u64 {
         self.run_id.fetch_add(1, AtomicOrdering::SeqCst) + 1
     }
+}
+
+struct JshellSession {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    stdout: BufReader<std::process::ChildStdout>,
+    stderr: Arc<Mutex<Vec<String>>>,
+}
+
+#[derive(Default)]
+struct JshellState {
+    current: Arc<Mutex<Option<JshellSession>>>,
 }
 
 const SKIP_DIRS: [&str; 8] = [
@@ -884,6 +978,187 @@ fn cancel_run(state: tauri::State<RunState>) -> Result<(), String> {
     Ok(())
 }
 
+fn jshell_send<T: for<'de> Deserialize<'de>>(
+    session: &mut JshellSession,
+    request: serde_json::Value,
+) -> Result<T, String> {
+    let stderr_snapshot = || {
+        if let Ok(lines) = session.stderr.lock() {
+            if lines.is_empty() {
+                return String::new();
+            }
+            return format!("\n{}", lines.join("\n"));
+        }
+        String::new()
+    };
+    let payload = serde_json::to_string(&request).map_err(|error| error.to_string())?;
+    session
+        .stdin
+        .write_all(payload.as_bytes())
+        .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
+    session
+        .stdin
+        .write_all(b"\n")
+        .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
+    session
+        .stdin
+        .flush()
+        .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
+
+    let mut response = String::new();
+    let bytes = session
+        .stdout
+        .read_line(&mut response)
+        .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
+    if bytes == 0 {
+        return Err(format!(
+            "JShell bridge closed unexpectedly{}",
+            stderr_snapshot()
+        ));
+    }
+    serde_json::from_str::<T>(&response).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn jshell_start(
+    app: tauri::AppHandle,
+    state: tauri::State<JshellState>,
+    root: String,
+    classpath: String,
+) -> Result<(), String> {
+    let java_rel = java_executable_name();
+    let java_path = resolve_resource(&app, &java_rel)
+        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
+    let jar_path = resolve_resource(&app, "jshell-bridge/jshell-bridge.jar")
+        .ok_or_else(|| "JShell bridge not found".to_string())?;
+
+    if let Ok(mut guard) = state.current.lock() {
+        if let Some(mut session) = guard.take() {
+            let _ = session.child.kill();
+        }
+    }
+
+    let out_dir = fs::canonicalize(&classpath).unwrap_or_else(|_| PathBuf::from(&classpath));
+    let mut command = Command::new(java_path);
+    command
+        .arg("-jar")
+        .arg(jar_path)
+        .arg("--classpath")
+        .arg(out_dir.to_string_lossy().to_string())
+        .current_dir(&root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let stderr_lines = Arc::new(Mutex::new(Vec::new()));
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "Failed to open JShell stdin".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Failed to open JShell stdout".to_string())?;
+    if let Some(stderr) = child.stderr.take() {
+        let stderr_buffer = stderr_lines.clone();
+        std::thread::spawn(move || {
+            let mut reader = BufReader::new(stderr);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                if reader.read_line(&mut line).ok().filter(|n| *n > 0).is_none() {
+                    break;
+                }
+                let trimmed = line.trim_end().to_string();
+                if let Ok(mut buffer) = stderr_buffer.lock() {
+                    if buffer.len() >= 50 {
+                        buffer.remove(0);
+                    }
+                    buffer.push(trimmed);
+                }
+            }
+        });
+    }
+
+    if let Ok(mut guard) = state.current.lock() {
+        *guard = Some(JshellSession {
+            child,
+            stdin,
+            stdout: BufReader::new(stdout),
+            stderr: stderr_lines,
+        });
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+fn jshell_stop(state: tauri::State<JshellState>) -> Result<(), String> {
+    if let Ok(mut guard) = state.current.lock() {
+        if let Some(mut session) = guard.take() {
+            let _ = session.child.kill();
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn jshell_eval(state: tauri::State<JshellState>, code: String) -> Result<JshellEvalResponse, String> {
+    let mut guard = state
+        .current
+        .lock()
+        .map_err(|_| "Failed to lock JShell state".to_string())?;
+    let session = guard
+        .as_mut()
+        .ok_or_else(|| "JShell is not running".to_string())?;
+    jshell_send(
+        session,
+        serde_json::json!({
+            "cmd": "eval",
+            "code": code
+        }),
+    )
+}
+
+#[tauri::command]
+fn jshell_inspect(
+    state: tauri::State<JshellState>,
+    var_name: String,
+) -> Result<JshellInspectResponse, String> {
+    let mut guard = state
+        .current
+        .lock()
+        .map_err(|_| "Failed to lock JShell state".to_string())?;
+    let session = guard
+        .as_mut()
+        .ok_or_else(|| "JShell is not running".to_string())?;
+    jshell_send(
+        session,
+        serde_json::json!({
+            "cmd": "inspect",
+            "var": var_name
+        }),
+    )
+}
+
+#[tauri::command]
+fn jshell_vars(state: tauri::State<JshellState>) -> Result<JshellVarsResponse, String> {
+    let mut guard = state
+        .current
+        .lock()
+        .map_err(|_| "Failed to lock JShell state".to_string())?;
+    let session = guard
+        .as_mut()
+        .ok_or_else(|| "JShell is not running".to_string())?;
+    jshell_send(session, serde_json::json!({ "cmd": "vars" }))
+}
+
 fn spawn_output_reader<R: std::io::Read + Send + 'static>(
     app: tauri::AppHandle,
     reader: R,
@@ -1189,18 +1464,18 @@ fn resolve_resource(app: &tauri::AppHandle, relative: &str) -> Option<PathBuf> {
     if let Ok(dir) = app.path().resource_dir() {
         let candidate: PathBuf = dir.join(relative);
         if candidate.exists() {
-            return Some(candidate);
+            return Some(fs::canonicalize(&candidate).unwrap_or(candidate));
         }
     }
 
     let fallback = PathBuf::from("resources").join(relative);
     if fallback.exists() {
-        return Some(fallback);
+        return Some(fs::canonicalize(&fallback).unwrap_or(fallback));
     }
 
     let dev_fallback = PathBuf::from("..").join("resources").join(relative);
     if dev_fallback.exists() {
-        return Some(dev_fallback);
+        return Some(fs::canonicalize(&dev_fallback).unwrap_or(dev_fallback));
     }
 
     None
@@ -1282,6 +1557,7 @@ fn main() {
             current: Arc::new(Mutex::new(None)),
             run_id: AtomicU64::new(0),
         })
+        .manage(JshellState::default())
         .manage(ls::LsState::default())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
@@ -1295,6 +1571,11 @@ fn main() {
             compile_project,
             run_main,
             cancel_run,
+            jshell_start,
+            jshell_stop,
+            jshell_eval,
+            jshell_inspect,
+            jshell_vars,
             read_settings,
             write_settings,
             parse_uml_graph,

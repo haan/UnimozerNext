@@ -29,6 +29,8 @@ type UseRunConsoleArgs = {
   setBusy: (busy: boolean) => void;
   setStatus: (status: string) => void;
   formatStatus: (input: unknown) => string;
+  onCompileSuccess?: (outDir: string) => void;
+  onCompileRequested?: () => void;
 };
 
 type UseRunConsoleResult = {
@@ -37,6 +39,7 @@ type UseRunConsoleResult = {
   setCompileStatus: Dispatch<SetStateAction<"success" | "failed" | null>>;
   runSessionId: number | null;
   appendConsoleOutput: (text: string) => void;
+  resetConsoleOutput: (text?: string) => void;
   handleCompileClass: (node: UmlNode) => Promise<void>;
   handleRunMain: (node: UmlNode) => Promise<void>;
   handleCancelRun: () => Promise<void>;
@@ -48,7 +51,9 @@ export const useRunConsole = ({
   formatAndSaveUmlFiles,
   setBusy,
   setStatus,
-  formatStatus
+  formatStatus,
+  onCompileSuccess,
+  onCompileRequested
 }: UseRunConsoleArgs): UseRunConsoleResult => {
   const [compileStatus, setCompileStatus] = useState<"success" | "failed" | null>(null);
   const [runSessionId, setRunSessionId] = useState<number | null>(null);
@@ -176,6 +181,7 @@ export const useRunConsole = ({
       const startedAt = new Date().toLocaleTimeString();
       resetConsole();
       setCompileStatus(null);
+      onCompileRequested?.();
       appendConsole(`[${startedAt}] Compile requested for ${node.name}`);
       try {
         await formatAndSaveUmlFiles(false);
@@ -183,6 +189,7 @@ export const useRunConsole = ({
           ok: boolean;
           stdout: string;
           stderr: string;
+          outDir: string;
         }>("compile_project", {
           root: projectPath,
           srcRoot: "src",
@@ -197,6 +204,9 @@ export const useRunConsole = ({
         if (result.ok) {
           appendConsole("Compilation succeeded.");
           setCompileStatus("success");
+          if (result.outDir && onCompileSuccess) {
+            onCompileSuccess(result.outDir);
+          }
         } else if (!result.stderr && !result.stdout) {
           appendConsole("Compilation failed.");
         }
@@ -217,6 +227,8 @@ export const useRunConsole = ({
       fileDrafts,
       formatAndSaveUmlFiles,
       formatStatus,
+      onCompileRequested,
+      onCompileSuccess,
       projectPath,
       resetConsole,
       setBusy,
@@ -267,6 +279,7 @@ export const useRunConsole = ({
     setCompileStatus,
     runSessionId,
     appendConsoleOutput: appendConsole,
+    resetConsoleOutput: resetConsole,
     handleCompileClass,
     handleRunMain,
     handleCancelRun

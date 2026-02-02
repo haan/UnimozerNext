@@ -13,6 +13,7 @@ type AppSettingsHook = {
   handleSettingsChange: (next: AppSettings) => void;
   updateUmlSplitRatioSetting: (ratio: number) => void;
   updateConsoleSplitRatioSetting: (ratio: number) => void;
+  updateObjectBenchSplitRatioSetting: (ratio: number) => void;
 };
 
 export const useAppSettings = (): AppSettingsHook => {
@@ -39,6 +40,10 @@ export const useAppSettings = (): AppSettingsHook => {
           advanced: {
             ...defaults.advanced,
             ...(stored as AppSettings).advanced
+          },
+          view: {
+            ...defaults.view,
+            ...(stored as AppSettings).view
           },
           layout: {
             ...defaults.layout,
@@ -93,6 +98,20 @@ export const useAppSettings = (): AppSettingsHook => {
     });
   }, []);
 
+  const updateObjectBenchSplitRatioSetting = useCallback((ratio: number) => {
+    setSettings((prev) => {
+      const next = {
+        ...prev,
+        layout: {
+          ...prev.layout,
+          objectBenchSplitRatio: ratio
+        }
+      };
+      void writeSettings(next);
+      return next;
+    });
+  }, []);
+
   return {
     settings,
     setSettings,
@@ -100,6 +119,7 @@ export const useAppSettings = (): AppSettingsHook => {
     setSettingsOpen,
     handleSettingsChange,
     updateUmlSplitRatioSetting,
-    updateConsoleSplitRatioSetting
+    updateConsoleSplitRatioSetting,
+    updateObjectBenchSplitRatioSetting
   };
 };

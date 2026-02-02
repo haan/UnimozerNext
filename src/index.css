@@ -79,6 +79,9 @@ body,
     --console-bg: #0b0b0b;
     --console-fg: #f5f5f5;
     --console-min-height: 60px;
+    --bench-min-height: 120px;
+    --objectbench-card-bg: 0 80% 92%;
+    --objectbench-card-border: 0 55% 70%;
   }
 
   body {

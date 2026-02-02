@@ -408,9 +408,7 @@ public class ParserBridge {
 
     if (includeGetter) {
       MethodDeclaration getter = new MethodDeclaration();
-      if ("public".equals(visibility)) getter.addModifier(Modifier.Keyword.PUBLIC);
-      if ("protected".equals(visibility)) getter.addModifier(Modifier.Keyword.PROTECTED);
-      if ("private".equals(visibility)) getter.addModifier(Modifier.Keyword.PRIVATE);
+      getter.addModifier(Modifier.Keyword.PUBLIC);
       if (request.field.isStatic || isInterface) getter.addModifier(Modifier.Keyword.STATIC);
       try {
         getter.setType(StaticJavaParser.parseType(request.field.fieldType));
@@ -429,9 +427,7 @@ public class ParserBridge {
 
     if (includeSetter) {
       MethodDeclaration setter = new MethodDeclaration();
-      if ("public".equals(visibility)) setter.addModifier(Modifier.Keyword.PUBLIC);
-      if ("protected".equals(visibility)) setter.addModifier(Modifier.Keyword.PROTECTED);
-      if ("private".equals(visibility)) setter.addModifier(Modifier.Keyword.PRIVATE);
+      setter.addModifier(Modifier.Keyword.PUBLIC);
       if (request.field.isStatic) setter.addModifier(Modifier.Keyword.STATIC);
       setter.setType("void");
       try {
