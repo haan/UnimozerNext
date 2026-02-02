@@ -1,10 +1,19 @@
 import type { ObjectInstance } from "../../models/objectBench";
+import type { UmlMethod } from "../../models/uml";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger
+} from "../ui/context-menu";
 
 type ObjectBenchPanelProps = {
   objects: ObjectInstance[];
   showPrivate: boolean;
   showInherited: boolean;
   showStatic: boolean;
+  getMethodsForObject?: (object: ObjectInstance) => UmlMethod[];
+  onCallMethod?: (object: ObjectInstance, method: UmlMethod) => void;
 };
 
 const shouldShowField = (
@@ -25,7 +34,9 @@ export const ObjectBenchPanel = ({
   objects,
   showPrivate,
   showInherited,
-  showStatic
+  showStatic,
+  getMethodsForObject,
+  onCallMethod
 }: ObjectBenchPanelProps) => {
   return (
     <div className="flex h-full flex-col bg-muted/30">
@@ -35,60 +46,99 @@ export const ObjectBenchPanel = ({
             No objects yet. Right-click a compiled class to create one.
           </div>
         ) : (
-          <div className="flex flex-wrap gap-3">
-            {objects.map((object) => (
-              <div
-                key={object.name}
-                className="min-w-[220px] rounded-md border border-border bg-background/80 shadow-sm"
-                style={{
-                  backgroundColor: "hsl(var(--objectbench-card-bg))",
-                  borderColor: "hsl(var(--objectbench-card-border))"
-                }}
-              >
-                <div
-                  className="border-b px-3 py-2 text-sm font-semibold"
-                  style={{ borderColor: "hsl(var(--objectbench-card-border))" }}
-                >
-                  {object.name}: {object.type}
-                </div>
-                <div className="space-y-1 px-3 py-2 text-xs text-muted-foreground">
-                  {object.fields
-                    .filter((field) =>
-                      shouldShowField(
-                        field.visibility,
-                        showPrivate,
-                        field.isInherited,
-                        showInherited,
-                        field.isStatic,
-                        showStatic
-                      )
-                    )
-                    .map((field) => (
-                      <div key={`${object.name}-${field.name}`} className="flex gap-2">
-                        <span className="font-medium text-foreground">
-                          {field.name}
-                        </span>
-                        <span>=</span>
-                        <span className="truncate">{field.value}</span>
+            <div className="flex flex-wrap items-start gap-3">
+              {objects.map((object) => {
+                const methods = getMethodsForObject?.(object) ?? [];
+                return (
+                  <ContextMenu key={object.name}>
+                    <ContextMenuTrigger asChild>
+                      <div
+                        className="min-w-[220px] rounded-md border border-border bg-background/80 shadow-sm"
+                        style={{
+                          backgroundColor: "hsl(var(--objectbench-card-bg))",
+                          borderColor: "hsl(var(--objectbench-card-border))"
+                        }}
+                      >
+                        <div
+                          className="border-b px-3 py-2 text-sm font-semibold"
+                          style={{ borderColor: "hsl(var(--objectbench-card-border))" }}
+                        >
+                          {object.name}: {object.type}
+                        </div>
+                        <div className="space-y-1 px-3 py-2 text-xs text-muted-foreground">
+                          {object.fields
+                            .filter((field) =>
+                              shouldShowField(
+                                field.visibility,
+                                showPrivate,
+                                field.isInherited,
+                                showInherited,
+                                field.isStatic,
+                                showStatic
+                              )
+                            )
+                            .map((field) => (
+                              <div key={`${object.name}-${field.name}`} className="flex gap-2">
+                                <span className="font-medium text-foreground">
+                                  {field.name}
+                                </span>
+                                <span>=</span>
+                                <span className="truncate">{field.value}</span>
+                              </div>
+                            ))}
+                          {object.fields.filter((field) =>
+                            shouldShowField(
+                              field.visibility,
+                              showPrivate,
+                              field.isInherited,
+                              showInherited,
+                              field.isStatic,
+                              showStatic
+                            )
+                          ).length === 0 ? (
+                            <div className="text-muted-foreground">No visible fields.</div>
+                          ) : null}
+                        </div>
                       </div>
-                    ))}
-                  {object.fields.filter((field) =>
-                    shouldShowField(
-                      field.visibility,
-                      showPrivate,
-                      field.isInherited,
-                      showInherited,
-                      field.isStatic,
-                      showStatic
-                    )
-                  ).length === 0 ? (
-                    <div className="text-muted-foreground">No visible fields.</div>
-                  ) : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      {methods.length > 0 ? (
+                        methods.map((method) => (
+                          <ContextMenuItem
+                            key={`${object.name}-${method.signature}`}
+                            disabled={!onCallMethod}
+                            onSelect={() => onCallMethod?.(object, method)}
+                          >
+                            <span className="inline-flex items-center gap-2">
+                              <svg
+                                width="15"
+                                height="15"
+                                viewBox="0 0 15 15"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M3.24182 2.32181C3.3919 2.23132 3.5784 2.22601 3.73338 2.30781L12.7334 7.05781C12.8974 7.14436 13 7.31457 13 7.5C13 7.68543 12.8974 7.85564 12.7334 7.94219L3.73338 12.6922C3.5784 12.774 3.3919 12.7687 3.24182 12.6782C3.09175 12.5877 3 12.4252 3 12.25V2.75C3 2.57476 3.09175 2.4123 3.24182 2.32181ZM4 3.57925V11.4207L11.4288 7.5L4 3.57925Z"
+                                  fill="currentColor"
+                                  fillRule="evenodd"
+                                  clipRule="evenodd"
+                                />
+                              </svg>
+                              {method.signature}
+                            </span>
+                          </ContextMenuItem>
+                        ))
+                      ) : (
+                        <ContextMenuItem disabled>
+                          No public methods
+                        </ContextMenuItem>
+                      )}
+                    </ContextMenuContent>
+                  </ContextMenu>
+                );
+              })}
+            </div>
+          )}
       </div>
     </div>
   );

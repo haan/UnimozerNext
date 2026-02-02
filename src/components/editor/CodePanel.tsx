@@ -24,7 +24,11 @@ export type CodePanelProps = {
   wordWrap: boolean;
   onChange: (value: string) => void;
   onEditorMount?: (editor: MonacoEditorType.IStandaloneCodeEditor) => void;
+  debugLogging?: boolean;
+  onDebugLog?: (message: string) => void;
 };
+
+type Disposable = { dispose: () => void };
 
 export const CodePanel = memo(
   ({
@@ -40,10 +44,22 @@ export const CodePanel = memo(
     autoCloseComments,
     wordWrap,
     onChange,
-    onEditorMount
+    onEditorMount,
+    debugLogging,
+    onDebugLog
   }: CodePanelProps) => {
     const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
+    const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
+    const subscriptionsRef = useRef<Disposable[]>([]);
     const resolvedTheme = resolveMonacoTheme(theme);
+
+    const logEvent = useCallback(
+      (message: string) => {
+        if (!debugLogging || !onDebugLog) return;
+        onDebugLog(`[Editor] ${new Date().toLocaleTimeString()} ${message}`);
+      },
+      [debugLogging, onDebugLog]
+    );
 
     const applyTheme = useCallback(
       async (monaco: typeof import("monaco-editor") | null) => {
@@ -62,21 +78,57 @@ export const CodePanel = memo(
       void applyTheme(monacoRef.current);
     }, [applyTheme]);
 
+    useEffect(() => {
+      return () => {
+        subscriptionsRef.current.forEach((subscription) => subscription.dispose());
+        subscriptionsRef.current = [];
+      };
+    }, []);
+
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="flex-1 min-h-0">
           {openFile ? (
             <MonacoEditor
-              key={openFile.path}
               language="java"
               theme={resolvedTheme}
-              value={content}
+              defaultValue={content}
               path={fileUri ?? undefined}
+              saveViewState
+              keepCurrentModel
               beforeMount={(monaco) => {
                 monacoRef.current = monaco;
                 void applyTheme(monaco);
               }}
               onMount={(editor) => {
+                editorRef.current = editor;
+                subscriptionsRef.current.forEach((subscription) =>
+                  subscription.dispose()
+                );
+                subscriptionsRef.current = [
+                  editor.onDidChangeCursorPosition((event) => {
+                    logEvent(
+                      `cursor ${event.position.lineNumber}:${event.position.column} reason=${event.reason}`
+                    );
+                  }),
+                  editor.onDidChangeModel((event) => {
+                    logEvent(
+                      `model change${event.newModelUrl ? ` -> ${event.newModelUrl.toString()}` : ""}`
+                    );
+                  }),
+                  editor.onDidChangeModelContent((event) => {
+                    const model = editor.getModel();
+                    logEvent(
+                      `content change (changes=${event.changes.length}) version=${model?.getVersionId() ?? "?"}`
+                    );
+                  }),
+                  editor.onDidFocusEditorText(() => {
+                    logEvent("focus");
+                  }),
+                  editor.onDidBlurEditorText(() => {
+                    logEvent("blur");
+                  })
+                ];
                 onEditorMount?.(editor);
               }}
               onChange={(value) => {

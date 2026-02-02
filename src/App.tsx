@@ -16,6 +16,7 @@ import {
 } from "./components/wizards/AddConstructorDialog";
 import { AddMethodDialog, type AddMethodForm } from "./components/wizards/AddMethodDialog";
 import { CreateObjectDialog, type CreateObjectForm } from "./components/wizards/CreateObjectDialog";
+import { CallMethodDialog, type CallMethodForm } from "./components/wizards/CallMethodDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +43,7 @@ import {
 } from "./components/ui/menubar";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
-import type { UmlConstructor, UmlGraph, UmlNode } from "./models/uml";
+import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "./models/uml";
 import type { ObjectInstance } from "./models/objectBench";
 import type { OpenFile } from "./models/openFile";
 import { buildMockGraph, parseUmlGraph } from "./services/uml";
@@ -108,6 +109,15 @@ const resolveConstructorParamClass = (type: string) => {
   }
 };
 
+const isBrokenPipe = (message: string) => {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("pipe is being closed") ||
+    normalized.includes("broken pipe") ||
+    normalized.includes("closed unexpectedly")
+  );
+};
+
 const getUmlSignature = (graph: UmlGraph | null) => {
   if (!graph) return "";
   const nodes = [...graph.nodes]
@@ -144,6 +154,12 @@ export default function App() {
   const [createObjectConstructor, setCreateObjectConstructor] = useState<UmlConstructor | null>(
     null
   );
+  const [callMethodOpen, setCallMethodOpen] = useState(false);
+  const [callMethodTarget, setCallMethodTarget] = useState<ObjectInstance | null>(null);
+  const [callMethodInfo, setCallMethodInfo] = useState<UmlMethod | null>(null);
+  const [methodReturnOpen, setMethodReturnOpen] = useState(false);
+  const [methodReturnValue, setMethodReturnValue] = useState<string | null>(null);
+  const [methodReturnLabel, setMethodReturnLabel] = useState("");
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
   const objectBenchRef = useRef<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
@@ -155,6 +171,10 @@ export default function App() {
   const [fieldTarget, setFieldTarget] = useState<UmlNode | null>(null);
   const [constructorTarget, setConstructorTarget] = useState<UmlNode | null>(null);
   const [methodTarget, setMethodTarget] = useState<UmlNode | null>(null);
+  const [editorResetKey, setEditorResetKey] = useState(0);
+  const bumpEditorResetKey = useCallback(() => {
+    setEditorResetKey((prev) => prev + 1);
+  }, []);
   const {
     settings,
     settingsOpen,
@@ -197,8 +217,6 @@ export default function App() {
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
-  const highlightDecorationRef = useRef<string[]>([]);
-  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRevealRef = useRef<{
     path: string;
     line: number;
@@ -246,7 +264,8 @@ export default function App() {
     notifyLsOpen,
     notifyLsChange,
     notifyLsClose,
-    setStatus
+    setStatus,
+    onExternalContent: bumpEditorResetKey
   });
 
   const dirty = useMemo(() => {
@@ -289,43 +308,6 @@ export default function App() {
     editor.trigger("menu", actionId, null);
   }, []);
 
-  const highlightEditorLine = useCallback(
-    (lineNumber: number, durationSeconds: number) => {
-      const editor = editorRef.current;
-      const monaco = monacoRef.current;
-      if (!editor || !monaco) return;
-      const model = editor.getModel();
-      if (!model) return;
-      const safeLine = Math.min(Math.max(lineNumber, 1), model.getLineCount());
-      highlightDecorationRef.current = model.deltaDecorations(
-        highlightDecorationRef.current,
-        [
-          {
-            range: new monaco.Range(safeLine, 1, safeLine, 1),
-            options: {
-              isWholeLine: true,
-              className: "uml-line-highlight"
-            }
-          }
-        ]
-      );
-      if (highlightTimeoutRef.current) {
-        clearTimeout(highlightTimeoutRef.current);
-      }
-      highlightTimeoutRef.current = setTimeout(() => {
-        const editorNow = editorRef.current;
-        if (!editorNow) return;
-        const currentModel = editorNow.getModel();
-        if (!currentModel) return;
-        highlightDecorationRef.current = currentModel.deltaDecorations(
-          highlightDecorationRef.current,
-          []
-        );
-      }, durationSeconds * 1000);
-    },
-    [monacoRef]
-  );
-
   const applyPendingReveal = useCallback(() => {
     const pending = pendingRevealRef.current;
     if (!pending) return;
@@ -343,31 +325,12 @@ export default function App() {
     editor.setPosition({ lineNumber: line, column });
     editor.revealPositionInCenter({ lineNumber: line, column });
     editor.focus();
-    highlightEditorLine(line, pending.durationSeconds);
     pendingRevealRef.current = null;
-  }, [highlightEditorLine, monacoRef]);
+  }, [monacoRef]);
 
   useEffect(() => {
     applyPendingReveal();
   }, [applyPendingReveal, openFilePath, content]);
-
-  useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor) return;
-    if (pendingRevealRef.current) return;
-    const model = editor.getModel();
-    if (!model) return;
-    if (highlightDecorationRef.current.length > 0) {
-      highlightDecorationRef.current = model.deltaDecorations(
-        highlightDecorationRef.current,
-        []
-      );
-    }
-    if (highlightTimeoutRef.current) {
-      clearTimeout(highlightTimeoutRef.current);
-      highlightTimeoutRef.current = null;
-    }
-  }, [openFilePath]);
 
   const handlePaste = useCallback(async () => {
     const editor = editorRef.current;
@@ -429,6 +392,20 @@ export default function App() {
       setCreateObjectConstructor(null);
     }
   }, [createObjectOpen]);
+
+  useEffect(() => {
+    if (!callMethodOpen) {
+      setCallMethodTarget(null);
+      setCallMethodInfo(null);
+    }
+  }, [callMethodOpen]);
+
+  useEffect(() => {
+    if (!methodReturnOpen) {
+      setMethodReturnValue(null);
+      setMethodReturnLabel("");
+    }
+  }, [methodReturnOpen]);
 
   useEffect(() => {
     objectBenchRef.current = objectBench;
@@ -532,6 +509,57 @@ export default function App() {
     [appendConsoleOutput, debugLogging]
   );
 
+  const resolveUmlNodeForObject = useCallback(
+    (object: ObjectInstance) => {
+      if (!umlGraph) return null;
+      return (
+        umlGraph.nodes.find((node) => node.id === object.type) ??
+        umlGraph.nodes.find((node) => node.name === object.type) ??
+        null
+      );
+    },
+    [umlGraph]
+  );
+
+  const getPublicMethodsForObject = useCallback(
+    (object: ObjectInstance) => {
+      const node = resolveUmlNodeForObject(object);
+      if (!node) return [];
+      const constructorName = node.name;
+      return node.methods.filter(
+        (method) =>
+          (method.visibility === "+" || !method.visibility) &&
+          method.name !== constructorName
+      );
+    },
+    [resolveUmlNodeForObject]
+  );
+
+  const refreshObjectBench = useCallback(
+    async (objects: ObjectInstance[]) => {
+      const fallback = new Map(objects.map((obj) => [obj.name, obj]));
+      const refreshed: ObjectInstance[] = [];
+      for (const obj of objects) {
+        const inspect = await jshellInspect(obj.name);
+        if (!inspect.ok) {
+          const message = trimStatus(inspect.error || "Unknown error");
+          appendDebugOutput(
+            `[${new Date().toLocaleTimeString()}] JShell inspect failed for ${obj.name}\n${message}`
+          );
+          refreshed.push(fallback.get(obj.name) ?? obj);
+          continue;
+        }
+        refreshed.push({
+          name: obj.name,
+          type: inspect.typeName || obj.type,
+          fields: inspect.fields ?? []
+        });
+      }
+      return refreshed;
+    },
+    [appendDebugOutput]
+  );
+
   const {
     handleOpenProject,
     handleNewProject,
@@ -560,7 +588,8 @@ export default function App() {
     notifyLsOpen,
     updateDraftForPath,
     formatAndSaveUmlFiles,
-    formatStatus
+    formatStatus,
+    onExternalContent: bumpEditorResetKey
   });
 
   const visibleGraph = useMemo(() => {
@@ -738,6 +767,8 @@ export default function App() {
         root.style.setProperty("--console-bg", defaults.bg);
         root.style.setProperty("--console-fg", defaults.fg);
       }
+      root.style.removeProperty("--editor-separator-color");
+      root.style.removeProperty("--editor-separator-hover");
       return;
     }
 
@@ -750,6 +781,8 @@ export default function App() {
           root.style.setProperty("--console-bg", defaults.bg);
           root.style.setProperty("--console-fg", defaults.fg);
         }
+        root.style.removeProperty("--editor-separator-color");
+        root.style.removeProperty("--editor-separator-hover");
         return;
       }
       if (colors.background) {
@@ -757,6 +790,15 @@ export default function App() {
       }
       if (colors.foreground) {
         root.style.setProperty("--console-fg", colors.foreground);
+      }
+      const separatorColor =
+        colors.lineHighlightBorder ?? colors.lineHighlightBackground ?? null;
+      if (separatorColor) {
+        root.style.setProperty("--editor-separator-color", separatorColor);
+        root.style.setProperty("--editor-separator-hover", separatorColor);
+      } else {
+        root.style.removeProperty("--editor-separator-color");
+        root.style.removeProperty("--editor-separator-hover");
       }
     };
     void applyTheme();
@@ -867,6 +909,15 @@ export default function App() {
       try {
         const name = basename(node.path);
         await invoke("remove_text_file", { path: node.path });
+        notifyLsClose(node.path);
+        const monaco = monacoRef.current;
+        if (monaco) {
+          const uri = toFileUri(node.path);
+          const model = monaco.editor.getModel(monaco.Uri.parse(uri));
+          if (model) {
+            model.dispose();
+          }
+        }
         const nextTree = await invoke<FileNode>("list_project_tree", { root: projectPath });
         setTree(nextTree);
         if (openFilePath && openFilePath === node.path) {
@@ -894,6 +945,8 @@ export default function App() {
       openFilePath,
       projectPath,
       selectedClassId,
+      notifyLsClose,
+      monacoRef,
       setBusy,
       setCompileStatus,
       setContent,
@@ -1021,6 +1074,159 @@ export default function App() {
     [jshellReady, setStatus]
   );
 
+  const executeMethodCall = useCallback(
+    async (target: ObjectInstance, method: UmlMethod, paramValues: string[]) => {
+      if (!projectPath) {
+        setStatus("Open a project before calling methods.");
+        return;
+      }
+      if (!jshellReady) {
+        setStatus("Compile the project before calling methods.");
+        return;
+      }
+
+      const methodName =
+        method.name ?? method.signature.split("(")[0].split(":")[0].trim();
+      const params = method.params ?? [];
+      const args = params.map((param, index) =>
+        normalizeConstructorArg(paramValues[index] ?? "", param.type)
+      );
+      const ownerNode = resolveUmlNodeForObject(target);
+      const className = ownerNode?.id || target.type;
+      const usesDefaultPackage = !className.includes(".");
+      const buildMethodSelector = () => {
+        if (params.length === 0) {
+          return `getDeclaredMethod("${methodName}")`;
+        }
+        const typeArgs = params
+          .map((param) => resolveConstructorParamClass(param.type))
+          .join(", ");
+        return `getDeclaredMethod("${methodName}", ${typeArgs})`;
+      };
+      const callExpression = usesDefaultPackage
+        ? `Class.forName("${className}").${buildMethodSelector()}.invoke(${method.isStatic ? "null" : target.name}${args.length ? `, ${args.join(", ")}` : ""});`
+        : `${method.isStatic ? className : target.name}.${methodName}(${args.join(", ")});`;
+
+      setBusy(true);
+      const startedAt = new Date().toLocaleTimeString();
+      resetConsoleOutput();
+      appendConsoleOutput(
+        `[${startedAt}] Call method requested for ${target.name}.${methodName}`
+      );
+
+      const handleOutput = (stdout?: string | null, stderr?: string | null) => {
+        if (stdout?.trim()) {
+          appendConsoleOutput(stdout.trim());
+        }
+        if (stderr?.trim()) {
+          appendConsoleOutput(stderr.trim());
+        }
+      };
+
+      const returnsVoid =
+        !method.returnType ||
+        method.returnType.trim() === "" ||
+        method.returnType.trim() === "void";
+
+      const invokeMethod = async () => {
+        const result = await jshellEval(callExpression);
+        handleOutput(result.stdout, result.stderr);
+        if (!result.ok) {
+          const message = trimStatus(
+            result.error || result.stderr || "Unknown error"
+          );
+          appendConsoleOutput(`Method call failed: ${message}`);
+          setStatus("Method call failed.");
+          return false;
+        }
+        if (!returnsVoid) {
+          const valueText =
+            result.value === undefined || result.value === null
+              ? "null"
+              : String(result.value);
+          if (valueText.trim() !== "") {
+            appendConsoleOutput(`Return value: ${valueText}`);
+          } else {
+            appendConsoleOutput("Return value: (empty)");
+          }
+          setMethodReturnLabel(
+            method.signature
+              ? `${target.name}.${method.signature}`
+              : `${target.name}.${methodName}`
+          );
+          setMethodReturnValue(valueText);
+          setMethodReturnOpen(true);
+        }
+        const refreshed = await refreshObjectBench(objectBenchRef.current);
+        setObjectBench(refreshed);
+        appendConsoleOutput("Method call finished.");
+        setStatus(`Called ${methodName}.`);
+        return true;
+      };
+
+      try {
+        await invokeMethod();
+      } catch (error) {
+        const message = formatStatus(error);
+        appendDebugOutput(
+          `[${new Date().toLocaleTimeString()}] JShell error\n${message}`
+        );
+        if (isBrokenPipe(message)) {
+          setJshellReady(false);
+          const outDir = lastCompileOutDirRef.current;
+          if (projectPath && outDir) {
+            try {
+              await jshellStop();
+              await jshellStart(projectPath, outDir);
+              setJshellReady(true);
+              const retryOk = await invokeMethod();
+              if (retryOk) return;
+            } catch (restartError) {
+              appendDebugOutput(
+                `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
+                  restartError
+                )}`
+              );
+            }
+          }
+        }
+        setStatus(`Failed to call method: ${trimStatus(message)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      appendConsoleOutput,
+      appendDebugOutput,
+      jshellReady,
+      projectPath,
+      refreshObjectBench,
+      resetConsoleOutput,
+      resolveUmlNodeForObject,
+      setBusy,
+      setJshellReady,
+      setStatus
+    ]
+  );
+
+  const handleOpenCallMethod = useCallback(
+    (object: ObjectInstance, method: UmlMethod) => {
+      if (!jshellReady) {
+        setStatus("Compile the project before calling methods.");
+        return;
+      }
+      const params = method.params ?? [];
+      if (params.length === 0) {
+        void executeMethodCall(object, method, []);
+        return;
+      }
+      setCallMethodTarget(object);
+      setCallMethodInfo(method);
+      setCallMethodOpen(true);
+    },
+    [executeMethodCall, jshellReady, setStatus]
+  );
+
   const buildClassSource = useCallback((form: AddClassForm) => {
     const name = form.name.trim().replace(/\.java$/i, "");
     const packageName = form.packageName.trim();
@@ -1090,6 +1296,7 @@ export default function App() {
         updateDraftForPath(filePath, source, "");
         setContent(source);
         setLastSavedContent("");
+        bumpEditorResetKey();
         setStatus(`Created ${name}.java`);
       } catch (error) {
         setStatus(`Failed to create class: ${formatStatus(error)}`);
@@ -1104,7 +1311,9 @@ export default function App() {
       openFileByPath,
       setTree,
       setCompileStatus,
-      buildClassSource
+      buildClassSource,
+      updateDraftForPath,
+      bumpEditorResetKey
     ]
   );
 
@@ -1151,11 +1360,13 @@ export default function App() {
         if (openFilePath === target.path) {
           setContent(updated);
           setLastSavedContent(savedBaseline);
+          bumpEditorResetKey();
           notifyLsChange(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
           setLastSavedContent(savedBaseline);
+          bumpEditorResetKey();
           notifyLsOpen(target.path, updated);
         }
         setCompileStatus(null);
@@ -1174,6 +1385,7 @@ export default function App() {
       openFilePath,
       notifyLsChange,
       notifyLsOpen,
+      bumpEditorResetKey,
       setBusy,
       setCompileStatus,
       setContent,
@@ -1220,11 +1432,13 @@ export default function App() {
         if (openFilePath === target.path) {
           setContent(updated);
           setLastSavedContent(savedBaseline);
+          bumpEditorResetKey();
           notifyLsChange(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
           setLastSavedContent(savedBaseline);
+          bumpEditorResetKey();
           notifyLsOpen(target.path, updated);
         }
         setCompileStatus(null);
@@ -1243,6 +1457,7 @@ export default function App() {
       openFilePath,
       notifyLsChange,
       notifyLsOpen,
+      bumpEditorResetKey,
       setBusy,
       setCompileStatus,
       setContent,
@@ -1296,11 +1511,13 @@ export default function App() {
         if (openFilePath === target.path) {
           setContent(updated);
           setLastSavedContent(savedBaseline);
+          bumpEditorResetKey();
           notifyLsChange(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
           setLastSavedContent(savedBaseline);
+          bumpEditorResetKey();
           notifyLsOpen(target.path, updated);
         }
         setCompileStatus(null);
@@ -1319,6 +1536,7 @@ export default function App() {
       openFilePath,
       notifyLsChange,
       notifyLsOpen,
+      bumpEditorResetKey,
       setBusy,
       setCompileStatus,
       setContent,
@@ -1364,11 +1582,6 @@ export default function App() {
       appendDebugOutput(
         `[${new Date().toLocaleTimeString()}] JShell eval\n${code}`
       );
-      const isBrokenPipe = (message: string) =>
-        message.toLowerCase().includes("pipe is being closed") ||
-        message.toLowerCase().includes("broken pipe") ||
-        message.toLowerCase().includes("closed unexpectedly");
-
       const startedAt = new Date().toLocaleTimeString();
       resetConsoleOutput();
       appendConsoleOutput(
@@ -1387,28 +1600,6 @@ export default function App() {
             `[${jshellTime}] JShell error output\n${stderr.trim()}`
           );
         }
-      };
-
-      const refreshObjects = async (objects: ObjectInstance[]) => {
-        const fallback = new Map(objects.map((obj) => [obj.name, obj]));
-        const refreshed: ObjectInstance[] = [];
-        for (const obj of objects) {
-          const inspect = await jshellInspect(obj.name);
-          if (!inspect.ok) {
-            const message = trimStatus(inspect.error || "Unknown error");
-            appendDebugOutput(
-              `[${new Date().toLocaleTimeString()}] JShell inspect failed for ${obj.name}\n${message}`
-            );
-            refreshed.push(fallback.get(obj.name) ?? obj);
-            continue;
-          }
-          refreshed.push({
-            name: obj.name,
-            type: inspect.typeName || obj.type,
-            fields: inspect.fields ?? []
-          });
-        }
-        return refreshed;
       };
 
       const createInstance = async (): Promise<ObjectInstance | null> => {
@@ -1443,7 +1634,7 @@ export default function App() {
         const entry = await createInstance();
         if (!entry) return false;
         const baseObjects = objectBenchRef.current.filter((item) => item.name !== entry.name);
-        const refreshed = await refreshObjects([...baseObjects, entry]);
+        const refreshed = await refreshObjectBench([...baseObjects, entry]);
         setObjectBench(refreshed);
         appendConsoleOutput("Object created.");
         setStatus(`Created ${entry.name}.`);
@@ -1488,11 +1679,25 @@ export default function App() {
       createObjectTarget,
       jshellReady,
       projectPath,
+      refreshObjectBench,
       resetConsoleOutput,
       setBusy,
       setJshellReady,
       setStatus
     ]
+  );
+
+  const handleCallMethod = useCallback(
+    async (form: CallMethodForm) => {
+      const target = callMethodTarget;
+      const method = callMethodInfo;
+      if (!target || !method) {
+        setStatus("Select a method before calling it.");
+        return;
+      }
+      await executeMethodCall(target, method, form.paramValues);
+    },
+    [callMethodInfo, callMethodTarget, executeMethodCall, setStatus]
   );
 
   return (
@@ -1751,6 +1956,8 @@ export default function App() {
                     showPrivate={showPrivateObjectFields}
                     showInherited={showInheritedObjectFields}
                     showStatic={showStaticObjectFields}
+                    getMethodsForObject={getPublicMethodsForObject}
+                    onCallMethod={handleOpenCallMethod}
                   />
                 </div>
               </div>
@@ -1776,35 +1983,38 @@ export default function App() {
                   className="min-h-50 flex-none overflow-hidden"
                   style={{ height: `${consoleSplitRatio * 100}%` }}
                 >
-                  <CodePanel
-                    openFile={openFile}
-                    fileUri={openFilePath ? toFileUri(openFilePath) : null}
-                    content={content}
-                    dirty={dirty}
-                    fontSize={settings.editor.fontSize}
-                    theme={settings.editor.theme}
-                    tabSize={settings.editor.tabSize}
-                    insertSpaces={settings.editor.insertSpaces}
-                    autoCloseBrackets={settings.editor.autoCloseBrackets}
-                    autoCloseQuotes={settings.editor.autoCloseQuotes}
-                    autoCloseComments={settings.editor.autoCloseComments}
-                    wordWrap={settings.editor.wordWrap}
-                    onChange={handleContentChange}
-                    onEditorMount={(editor) => {
-                      editorRef.current = editor;
-                      applyPendingReveal();
-                    }}
-                  />
+                    <CodePanel
+                      key={openFilePath ? `${openFilePath}:${editorResetKey}` : "no-file"}
+                      openFile={openFile}
+                      fileUri={openFilePath ? toFileUri(openFilePath) : null}
+                      content={content}
+                      dirty={dirty}
+                      fontSize={settings.editor.fontSize}
+                      theme={settings.editor.theme}
+                      tabSize={settings.editor.tabSize}
+                      insertSpaces={settings.editor.insertSpaces}
+                      autoCloseBrackets={settings.editor.autoCloseBrackets}
+                      autoCloseQuotes={settings.editor.autoCloseQuotes}
+                      autoCloseComments={settings.editor.autoCloseComments}
+                      wordWrap={settings.editor.wordWrap}
+                      onChange={handleContentChange}
+                      debugLogging={debugLogging}
+                      onDebugLog={appendDebugOutput}
+                      onEditorMount={(editor) => {
+                        editorRef.current = editor;
+                        applyPendingReveal();
+                      }}
+                    />
                 </div>
                 <div
-                  className="absolute left-0 w-full h-3 -translate-y-1.5 cursor-row-resize transition hover:bg-border/40"
+                  className="editor-separator-handle absolute left-0 w-full h-3 -translate-y-1.5 cursor-row-resize"
                   style={{ top: `${consoleSplitRatio * 100}%` }}
                   role="separator"
                   aria-orientation="horizontal"
                   aria-label="Resize console panel"
                   onPointerDown={startConsoleResize}
                 >
-                  <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
+                <div className="editor-separator-line pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2" />
                 </div>
                 <div className="min-h-[var(--console-min-height)] flex-1 overflow-hidden">
                   <ConsolePanel
@@ -1865,6 +2075,15 @@ export default function App() {
         constructorLabel={createObjectConstructor?.signature ?? ""}
         params={createObjectConstructor?.params ?? []}
         existingNames={objectBench.map((item) => item.name)}
+        busy={busy}
+      />
+      <CallMethodDialog
+        open={callMethodOpen}
+        onOpenChange={setCallMethodOpen}
+        onSubmit={handleCallMethod}
+        objectName={callMethodTarget?.name ?? ""}
+        methodLabel={callMethodInfo?.signature ?? ""}
+        params={callMethodInfo?.params ?? []}
         busy={busy}
       />
       <AlertDialog
@@ -1955,6 +2174,27 @@ export default function App() {
             >
               Continue
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={methodReturnOpen}
+        onOpenChange={setMethodReturnOpen}
+      >
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader className="items-center text-center">
+            <AlertDialogTitle>Method return value</AlertDialogTitle>
+            {methodReturnLabel ? (
+              <AlertDialogDescription className="text-center">
+                {methodReturnLabel}
+              </AlertDialogDescription>
+            ) : null}
+          </AlertDialogHeader>
+          <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-foreground">
+            {methodReturnValue ?? ""}
+          </div>
+          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+            <AlertDialogAction className="w-full">OK</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

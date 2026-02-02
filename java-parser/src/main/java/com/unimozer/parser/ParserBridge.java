@@ -920,60 +920,63 @@ public class ParserBridge {
 
   static List<MethodInfo> collectMethodInfo(TypeDeclaration<?> typeDecl, String className) {
     List<MethodInfo> methods = new ArrayList<>();
-    for (MethodDeclaration method : typeDecl.getMethods()) {
-      String params = method.getParameters().stream()
-        .map(param -> param.getType().asString())
-        .collect(Collectors.joining(", "));
-      String returnType = method.getType().isVoidType()
-        ? "void"
-        : method.getType().asString();
-      boolean isAbstract = method.isAbstract() || isInterfaceAbstract(typeDecl, method);
-      boolean isStatic = method.isStatic();
-      boolean isMain = isMainMethod(method);
-      String visibility = visibilitySymbol(method);
-      String signature = method.getNameAsString() + "(" + params + "): " + returnType;
-      MethodInfo info = new MethodInfo();
-      info.signature = signature;
-      info.name = method.getNameAsString();
-      info.returnType = returnType;
-      info.params = method.getParameters().stream()
-        .map(param -> {
-          ParamInfo paramInfo = new ParamInfo();
-          paramInfo.name = param.getNameAsString();
-          paramInfo.type = param.getType().asString();
-          return paramInfo;
-        })
-        .collect(Collectors.toList());
-      info.isAbstract = isAbstract;
-      info.isMain = isMain;
-      info.isStatic = isStatic;
-      info.visibility = visibility;
-      info.range = toSourceRange(method);
-      methods.add(info);
-    }
-    for (ConstructorDeclaration ctor : typeDecl.getConstructors()) {
-      String params = ctor.getParameters().stream()
-        .map(param -> param.getType().asString())
-        .collect(Collectors.joining(", "));
-      String visibility = visibilitySymbol(ctor);
-      MethodInfo info = new MethodInfo();
-      info.signature = className + "(" + params + ")";
-      info.name = className;
-      info.returnType = "";
-      info.params = ctor.getParameters().stream()
-        .map(param -> {
-          ParamInfo paramInfo = new ParamInfo();
-          paramInfo.name = param.getNameAsString();
-          paramInfo.type = param.getType().asString();
-          return paramInfo;
-        })
-        .collect(Collectors.toList());
-      info.isAbstract = false;
-      info.isMain = false;
-      info.isStatic = false;
-      info.visibility = visibility;
-      info.range = toSourceRange(ctor);
-      methods.add(info);
+    for (BodyDeclaration<?> member : typeDecl.getMembers()) {
+      if (member.isMethodDeclaration()) {
+        MethodDeclaration method = member.asMethodDeclaration();
+        String params = method.getParameters().stream()
+          .map(param -> param.getType().asString())
+          .collect(Collectors.joining(", "));
+        String returnType = method.getType().isVoidType()
+          ? "void"
+          : method.getType().asString();
+        boolean isAbstract = method.isAbstract() || isInterfaceAbstract(typeDecl, method);
+        boolean isStatic = method.isStatic();
+        boolean isMain = isMainMethod(method);
+        String visibility = visibilitySymbol(method);
+        String signature = method.getNameAsString() + "(" + params + "): " + returnType;
+        MethodInfo info = new MethodInfo();
+        info.signature = signature;
+        info.name = method.getNameAsString();
+        info.returnType = returnType;
+        info.params = method.getParameters().stream()
+          .map(param -> {
+            ParamInfo paramInfo = new ParamInfo();
+            paramInfo.name = param.getNameAsString();
+            paramInfo.type = param.getType().asString();
+            return paramInfo;
+          })
+          .collect(Collectors.toList());
+        info.isAbstract = isAbstract;
+        info.isMain = isMain;
+        info.isStatic = isStatic;
+        info.visibility = visibility;
+        info.range = toSourceRange(method);
+        methods.add(info);
+      } else if (member.isConstructorDeclaration()) {
+        ConstructorDeclaration ctor = member.asConstructorDeclaration();
+        String params = ctor.getParameters().stream()
+          .map(param -> param.getType().asString())
+          .collect(Collectors.joining(", "));
+        String visibility = visibilitySymbol(ctor);
+        MethodInfo info = new MethodInfo();
+        info.signature = className + "(" + params + ")";
+        info.name = className;
+        info.returnType = "";
+        info.params = ctor.getParameters().stream()
+          .map(param -> {
+            ParamInfo paramInfo = new ParamInfo();
+            paramInfo.name = param.getNameAsString();
+            paramInfo.type = param.getType().asString();
+            return paramInfo;
+          })
+          .collect(Collectors.toList());
+        info.isAbstract = false;
+        info.isMain = false;
+        info.isStatic = false;
+        info.visibility = visibility;
+        info.range = toSourceRange(ctor);
+        methods.add(info);
+      }
     }
     return methods;
   }

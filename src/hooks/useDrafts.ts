@@ -23,6 +23,7 @@ type UseDraftsArgs = {
   notifyLsChange: (path: string, text: string) => void;
   notifyLsClose: (path: string) => void;
   setStatus: (status: string) => void;
+  onExternalContent?: () => void;
 };
 
 type UseDraftsResult = {
@@ -45,7 +46,8 @@ export const useDrafts = ({
   notifyLsOpen,
   notifyLsChange,
   notifyLsClose,
-  setStatus
+  setStatus,
+  onExternalContent
 }: UseDraftsArgs): UseDraftsResult => {
   const [fileDrafts, setFileDrafts] = useState<Record<string, FileDraft>>({});
 
@@ -148,6 +150,7 @@ export const useDrafts = ({
                 next = model.getValue();
                 if (openFilePath === path) {
                   setContent(next);
+                  onExternalContent?.();
                 }
               } else {
                 next = applyTextEdits(draftContent, edits);
@@ -179,6 +182,7 @@ export const useDrafts = ({
           setLastSavedContent(contents);
           if (formatted[path]) {
             setContent(contents);
+            onExternalContent?.();
           }
         }
       }
@@ -202,7 +206,8 @@ export const useDrafts = ({
       setStatus,
       settingsEditor,
       umlGraph,
-      updateDraftForPath
+      updateDraftForPath,
+      onExternalContent
     ]
   );
 

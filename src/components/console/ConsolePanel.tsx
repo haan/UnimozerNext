@@ -17,7 +17,7 @@ export const ConsolePanel = ({ output, fontSize, running, onStop }: ConsolePanel
 
   return (
     <div
-      className="relative flex h-full flex-col border-t border-border"
+      className="relative flex h-full flex-col"
       style={{ background: "var(--console-bg)" }}
     >
       {running ? (

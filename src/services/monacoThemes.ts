@@ -5,6 +5,13 @@ export type ThemeOption = {
   label: string;
 };
 
+export type ThemeColors = {
+  background: string | null;
+  foreground: string | null;
+  lineHighlightBorder: string | null;
+  lineHighlightBackground: string | null;
+};
+
 type ThemeFileOption = ThemeOption & {
   file: string;
   url: string;
@@ -79,7 +86,7 @@ const normalizeColor = (value?: string | null) => {
   return color;
 };
 
-const pickThemeColors = (theme: Monaco.editor.IStandaloneThemeData) => {
+const pickThemeColors = (theme: Monaco.editor.IStandaloneThemeData): ThemeColors => {
   const colors = theme.colors ?? {};
   const background =
     normalizeColor(colors["editor.background"]) ??
@@ -87,7 +94,9 @@ const pickThemeColors = (theme: Monaco.editor.IStandaloneThemeData) => {
   const foreground =
     normalizeColor(colors["editor.foreground"]) ??
     normalizeColor(theme.rules?.find((rule) => !rule.token)?.foreground);
-  return { background, foreground };
+  const lineHighlightBorder = normalizeColor(colors["editor.lineHighlightBorder"]);
+  const lineHighlightBackground = normalizeColor(colors["editor.lineHighlightBackground"]);
+  return { background, foreground, lineHighlightBorder, lineHighlightBackground };
 };
 
 const fetchThemeData = async (themeId: string) => {
@@ -105,7 +114,9 @@ const fetchThemeData = async (themeId: string) => {
   return theme;
 };
 
-export const getThemeColors = async (themeId: string | undefined) => {
+export const getThemeColors = async (
+  themeId: string | undefined
+): Promise<ThemeColors | null> => {
   if (!themeId || themeId === "default") return null;
   const theme = await fetchThemeData(themeId);
   if (!theme) return null;
