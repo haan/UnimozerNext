@@ -145,6 +145,7 @@ export default function App() {
     null
   );
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
+  const objectBenchRef = useRef<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
@@ -428,6 +429,10 @@ export default function App() {
       setCreateObjectConstructor(null);
     }
   }, [createObjectOpen]);
+
+  useEffect(() => {
+    objectBenchRef.current = objectBench;
+  }, [objectBench]);
 
   useEffect(() => {
     if (selectedClassId && !selectedNode) {
@@ -1384,7 +1389,29 @@ export default function App() {
         }
       };
 
-      const createInstance = async () => {
+      const refreshObjects = async (objects: ObjectInstance[]) => {
+        const fallback = new Map(objects.map((obj) => [obj.name, obj]));
+        const refreshed: ObjectInstance[] = [];
+        for (const obj of objects) {
+          const inspect = await jshellInspect(obj.name);
+          if (!inspect.ok) {
+            const message = trimStatus(inspect.error || "Unknown error");
+            appendDebugOutput(
+              `[${new Date().toLocaleTimeString()}] JShell inspect failed for ${obj.name}\n${message}`
+            );
+            refreshed.push(fallback.get(obj.name) ?? obj);
+            continue;
+          }
+          refreshed.push({
+            name: obj.name,
+            type: inspect.typeName || obj.type,
+            fields: inspect.fields ?? []
+          });
+        }
+        return refreshed;
+      };
+
+      const createInstance = async (): Promise<ObjectInstance | null> => {
         const result = await jshellEval(code);
         logJshellOutput(result.stdout, result.stderr);
         if (!result.ok) {
@@ -1393,7 +1420,7 @@ export default function App() {
           )}`;
           appendConsoleOutput(message);
           setStatus("Object creation failed.");
-          return false;
+          return null;
         }
 
         const inspect = await jshellInspect(form.objectName);
@@ -1403,23 +1430,28 @@ export default function App() {
           )}`;
           appendConsoleOutput(message);
           setStatus("Object creation failed.");
-          return false;
+          return null;
         }
-        setObjectBench((prev) => [
-          ...prev.filter((item) => item.name !== form.objectName),
-          {
-            name: form.objectName,
-            type: target.name || inspect.typeName || target.id,
-            fields: inspect.fields ?? []
-          }
-        ]);
+        return {
+          name: form.objectName,
+          type: target.name || inspect.typeName || target.id,
+          fields: inspect.fields ?? []
+        };
+      };
+
+      const createAndRefresh = async () => {
+        const entry = await createInstance();
+        if (!entry) return false;
+        const baseObjects = objectBenchRef.current.filter((item) => item.name !== entry.name);
+        const refreshed = await refreshObjects([...baseObjects, entry]);
+        setObjectBench(refreshed);
         appendConsoleOutput("Object created.");
-        setStatus(`Created ${form.objectName}.`);
+        setStatus(`Created ${entry.name}.`);
         return true;
       };
 
       try {
-        await createInstance();
+        await createAndRefresh();
       } catch (error) {
         const message = formatStatus(error);
         appendDebugOutput(
@@ -1433,7 +1465,7 @@ export default function App() {
               await jshellStop();
               await jshellStart(projectPath, outDir);
               setJshellReady(true);
-              const retryOk = await createInstance();
+              const retryOk = await createAndRefresh();
               if (retryOk) return;
             } catch (restartError) {
               appendDebugOutput(
