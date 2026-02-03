@@ -34,6 +34,7 @@ type ObjectBenchSectionProps = {
   showStatic: boolean;
   getMethodsForObject: (object: ObjectInstance) => UmlMethod[];
   onCallMethod: (object: ObjectInstance, method: UmlMethod) => void;
+  onRemoveObject: (object: ObjectInstance) => void;
 };
 
 export const ObjectBenchSection = ({
@@ -63,7 +64,8 @@ export const ObjectBenchSection = ({
   showInherited,
   showStatic,
   getMethodsForObject,
-  onCallMethod
+  onCallMethod,
+  onRemoveObject
 }: ObjectBenchSectionProps) => (
   <section className="flex h-full flex-col border-r border-border">
     <div ref={benchContainerRef} className="relative flex h-full flex-col">
@@ -110,6 +112,7 @@ export const ObjectBenchSection = ({
           showStatic={showStatic}
           getMethodsForObject={getMethodsForObject}
           onCallMethod={onCallMethod}
+          onRemoveObject={onRemoveObject}
         />
       </div>
     </div>

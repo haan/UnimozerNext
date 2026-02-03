@@ -1216,6 +1216,11 @@ export default function App() {
     [callMethodInfo, callMethodTarget, executeMethodCall, setStatus]
   );
 
+  const handleRemoveObject = useCallback((object: ObjectInstance) => {
+    setObjectBench((prev) => prev.filter((item) => item.name !== object.name));
+    setStatus(`Removed ${object.name}.`);
+  }, [setStatus]);
+
   return (
     <div className="flex h-full flex-col">
       <AppMenu
@@ -1301,6 +1306,7 @@ export default function App() {
                 showStatic={showStaticObjectFields}
                 getMethodsForObject={getPublicMethodsForObject}
                 onCallMethod={handleOpenCallMethod}
+                onRemoveObject={handleRemoveObject}
               />
             </div>
 
