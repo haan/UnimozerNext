@@ -1,13 +1,14 @@
 import type { UmlField } from "../../models/uml";
-import { TEXT_PADDING, UML_FONT_SIZE } from "./constants";
+import { TEXT_PADDING } from "./constants";
 
 export type UmlAttributeProps = {
   field: UmlField;
   y: number;
+  fontSize: number;
   onSelect?: () => void;
 };
 
-export const UmlAttribute = ({ field, y, onSelect }: UmlAttributeProps) => {
+export const UmlAttribute = ({ field, y, fontSize, onSelect }: UmlAttributeProps) => {
   const visibility = field.visibility ?? "";
   const signature = field.signature ?? "";
   return (
@@ -24,7 +25,7 @@ export const UmlAttribute = ({ field, y, onSelect }: UmlAttributeProps) => {
       }}
       style={{
         fill: "hsl(var(--foreground))",
-        fontSize: UML_FONT_SIZE,
+        fontSize,
         fontFamily: "var(--uml-font)",
         pointerEvents: onSelect ? "auto" : "none",
         cursor: onSelect ? "pointer" : "default"

@@ -23,7 +23,7 @@ export const ConsolePanel = ({ output, fontSize, running, onStop }: ConsolePanel
 
   return (
     <div
-      className="relative flex h-full flex-col"
+      className="relative flex h-full min-w-0 flex-col"
       style={{ background: "var(--console-bg)" }}
     >
       {running ? (
@@ -45,13 +45,14 @@ export const ConsolePanel = ({ output, fontSize, running, onStop }: ConsolePanel
       ) : null}
       <pre
         ref={scrollRef}
-        className={`flex-1 overflow-auto whitespace-pre-wrap px-4 py-3 leading-relaxed ${
+        className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words px-4 py-3 leading-relaxed ${
           running ? "pr-16" : ""
         }`}
         style={{
           color: "var(--console-fg)",
           fontFamily: "var(--editor-font)",
-          fontSize
+          fontSize,
+          overflowWrap: "anywhere"
         }}
       >
         {output}

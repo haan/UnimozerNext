@@ -54,3 +54,47 @@ export const ContextMenuSeparator = React.forwardRef<
   />
 ));
 ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
+
+export const ContextMenuSubTriggerItem = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.SubTrigger>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubTrigger> & { inset?: boolean }
+>(({ className, inset, children, ...props }, ref) => (
+  <ContextMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(
+      "flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none",
+      "focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground",
+      inset && "pl-8",
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      className="ml-auto h-3.5 w-3.5"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="m9 5 6 7-6 7" />
+    </svg>
+  </ContextMenuPrimitive.SubTrigger>
+));
+ContextMenuSubTriggerItem.displayName = ContextMenuPrimitive.SubTrigger.displayName;
+
+export const ContextMenuSubContent = React.forwardRef<
+  React.ElementRef<typeof ContextMenuPrimitive.SubContent>,
+  React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>
+>(({ className, ...props }, ref) => (
+  <ContextMenuPrimitive.SubContent
+    ref={ref}
+    className={cn(
+      "z-50 max-h-72 min-w-[10rem] overflow-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md",
+      className
+    )}
+    {...props}
+  />
+));
+ContextMenuSubContent.displayName = ContextMenuPrimitive.SubContent.displayName;

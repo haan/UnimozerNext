@@ -95,9 +95,11 @@ export default function App() {
   const debugLogging = settings.advanced?.debugLogging ?? false;
   const codeHighlightEnabled = settings.uml.codeHighlight ?? true;
   const showPackages = settings.uml.showPackages ?? true;
+  const umlFontSize = settings.uml.fontSize ?? 12;
   const showPrivateObjectFields = settings.view.showPrivateObjectFields ?? true;
   const showInheritedObjectFields = settings.view.showInheritedObjectFields ?? true;
   const showStaticObjectFields = settings.view.showStaticObjectFields ?? true;
+  const showSwingAttributes = settings.view.showSwingAttributes ?? true;
   const {
     containerRef,
     consoleContainerRef,
@@ -505,12 +507,30 @@ export default function App() {
 
   const visibleGraph = useMemo(() => {
     if (!umlGraph) return null;
-    if (settings.uml.showDependencies) return umlGraph;
-    return {
-      ...umlGraph,
-      edges: umlGraph.edges.filter((edge) => edge.kind !== "dependency")
-    };
-  }, [umlGraph, settings.uml.showDependencies]);
+    let nextGraph: UmlGraph = umlGraph;
+    if (!settings.uml.showDependencies) {
+      nextGraph = {
+        ...nextGraph,
+        edges: nextGraph.edges.filter((edge) => edge.kind !== "dependency")
+      };
+    }
+    if (!showSwingAttributes) {
+      const swingPattern = /\bjavax\.swing\./;
+      nextGraph = {
+        ...nextGraph,
+        nodes: nextGraph.nodes.map((node) => ({
+          ...node,
+          fields: node.fields.filter((field) => {
+            const parts = field.signature.split(":");
+            if (parts.length < 2) return true;
+            const type = parts.slice(1).join(":").trim();
+            return !swingPattern.test(type);
+          })
+        }))
+      };
+    }
+    return nextGraph;
+  }, [umlGraph, settings.uml.showDependencies, showSwingAttributes]);
 
 
   const handleContentChange = useCallback((value: string) => {
@@ -1237,6 +1257,7 @@ export default function App() {
         showPrivateObjectFields={showPrivateObjectFields}
         showInheritedObjectFields={showInheritedObjectFields}
         showStaticObjectFields={showStaticObjectFields}
+        showSwingAttributes={showSwingAttributes}
         onRequestNewProject={() => requestProjectAction("new")}
         onRequestOpenProject={() => requestProjectAction("open")}
         onSave={() => {
@@ -1266,6 +1287,9 @@ export default function App() {
         onToggleShowStatic={(value) =>
           updateViewSettings({ showStaticObjectFields: value })
         }
+        onToggleShowSwingAttributes={(value) =>
+          updateViewSettings({ showSwingAttributes: value })
+        }
         onAddClass={handleMenuAddClass}
         onAddConstructor={handleMenuAddConstructor}
         onAddField={handleMenuAddField}
@@ -1285,6 +1309,7 @@ export default function App() {
                   compiled={compileStatus === "success"}
                   backgroundColor={settings.uml.panelBackground}
                   showPackages={showPackages}
+                  umlFontSize={umlFontSize}
                   onNodePositionChange={handleNodePositionChange}
                 onNodeSelect={handleNodeSelect}
                 onCompileClass={handleCompileClass}

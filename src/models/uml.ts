@@ -15,6 +15,8 @@ export type UmlMethod = {
   isAbstract?: boolean;
   isStatic?: boolean;
   visibility?: string;
+  declaringClass?: string;
+  isInherited?: boolean;
   range?: UmlSourceRange;
 };
 

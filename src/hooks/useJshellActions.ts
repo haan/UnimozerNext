@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { MutableRefObject } from "react";
 
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../models/uml";
-import type { ObjectInstance } from "../models/objectBench";
+import type { ObjectInstance, ObjectInheritedMethodGroup, ObjectMethod } from "../models/objectBench";
 import { normalizeConstructorArg, resolveConstructorParamClass } from "../services/javaCodegen";
 import { jshellEval, jshellInspect, jshellStart, jshellStop } from "../services/jshell";
 
@@ -104,13 +104,41 @@ export const useJshellActions = ({
           appendDebugOutput(
             `[${new Date().toLocaleTimeString()}] JShell inspect failed for ${obj.name}\n${message}`
           );
+          if (inspect.error && inspect.error.includes("payload:")) {
+            appendDebugOutput(
+              `[${new Date().toLocaleTimeString()}] JShell inspect payload\n${inspect.error}`
+            );
+          }
           refreshed.push(fallback.get(obj.name) ?? obj);
           continue;
         }
+        appendDebugOutput(
+          `[${new Date().toLocaleTimeString()}] JShell inspect ${obj.name} inheritedGroups=${
+            inspect.inheritedMethods?.length ?? 0
+          }`
+        );
+        const inheritedMethods: ObjectInheritedMethodGroup[] = (inspect.inheritedMethods ?? [])
+          .map((group) => ({
+            className: group.className,
+            methods: (group.methods ?? []).map((method): ObjectMethod => ({
+              name: method.name,
+              returnType: method.returnType ?? "",
+              paramTypes: method.paramTypes ?? [],
+              visibility: method.visibility,
+              isStatic: method.isStatic,
+              declaringClass: group.className
+            }))
+          }))
+          .filter((group) => group.methods.length > 0);
         refreshed.push({
           name: obj.name,
           type: inspect.typeName || obj.type,
-          fields: inspect.fields ?? []
+          fields: (inspect.fields ?? []).map((field) => ({
+            ...field,
+            type: field.type ?? "",
+            value: field.value ?? ""
+          })),
+          inheritedMethods
         });
       }
       return refreshed;
@@ -177,13 +205,41 @@ export const useJshellActions = ({
             inspect.error || "Unknown error"
           )}`;
           appendConsoleOutput(message);
+          if (inspect.error && inspect.error.includes("payload:")) {
+            appendDebugOutput(
+              `[${new Date().toLocaleTimeString()}] JShell inspect payload\n${inspect.error}`
+            );
+          }
           setStatus("Object creation failed.");
           return null;
         }
+        appendDebugOutput(
+          `[${new Date().toLocaleTimeString()}] JShell inspect ${form.objectName} inheritedGroups=${
+            inspect.inheritedMethods?.length ?? 0
+          }`
+        );
+        const inheritedMethods: ObjectInheritedMethodGroup[] = (inspect.inheritedMethods ?? [])
+          .map((group) => ({
+            className: group.className,
+            methods: (group.methods ?? []).map((method): ObjectMethod => ({
+              name: method.name,
+              returnType: method.returnType ?? "",
+              paramTypes: method.paramTypes ?? [],
+              visibility: method.visibility,
+              isStatic: method.isStatic,
+              declaringClass: group.className
+            }))
+          }))
+          .filter((group) => group.methods.length > 0);
         return {
           name: form.objectName,
           type: target.name || inspect.typeName || target.id,
-          fields: inspect.fields ?? []
+          fields: (inspect.fields ?? []).map((field) => ({
+            ...field,
+            type: field.type ?? "",
+            value: field.value ?? ""
+          })),
+          inheritedMethods
         };
       };
 
@@ -265,13 +321,14 @@ export const useJshellActions = ({
       const className = ownerNode?.id || target.type;
       const usesDefaultPackage = !className.includes(".");
       const buildMethodSelector = () => {
+        const selector = method.isInherited ? "getMethod" : "getDeclaredMethod";
         if (params.length === 0) {
-          return `getDeclaredMethod("${methodName}")`;
+          return `${selector}("${methodName}")`;
         }
         const typeArgs = params
           .map((param) => resolveConstructorParamClass(param.type))
           .join(", ");
-        return `getDeclaredMethod("${methodName}", ${typeArgs})`;
+        return `${selector}("${methodName}", ${typeArgs})`;
       };
       const callExpression = usesDefaultPackage
         ? `Class.forName("${className}").${buildMethodSelector()}.invoke(${method.isStatic ? "null" : target.name}${args.length ? `, ${args.join(", ")}` : ""});`

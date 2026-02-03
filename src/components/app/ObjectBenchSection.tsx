@@ -15,6 +15,7 @@ type ObjectBenchSectionProps = {
   compiled: boolean;
   backgroundColor?: string | null;
   showPackages?: boolean;
+  umlFontSize: number;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect: (id: string) => void;
   onCompileClass: (node: UmlNode) => void;
@@ -46,6 +47,7 @@ export const ObjectBenchSection = ({
   compiled,
   backgroundColor,
   showPackages,
+  umlFontSize,
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
@@ -79,6 +81,7 @@ export const ObjectBenchSection = ({
           compiled={compiled}
           backgroundColor={backgroundColor}
           showPackages={showPackages}
+          fontSize={umlFontSize}
           onNodePositionChange={onNodePositionChange}
           onNodeSelect={onNodeSelect}
           onCompileClass={onCompileClass}

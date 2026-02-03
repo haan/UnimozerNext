@@ -9,12 +9,11 @@ import { Implementation } from "./Implementation";
 import { Inheritance } from "./Inheritance";
 import { ReflexiveAssociation } from "./ReflexiveAssociation";
 import {
-  HEADER_HEIGHT,
   NODE_WIDTH,
-  ROW_HEIGHT,
   SECTION_PADDING,
   TEXT_PADDING,
   UML_FONT_SIZE,
+  UML_LINE_HEIGHT,
   EDGE_CORNER_GUTTER,
   EDGE_RADIUS,
   REFLEXIVE_LOOP_INSET,
@@ -23,16 +22,21 @@ import {
   UML_PACKAGE_PADDING
 } from "./constants";
 
-const computeNodeHeight = (node: UmlNode, diagram: DiagramState) => {
+const computeNodeHeight = (
+  node: UmlNode,
+  diagram: DiagramState,
+  headerHeight: number,
+  rowHeight: number
+) => {
   const showFields = diagram.showFields;
   const showMethods = diagram.showMethods;
-  let height = HEADER_HEIGHT;
+  let height = headerHeight;
 
   if (showFields) {
-    height += 2*SECTION_PADDING + (node.fields.length) * ROW_HEIGHT;
+    height += 2 * SECTION_PADDING + node.fields.length * rowHeight;
   }
   if (showMethods) {
-    height += 2*SECTION_PADDING + (node.methods.length) * ROW_HEIGHT;
+    height += 2 * SECTION_PADDING + node.methods.length * rowHeight;
   }
 
   return height;
@@ -52,9 +56,9 @@ const measureTextWidth = (text: string, font: string) => {
   return ctx.measureText(text).width;
 };
 
-const computeNodeWidth = (node: UmlNode, diagram: DiagramState) => {
+const computeNodeWidth = (node: UmlNode, diagram: DiagramState, fontSize: number) => {
   const padding = TEXT_PADDING;
-  const nameWidth = measureTextWidth(node.name, `600 ${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`);
+  const nameWidth = measureTextWidth(node.name, `600 ${fontSize}px ${UML_FONT_FAMILY}`);
   const fieldWidth = diagram.showFields
     ? Math.max(
         0,
@@ -62,7 +66,7 @@ const computeNodeWidth = (node: UmlNode, diagram: DiagramState) => {
           const visibility = field.visibility ? `${field.visibility} ` : "";
           return measureTextWidth(
             `${visibility}${field.signature}`,
-            `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`
+            `${fontSize}px ${UML_FONT_FAMILY}`
           );
         })
       )
@@ -74,7 +78,7 @@ const computeNodeWidth = (node: UmlNode, diagram: DiagramState) => {
           const visibility = method.visibility ? `${method.visibility} ` : "";
           return measureTextWidth(
             `${visibility}${method.signature}`,
-            `${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`
+            `${fontSize}px ${UML_FONT_FAMILY}`
           );
         })
       )
@@ -181,6 +185,7 @@ export type UmlDiagramProps = {
   diagram: DiagramState;
   compiled?: boolean;
   showPackages?: boolean;
+  fontSize?: number;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect?: (id: string) => void;
   onCompileClass?: (node: UmlNode) => void;
@@ -233,6 +238,7 @@ export const UmlDiagram = ({
   diagram,
   compiled,
   showPackages,
+  fontSize,
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
@@ -252,6 +258,9 @@ export const UmlDiagram = ({
   const [panning, setPanning] = useState<PanState | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const [fontReady, setFontReady] = useState(false);
+  const umlFontSize = fontSize ?? UML_FONT_SIZE;
+  const headerHeight = umlFontSize + 16;
+  const rowHeight = Math.round(umlFontSize * UML_LINE_HEIGHT);
   const zoomAt = useCallback((factor: number, clientX?: number, clientY?: number) => {
     const svg = svgRef.current;
     if (!svg) return;
@@ -282,8 +291,8 @@ export const UmlDiagram = ({
         return;
       }
       try {
-        await document.fonts.load(`400 ${UML_FONT_SIZE}px "JetBrains Mono"`);
-        await document.fonts.load(`600 ${UML_FONT_SIZE}px "JetBrains Mono"`);
+        await document.fonts.load(`400 ${umlFontSize}px "JetBrains Mono"`);
+        await document.fonts.load(`600 ${umlFontSize}px "JetBrains Mono"`);
         await document.fonts.ready;
       } catch {
         // If font loading fails, we still want a layout pass.
@@ -294,7 +303,7 @@ export const UmlDiagram = ({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [umlFontSize]);
 
   useEffect(() => {
     if (!onRegisterZoom) return;
@@ -405,11 +414,11 @@ export const UmlDiagram = ({
           ...node,
           x: position.x,
           y: position.y,
-          width: fontReady ? computeNodeWidth(node, diagram) : NODE_WIDTH,
-          height: computeNodeHeight(node, diagram)
+          width: fontReady ? computeNodeWidth(node, diagram, umlFontSize) : NODE_WIDTH,
+          height: computeNodeHeight(node, diagram, headerHeight, rowHeight)
         };
       }),
-    [diagram, graph.nodes, fontReady]
+    [diagram, graph.nodes, fontReady, headerHeight, rowHeight, umlFontSize]
   );
 
   const nodeMap = useMemo(() => {
@@ -436,7 +445,7 @@ export const UmlDiagram = ({
     if (grouped.size === 0) return [];
     const paddingX = UML_PACKAGE_PADDING;
     const paddingBottom = UML_PACKAGE_PADDING;
-    const paddingTop = UML_PACKAGE_PADDING + HEADER_HEIGHT;
+    const paddingTop = UML_PACKAGE_PADDING + headerHeight;
     return Array.from(grouped.entries()).map(([pkg, nodes]) => {
       const minX = Math.min(...nodes.map((node) => node.x));
       const minY = Math.min(...nodes.map((node) => node.y));
@@ -522,7 +531,7 @@ export const UmlDiagram = ({
       <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
         {packages.map((pkg) => {
           const labelWidth = Math.ceil(
-            measureTextWidth(pkg.name, `600 ${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`) +
+            measureTextWidth(pkg.name, `600 ${umlFontSize}px ${UML_FONT_FAMILY}`) +
               TEXT_PADDING
           );
           return (
@@ -562,7 +571,7 @@ export const UmlDiagram = ({
                 x={pkg.x}
                 y={pkg.y}
                 width={labelWidth}
-                height={HEADER_HEIGHT}
+                height={headerHeight}
                 rx={UML_CORNER_RADIUS}
                 ry={UML_CORNER_RADIUS}
                 fill="var(--uml-package-name-bg)"
@@ -591,11 +600,12 @@ export const UmlDiagram = ({
               />
               <text
                 x={pkg.x + TEXT_PADDING / 2}
-                y={pkg.y + HEADER_HEIGHT / 2 + 5}
+                y={pkg.y + headerHeight / 2 + 1}
                 textAnchor="start"
+                dominantBaseline="middle"
                 style={{
                   fill: "hsl(var(--foreground) / 0.8)",
-                  fontSize: UML_FONT_SIZE,
+                  fontSize: umlFontSize,
                   fontWeight: 600,
                   fontFamily: "var(--uml-font)"
                 }}
@@ -697,6 +707,9 @@ export const UmlDiagram = ({
             node={node}
             diagram={diagram}
             compiled={compiled}
+            fontSize={umlFontSize}
+            headerHeight={headerHeight}
+            rowHeight={rowHeight}
             onHeaderPointerDown={(event) => {
               if (event.button !== 0) return;
               event.preventDefault();

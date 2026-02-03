@@ -26,6 +26,7 @@ type AppMenuProps = {
   showPrivateObjectFields: boolean;
   showInheritedObjectFields: boolean;
   showStaticObjectFields: boolean;
+  showSwingAttributes: boolean;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onSave: () => void;
@@ -43,6 +44,7 @@ type AppMenuProps = {
   onToggleShowPrivate: (value: boolean) => void;
   onToggleShowInherited: (value: boolean) => void;
   onToggleShowStatic: (value: boolean) => void;
+  onToggleShowSwingAttributes: (value: boolean) => void;
   onAddClass: () => void;
   onAddConstructor: () => void;
   onAddField: () => void;
@@ -63,6 +65,7 @@ export const AppMenu = ({
   showPrivateObjectFields,
   showInheritedObjectFields,
   showStaticObjectFields,
+  showSwingAttributes,
   onRequestNewProject,
   onRequestOpenProject,
   onSave,
@@ -80,6 +83,7 @@ export const AppMenu = ({
   onToggleShowPrivate,
   onToggleShowInherited,
   onToggleShowStatic,
+  onToggleShowSwingAttributes,
   onAddClass,
   onAddConstructor,
   onAddField,
@@ -164,6 +168,19 @@ export const AppMenu = ({
               <MenubarShortcut>{isMac ? "⌘0" : "Ctrl+0"}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
+            <MenubarSub>
+              <MenubarSubTrigger>UML</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarCheckboxItem
+                  checked={showSwingAttributes}
+                  onCheckedChange={(checked) =>
+                    onToggleShowSwingAttributes(Boolean(checked))
+                  }
+                >
+                  Show javax.swing fields
+                </MenubarCheckboxItem>
+              </MenubarSubContent>
+            </MenubarSub>
             <MenubarSub>
               <MenubarSubTrigger>Object Bench</MenubarSubTrigger>
               <MenubarSubContent>

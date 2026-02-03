@@ -1,6 +1,6 @@
 export const NODE_WIDTH = 220; // Minimum width for UML class boxes.
-export const HEADER_HEIGHT = 28; // Height of the class name header area.
 export const UML_FONT_SIZE = 12; // Font size for UML text (header, attributes, methods).
+export const HEADER_HEIGHT = UML_FONT_SIZE + 2 * 8; // Header height = font size + top/bottom padding.
 export const UML_LINE_HEIGHT = 1.6; // Line height multiplier for UML text.
 export const ROW_HEIGHT = Math.round(UML_FONT_SIZE * UML_LINE_HEIGHT); // Row height for each attribute/method line.
 export const SECTION_PADDING = 8; // Vertical padding above/below attribute and method sections.

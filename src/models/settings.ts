@@ -3,6 +3,7 @@ export type UmlSettings = {
   panelBackground: string | null;
   codeHighlight: boolean;
   showPackages: boolean;
+  fontSize: number;
 };
 
 export type EditorSettings = {
@@ -25,6 +26,7 @@ export type ViewSettings = {
   showPrivateObjectFields: boolean;
   showInheritedObjectFields: boolean;
   showStaticObjectFields: boolean;
+  showSwingAttributes: boolean;
 };
 
 export type AppSettings = {
@@ -44,7 +46,8 @@ export const createDefaultSettings = (): AppSettings => ({
     showDependencies: true,
     panelBackground: null,
     codeHighlight: true,
-    showPackages: true
+    showPackages: true,
+    fontSize: 12
   },
   editor: {
     fontSize: 14,
@@ -63,7 +66,8 @@ export const createDefaultSettings = (): AppSettings => ({
   view: {
     showPrivateObjectFields: true,
     showInheritedObjectFields: true,
-    showStaticObjectFields: true
+    showStaticObjectFields: true,
+    showSwingAttributes: true
   },
   layout: {
     umlSplitRatio: 0.5,

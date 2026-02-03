@@ -14,6 +14,7 @@ export type DiagramPanelProps = {
   compiled?: boolean;
   backgroundColor?: string | null;
   showPackages?: boolean;
+  fontSize?: number;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect: (id: string) => void;
   onCompileClass: (node: UmlNode) => void;
@@ -35,6 +36,7 @@ export const DiagramPanel = ({
   compiled,
   backgroundColor,
   showPackages,
+  fontSize,
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
@@ -62,6 +64,7 @@ export const DiagramPanel = ({
               diagram={diagram}
               compiled={compiled}
               showPackages={showPackages}
+              fontSize={fontSize}
               onNodePositionChange={onNodePositionChange}
               onNodeSelect={onNodeSelect}
               onCompileClass={onCompileClass}

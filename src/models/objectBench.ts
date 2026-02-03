@@ -7,8 +7,23 @@ export type ObjectField = {
   isInherited?: boolean;
 };
 
+export type ObjectMethod = {
+  name: string;
+  returnType?: string | null;
+  paramTypes?: string[];
+  visibility?: string;
+  isStatic?: boolean;
+  declaringClass?: string;
+};
+
+export type ObjectInheritedMethodGroup = {
+  className: string;
+  methods: ObjectMethod[];
+};
+
 export type ObjectInstance = {
   name: string;
   type: string;
   fields: ObjectField[];
+  inheritedMethods?: ObjectInheritedMethodGroup[];
 };

@@ -2,17 +2,31 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type JshellField = {
   name: string;
-  type: string;
-  value: string;
+  type?: string | null;
+  value?: string | null;
   visibility: "public" | "protected" | "private" | "package";
   isStatic: boolean;
   isInherited?: boolean;
+};
+
+export type JshellMethod = {
+  name: string;
+  returnType?: string | null;
+  paramTypes?: string[];
+  visibility?: string;
+  isStatic?: boolean;
+};
+
+export type JshellInheritedMethodGroup = {
+  className: string;
+  methods?: JshellMethod[];
 };
 
 export type JshellInspectResult = {
   ok: boolean;
   typeName?: string;
   fields?: JshellField[];
+  inheritedMethods?: JshellInheritedMethodGroup[];
   error?: string | null;
 };
 

@@ -451,13 +451,37 @@ struct RunStartEvent {
 struct JshellField {
     name: String,
     #[serde(rename = "type")]
-    type_name: String,
-    value: String,
+    #[serde(default)]
+    type_name: Option<String>,
+    #[serde(default)]
+    value: Option<String>,
     visibility: String,
     #[serde(default)]
     is_static: bool,
     #[serde(default)]
     is_inherited: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JshellMethodInfo {
+    name: String,
+    #[serde(default)]
+    return_type: Option<String>,
+    #[serde(default)]
+    param_types: Vec<String>,
+    #[serde(default)]
+    visibility: Option<String>,
+    #[serde(default)]
+    is_static: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JshellInheritedMethodGroup {
+    class_name: String,
+    #[serde(default)]
+    methods: Vec<JshellMethodInfo>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -468,6 +492,8 @@ struct JshellInspectResponse {
     type_name: Option<String>,
     #[serde(default)]
     fields: Vec<JshellField>,
+    #[serde(default)]
+    inherited_methods: Vec<JshellInheritedMethodGroup>,
     #[serde(default)]
     error: Option<String>,
 }

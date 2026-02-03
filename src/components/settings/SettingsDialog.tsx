@@ -89,6 +89,34 @@ export const SettingsDialog = ({
               <div className="mt-4 grid gap-2">
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
+                    <p className="text-sm font-medium">UML font size</p>
+                    <p className="text-xs text-muted-foreground">
+                      Adjust the font size used in UML class boxes.
+                    </p>
+                  </div>
+                  <div className="flex w-44 items-center gap-3">
+                    <Slider
+                      value={[settings.uml.fontSize]}
+                      min={10}
+                      max={40}
+                      step={1}
+                      onValueChange={(value) =>
+                        onChange({
+                          ...settings,
+                          uml: {
+                            ...settings.uml,
+                            fontSize: value[0] ?? 12
+                          }
+                        })
+                      }
+                    />
+                    <span className="w-8 text-right text-xs text-muted-foreground">
+                      {settings.uml.fontSize}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
                     <p className="text-sm font-medium">Show dependencies</p>
                     <p className="text-xs text-muted-foreground">
                       Display dependency relationships between classes.

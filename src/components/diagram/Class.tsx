@@ -1,12 +1,6 @@
 import type { DiagramState } from "../../models/diagram";
 import type { UmlConstructor, UmlNode } from "../../models/uml";
-import {
-  HEADER_HEIGHT,
-  ROW_HEIGHT,
-  SECTION_PADDING,
-  UML_FONT_SIZE,
-  UML_CORNER_RADIUS
-} from "./constants";
+import { SECTION_PADDING, UML_CORNER_RADIUS } from "./constants";
 import { UmlAttribute } from "./Attribute";
 import { UmlMethod } from "./Method";
 import {
@@ -28,6 +22,9 @@ export type ClassProps = {
   node: UmlNodeLayout;
   diagram: DiagramState;
   compiled?: boolean;
+  fontSize: number;
+  headerHeight: number;
+  rowHeight: number;
   onHeaderPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
   onCompile?: () => void;
   onRunMain?: () => void;
@@ -44,6 +41,9 @@ export const Class = ({
   node,
   diagram,
   compiled,
+  fontSize,
+  headerHeight,
+  rowHeight,
   onHeaderPointerDown,
   onCompile,
   onRunMain,
@@ -57,7 +57,7 @@ export const Class = ({
 }: ClassProps) => {
   const fields = diagram.showFields ? node.fields : [];
   const methods = diagram.showMethods ? node.methods : [];
-  let cursorY = HEADER_HEIGHT;
+  let cursorY = headerHeight;
   const hasMain = node.methods.some((method) => Boolean(method.isMain));
   const isCompiled = Boolean(compiled && !node.isInvalid);
   const constructorOptions: UmlConstructor[] = isCompiled
@@ -98,8 +98,8 @@ export const Class = ({
         key={`${node.id}-fields-separator`}
         x1={0}
         x2={node.width}
-        y1={HEADER_HEIGHT}
-        y2={HEADER_HEIGHT}
+        y1={headerHeight}
+        y2={headerHeight}
         stroke={strokeColor}
         strokeWidth={1}
         pointerEvents="none"
@@ -113,16 +113,17 @@ export const Class = ({
           key={`${node.id}-field-${field.signature}-${index}`}
           field={field}
           y={y}
+          fontSize={fontSize}
           onSelect={onFieldSelect ? () => onFieldSelect(field, node) : undefined}
         />
       );
-      cursorY += ROW_HEIGHT;
+      cursorY += rowHeight;
     });
     cursorY += SECTION_PADDING;
   }
 
   if (diagram.showMethods) {
-    const lineY = diagram.showFields ? cursorY : HEADER_HEIGHT;
+    const lineY = diagram.showFields ? cursorY : headerHeight;
     content.push(
       <line
         key={`${node.id}-methods-separator`}
@@ -143,10 +144,11 @@ export const Class = ({
           key={`${node.id}-method-${method.signature}-${index}`}
           method={method}
           y={y}
+          fontSize={fontSize}
           onSelect={onMethodSelect ? () => onMethodSelect(method, node) : undefined}
         />
       );
-      cursorY += ROW_HEIGHT;
+      cursorY += rowHeight;
     });
     cursorY += SECTION_PADDING;
   }
@@ -166,7 +168,7 @@ export const Class = ({
           />
           <rect
             width={node.width}
-            height={HEADER_HEIGHT}
+            height={headerHeight}
             rx={UML_CORNER_RADIUS}
             ry={UML_CORNER_RADIUS}
             style={{ fill: fillColor, cursor: "grab" }}
@@ -182,11 +184,12 @@ export const Class = ({
           />
           <text
             x={node.width / 2}
-            y={HEADER_HEIGHT / 2 + 5}
+            y={headerHeight / 2 + 1}
             textAnchor="middle"
+            dominantBaseline="middle"
             style={{
               fill: "hsl(var(--accent-foreground))",
-              fontSize: UML_FONT_SIZE,
+              fontSize,
               fontWeight: 600,
               fontStyle: node.isAbstract ? "italic" : "normal",
               fontFamily: "var(--uml-font)",
@@ -197,7 +200,7 @@ export const Class = ({
           </text>
           {node.isInvalid ? (
             <g
-              transform={`translate(${node.width - 18}, ${HEADER_HEIGHT / 2 - 7})`}
+              transform={`translate(${node.width - 18}, ${headerHeight / 2 - 7})`}
               style={{ color: "hsl(36 85% 35%)", pointerEvents: "none" }}
             >
               <svg

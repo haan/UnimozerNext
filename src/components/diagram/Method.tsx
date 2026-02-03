@@ -1,13 +1,14 @@
 import type { UmlMethod } from "../../models/uml";
-import { TEXT_PADDING, UML_FONT_SIZE } from "./constants";
+import { TEXT_PADDING } from "./constants";
 
 export type UmlMethodProps = {
   method: UmlMethod;
   y: number;
+  fontSize: number;
   onSelect?: () => void;
 };
 
-export const UmlMethod = ({ method, y, onSelect }: UmlMethodProps) => {
+export const UmlMethod = ({ method, y, fontSize, onSelect }: UmlMethodProps) => {
   const visibility = method.visibility ?? "";
   const signature = method.signature ?? "";
   return (
@@ -24,7 +25,7 @@ export const UmlMethod = ({ method, y, onSelect }: UmlMethodProps) => {
       }}
       style={{
         fill: "hsl(var(--foreground))",
-        fontSize: UML_FONT_SIZE,
+        fontSize,
         fontFamily: "var(--uml-font)",
         fontStyle: method.isAbstract ? "italic" : "normal",
         pointerEvents: onSelect ? "auto" : "none",

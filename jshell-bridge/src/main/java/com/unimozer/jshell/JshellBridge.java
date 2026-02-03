@@ -15,6 +15,7 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -102,23 +103,52 @@ public final class JshellBridge {
         if (varName == null || varName.isBlank()) {
             return errorResponse("Missing variable name");
         }
-        EvalResult eval = evaluate("com.unimozer.jshell.Inspector.inspect(" + varName + ")");
-        if (!eval.ok || eval.value == null) {
+        Path tempFile;
+        try {
+            tempFile = Files.createTempFile("unimozer-inspect-", ".json");
+        } catch (Exception error) {
+            return errorResponse("Failed to create temp file: " + error.getMessage());
+        }
+        String escapedPath = escapeJavaString(tempFile.toString());
+        EvalResult eval = evaluate(
+            "com.unimozer.jshell.Inspector.inspectToFile(" + varName + ", \"" + escapedPath + "\")"
+        );
+        if (!eval.ok) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (Exception ignored) {
+                // Ignore cleanup failures.
+            }
             String message = eval.error != null ? eval.error : "Inspection failed";
             return errorResponse(message);
         }
         try {
-            String payload = eval.value;
-            if (payload.startsWith("\"")) {
-                payload = mapper.readValue(payload, String.class);
+            String payload = Files.readString(tempFile, StandardCharsets.UTF_8);
+            JsonNode result;
+            try {
+                result = mapper.readTree(payload);
+            } catch (Exception primary) {
+                int start = payload.indexOf('{');
+                int end = payload.lastIndexOf('}');
+                if (start >= 0 && end > start) {
+                    String trimmed = payload.substring(start, end + 1);
+                    result = mapper.readTree(trimmed);
+                } else {
+                    throw primary;
+                }
             }
-            JsonNode result = mapper.readTree(payload);
             ObjectNode node = mapper.createObjectNode();
             node.put("ok", true);
             node.setAll((ObjectNode) result);
             return node;
         } catch (Exception error) {
             return errorResponse(error.getMessage());
+        } finally {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (Exception ignored) {
+                // Ignore cleanup failures.
+            }
         }
     }
 
@@ -191,6 +221,11 @@ public final class JshellBridge {
         node.put("ok", false);
         node.put("error", message == null ? "Unknown error" : message);
         return node;
+    }
+
+    private String escapeJavaString(String input) {
+        if (input == null) return "";
+        return input.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private static final class EvalResult {

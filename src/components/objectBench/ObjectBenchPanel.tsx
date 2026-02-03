@@ -1,9 +1,13 @@
-import type { ObjectInstance } from "../../models/objectBench";
+import type { ObjectInstance, ObjectInheritedMethodGroup, ObjectMethod } from "../../models/objectBench";
 import type { UmlMethod } from "../../models/uml";
+import { OBJECT_FIELD_VALUE_MAX_LENGTH } from "./constants";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTriggerItem,
   ContextMenuSeparator,
   ContextMenuTrigger
 } from "../ui/context-menu";
@@ -32,6 +36,51 @@ const shouldShowField = (
   return true;
 };
 
+const toSimpleTypeName = (typeName: string) => {
+  const cleaned = typeName.replace(/\$/g, ".");
+  const parts = cleaned.split(".");
+  return parts[parts.length - 1] || cleaned;
+};
+
+const buildMethodSignature = (method: ObjectMethod) => {
+  const params = method.paramTypes ?? [];
+  const paramLabel = params.map((param) => toSimpleTypeName(param)).join(", ");
+  const returnType = method.returnType ? toSimpleTypeName(method.returnType) : "void";
+  return `${method.name}(${paramLabel}): ${returnType}`;
+};
+
+const buildUmlMethod = (method: ObjectMethod): UmlMethod => {
+  const params = method.paramTypes ?? [];
+  return {
+    signature: buildMethodSignature(method),
+    name: method.name,
+    returnType: method.returnType ?? "",
+    params: params.map((param, index) => ({
+      name: `arg${index + 1}`,
+      type: param
+    })),
+    isStatic: method.isStatic,
+    visibility: method.visibility,
+    declaringClass: method.declaringClass,
+    isInherited: true
+  };
+};
+
+const buildInheritedGroups = (groups: ObjectInheritedMethodGroup[]) =>
+  groups
+    .map((group) => ({
+      className: group.className,
+      label: toSimpleTypeName(group.className),
+      methods: group.methods ?? []
+    }))
+    .filter((group) => group.methods.length > 0);
+
+const formatFieldValue = (value: string | null | undefined) => {
+  const text = value ?? "";
+  if (text.length <= OBJECT_FIELD_VALUE_MAX_LENGTH) return text;
+  return `${text.slice(0, OBJECT_FIELD_VALUE_MAX_LENGTH - 3)}...`;
+};
+
 export const ObjectBenchPanel = ({
   objects,
   showPrivate,
@@ -52,6 +101,9 @@ export const ObjectBenchPanel = ({
             <div className="flex flex-wrap items-start gap-3">
               {objects.map((object) => {
                 const methods = getMethodsForObject?.(object) ?? [];
+                const inheritedGroups = buildInheritedGroups(
+                  object.inheritedMethods ?? []
+                );
                 return (
                   <ContextMenu key={object.name}>
                     <ContextMenuTrigger asChild>
@@ -86,7 +138,16 @@ export const ObjectBenchPanel = ({
                                   {field.name}
                                 </span>
                                 <span>=</span>
-                                <span className="truncate">{field.value}</span>
+                                <span
+                                  className="truncate"
+                                  title={
+                                    field.value && field.value.length > OBJECT_FIELD_VALUE_MAX_LENGTH
+                                      ? field.value
+                                      : undefined
+                                  }
+                                >
+                                  {formatFieldValue(field.value)}
+                                </span>
                               </div>
                             ))}
                           {object.fields.filter((field) =>
@@ -136,7 +197,61 @@ export const ObjectBenchPanel = ({
                           No public methods
                         </ContextMenuItem>
                       )}
-                      {methods.length > 0 ? <ContextMenuSeparator /> : null}
+                      {inheritedGroups.length > 0 ? (
+                        <>
+                          {methods.length > 0 ? <ContextMenuSeparator /> : null}
+                          {methods.length === 0 ? <ContextMenuSeparator /> : null}
+                          <ContextMenuSub>
+                            <ContextMenuSubTriggerItem>
+                              Inherited methods
+                            </ContextMenuSubTriggerItem>
+                            <ContextMenuSubContent>
+                              {inheritedGroups.map((group) => (
+                                <ContextMenuSub key={group.className}>
+                                  <ContextMenuSubTriggerItem>
+                                    Inherited from {group.label}
+                                  </ContextMenuSubTriggerItem>
+                                  <ContextMenuSubContent>
+                                    {group.methods.map((method) => {
+                                      const asUml = buildUmlMethod(method);
+                                      return (
+                                        <ContextMenuItem
+                                          key={`${object.name}-${group.className}-${method.name}-${method.paramTypes?.length ?? 0}`}
+                                          disabled={!onCallMethod}
+                                          onSelect={() =>
+                                            onCallMethod?.(object, asUml)
+                                          }
+                                        >
+                                          <span className="inline-flex items-center gap-2">
+                                            <svg
+                                              width="15"
+                                              height="15"
+                                              viewBox="0 0 15 15"
+                                              fill="none"
+                                              xmlns="http://www.w3.org/2000/svg"
+                                            >
+                                              <path
+                                                d="M3.24182 2.32181C3.3919 2.23132 3.5784 2.22601 3.73338 2.30781L12.7334 7.05781C12.8974 7.14436 13 7.31457 13 7.5C13 7.68543 12.8974 7.85564 12.7334 7.94219L3.73338 12.6922C3.5784 12.774 3.3919 12.7687 3.24182 12.6782C3.09175 12.5877 3 12.4252 3 12.25V2.75C3 2.57476 3.09175 2.4123 3.24182 2.32181ZM4 3.57925V11.4207L11.4288 7.5L4 3.57925Z"
+                                                fill="currentColor"
+                                                fillRule="evenodd"
+                                                clipRule="evenodd"
+                                              />
+                                            </svg>
+                                            {asUml.signature}
+                                          </span>
+                                        </ContextMenuItem>
+                                      );
+                                    })}
+                                  </ContextMenuSubContent>
+                                </ContextMenuSub>
+                              ))}
+                            </ContextMenuSubContent>
+                          </ContextMenuSub>
+                        </>
+                      ) : null}
+                      {methods.length > 0 || inheritedGroups.length > 0 ? (
+                        <ContextMenuSeparator />
+                      ) : null}
                       <ContextMenuItem
                         disabled={!onRemoveObject}
                         onSelect={() => onRemoveObject?.(object)}
