@@ -1,6 +1,12 @@
 import type { DiagramState } from "../../models/diagram";
 import type { UmlConstructor, UmlNode } from "../../models/uml";
-import { HEADER_HEIGHT, ROW_HEIGHT, SECTION_PADDING, UML_FONT_SIZE } from "./constants";
+import {
+  HEADER_HEIGHT,
+  ROW_HEIGHT,
+  SECTION_PADDING,
+  UML_FONT_SIZE,
+  UML_CORNER_RADIUS
+} from "./constants";
 import { UmlAttribute } from "./Attribute";
 import { UmlMethod } from "./Method";
 import {
@@ -152,8 +158,8 @@ export const Class = ({
           <rect
             width={node.width}
             height={node.height}
-            rx={2}
-            ry={2}
+            rx={UML_CORNER_RADIUS}
+            ry={UML_CORNER_RADIUS}
             style={{ fill: fillColor, cursor: "grab" }}
             filter="url(#node-shadow)"
             onPointerDown={onHeaderPointerDown}
@@ -161,16 +167,16 @@ export const Class = ({
           <rect
             width={node.width}
             height={HEADER_HEIGHT}
-            rx={2}
-            ry={2}
+            rx={UML_CORNER_RADIUS}
+            ry={UML_CORNER_RADIUS}
             style={{ fill: fillColor, cursor: "grab" }}
             pointerEvents="none"
           />
           <rect
             width={node.width}
             height={node.height}
-            rx={2}
-            ry={2}
+            rx={UML_CORNER_RADIUS}
+            ry={UML_CORNER_RADIUS}
             fill="none"
             style={{ stroke: strokeColor, strokeWidth: 1 }}
           />

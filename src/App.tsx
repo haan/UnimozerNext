@@ -94,6 +94,7 @@ export default function App() {
   } = useAppSettings();
   const debugLogging = settings.advanced?.debugLogging ?? false;
   const codeHighlightEnabled = settings.uml.codeHighlight ?? true;
+  const showPackages = settings.uml.showPackages ?? true;
   const showPrivateObjectFields = settings.view.showPrivateObjectFields ?? true;
   const showInheritedObjectFields = settings.view.showInheritedObjectFields ?? true;
   const showStaticObjectFields = settings.view.showStaticObjectFields ?? true;
@@ -1270,15 +1271,16 @@ export default function App() {
         <main className="flex flex-1 flex-col bg-background">
           <div ref={containerRef} className="relative flex flex-1 overflow-hidden">
             <div className="h-full" style={{ width: `${splitRatio * 100}%` }}>
-              <ObjectBenchSection
-                benchContainerRef={benchContainerRef}
-                objectBenchSplitRatio={objectBenchSplitRatio}
-                startBenchResize={startBenchResize}
-                graph={visibleGraph}
-                diagram={diagramState}
-                compiled={compileStatus === "success"}
-                backgroundColor={settings.uml.panelBackground}
-                onNodePositionChange={handleNodePositionChange}
+                <ObjectBenchSection
+                  benchContainerRef={benchContainerRef}
+                  objectBenchSplitRatio={objectBenchSplitRatio}
+                  startBenchResize={startBenchResize}
+                  graph={visibleGraph}
+                  diagram={diagramState}
+                  compiled={compileStatus === "success"}
+                  backgroundColor={settings.uml.panelBackground}
+                  showPackages={showPackages}
+                  onNodePositionChange={handleNodePositionChange}
                 onNodeSelect={handleNodeSelect}
                 onCompileClass={handleCompileClass}
                 onRunMain={handleRunMain}

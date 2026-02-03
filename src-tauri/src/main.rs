@@ -837,7 +837,12 @@ fn compile_project(
 
     let mut sources_list = String::new();
     for file in java_files {
-        sources_list.push_str(&format!("{}\n", file.display()));
+        let mut path = file.to_string_lossy().replace('\\', "/");
+        if path.contains(' ') || path.contains('\t') {
+            path = format!("\"{}\"", path.replace('"', "\\\""));
+        }
+        sources_list.push_str(&path);
+        sources_list.push('\n');
     }
 
     let sources_file = build_dir.join("sources.txt");

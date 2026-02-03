@@ -9,3 +9,5 @@ export const EDGE_CORNER_GUTTER = 40; // No-attach zone near class box corners f
 export const EDGE_RADIUS = 6; // Corner radius for orthogonal edge bends.
 export const REFLEXIVE_LOOP_INSET = 40; // How far reflexive loops extend outside the class box.
 export const EDGE_SNAP_DELTA = 60; // Snap threshold for near-horizontal/vertical edges.
+export const UML_CORNER_RADIUS = 6; // Corner radius for UML class and package boxes.
+export const UML_PACKAGE_PADDING = 12; // Extra padding around classes inside package boxes.

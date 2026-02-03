@@ -18,7 +18,9 @@ import {
   EDGE_CORNER_GUTTER,
   EDGE_RADIUS,
   REFLEXIVE_LOOP_INSET,
-  EDGE_SNAP_DELTA
+  EDGE_SNAP_DELTA,
+  UML_CORNER_RADIUS,
+  UML_PACKAGE_PADDING
 } from "./constants";
 
 const computeNodeHeight = (node: UmlNode, diagram: DiagramState) => {
@@ -178,6 +180,7 @@ export type UmlDiagramProps = {
   graph: UmlGraph;
   diagram: DiagramState;
   compiled?: boolean;
+  showPackages?: boolean;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect?: (id: string) => void;
   onCompileClass?: (node: UmlNode) => void;
@@ -207,6 +210,16 @@ type DragState = {
   moved: boolean;
 };
 
+type PackageDragState = {
+  name: string;
+  startX: number;
+  startY: number;
+  offsetX: number;
+  offsetY: number;
+  nodes: { id: string; x: number; y: number }[];
+  moved: boolean;
+};
+
 type PanState = {
   startClientX: number;
   startClientY: number;
@@ -219,6 +232,7 @@ export const UmlDiagram = ({
   graph,
   diagram,
   compiled,
+  showPackages,
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
@@ -234,6 +248,7 @@ export const UmlDiagram = ({
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
+  const [draggingPackage, setDraggingPackage] = useState<PackageDragState | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
   const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
   const [fontReady, setFontReady] = useState(false);
@@ -310,6 +325,23 @@ export const UmlDiagram = ({
         return;
       }
 
+      if (draggingPackage) {
+        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+        const dx = point.x - draggingPackage.startX;
+        const dy = point.y - draggingPackage.startY;
+        const moved =
+          draggingPackage.moved ||
+          Math.abs(point.x - draggingPackage.startX) > 3 ||
+          Math.abs(point.y - draggingPackage.startY) > 3;
+        if (moved !== draggingPackage.moved) {
+          setDraggingPackage({ ...draggingPackage, moved });
+        }
+        draggingPackage.nodes.forEach((node) => {
+          onNodePositionChange(node.id, node.x + dx, node.y + dy, false);
+        });
+        return;
+      }
+
       if (panning) {
         const dx = (event.clientX - panning.startClientX) / panning.scale;
         const dy = (event.clientY - panning.startClientY) / panning.scale;
@@ -333,6 +365,16 @@ export const UmlDiagram = ({
           onNodeSelect(id);
         }
       }
+      if (draggingPackage) {
+        const { nodes } = draggingPackage;
+        setDraggingPackage(null);
+        nodes.forEach((node) => {
+          const position = diagram.nodes[node.id];
+          if (position) {
+            onNodePositionChange(node.id, position.x, position.y, true);
+          }
+        });
+      }
       if (panning) {
         setPanning(null);
       }
@@ -345,7 +387,15 @@ export const UmlDiagram = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [dragging, panning, diagram.nodes, onNodePositionChange, onNodeSelect, view]);
+  }, [
+    dragging,
+    draggingPackage,
+    panning,
+    diagram.nodes,
+    onNodePositionChange,
+    onNodeSelect,
+    view
+  ]);
 
   const nodesWithLayout = useMemo(
     () =>
@@ -367,6 +417,41 @@ export const UmlDiagram = ({
     nodesWithLayout.forEach((node) => map.set(node.id, node));
     return map;
   }, [nodesWithLayout]);
+
+  const packages = useMemo(() => {
+    if (!showPackages) return [];
+    const grouped = new Map<string, (typeof nodesWithLayout)[number][]>();
+    nodesWithLayout.forEach((node) => {
+      const lastDot = node.id.lastIndexOf(".");
+      if (lastDot <= 0) return;
+      const pkg = node.id.slice(0, lastDot);
+      if (!pkg) return;
+      const list = grouped.get(pkg);
+      if (list) {
+        list.push(node);
+      } else {
+        grouped.set(pkg, [node]);
+      }
+    });
+    if (grouped.size === 0) return [];
+    const paddingX = UML_PACKAGE_PADDING;
+    const paddingBottom = UML_PACKAGE_PADDING;
+    const paddingTop = UML_PACKAGE_PADDING + HEADER_HEIGHT;
+    return Array.from(grouped.entries()).map(([pkg, nodes]) => {
+      const minX = Math.min(...nodes.map((node) => node.x));
+      const minY = Math.min(...nodes.map((node) => node.y));
+      const maxX = Math.max(...nodes.map((node) => node.x + node.width));
+      const maxY = Math.max(...nodes.map((node) => node.y + node.height));
+      return {
+        name: pkg,
+        nodeIds: nodes.map((node) => node.id),
+        x: minX - paddingX,
+        y: minY - paddingTop,
+        width: maxX - minX + paddingX * 2,
+        height: maxY - minY + paddingTop + paddingBottom
+      };
+    });
+  }, [nodesWithLayout, showPackages]);
 
   return (
     <svg
@@ -433,6 +518,95 @@ export const UmlDiagram = ({
           />
         </marker>
       </defs>
+
+      <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+        {packages.map((pkg) => {
+          const labelWidth = Math.ceil(
+            measureTextWidth(pkg.name, `600 ${UML_FONT_SIZE}px ${UML_FONT_FAMILY}`) +
+              TEXT_PADDING
+          );
+          return (
+            <g key={pkg.name}>
+              <rect
+                x={pkg.x}
+                y={pkg.y}
+                width={pkg.width}
+                height={pkg.height}
+                rx={UML_CORNER_RADIUS}
+                ry={UML_CORNER_RADIUS}
+                fill="var(--uml-package-bg)"
+                stroke="var(--uml-package-border)"
+                strokeWidth={1}
+                style={{ cursor: "grab" }}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+                  const nodes = pkg.nodeIds
+                    .map((id) => nodeMap.get(id))
+                    .filter(Boolean)
+                    .map((node) => ({ id: node!.id, x: node!.x, y: node!.y }));
+                  setDraggingPackage({
+                    name: pkg.name,
+                    startX: point.x,
+                    startY: point.y,
+                    offsetX: point.x - pkg.x,
+                    offsetY: point.y - pkg.y,
+                    nodes,
+                    moved: false
+                  });
+                }}
+              />
+              <rect
+                x={pkg.x}
+                y={pkg.y}
+                width={labelWidth}
+                height={HEADER_HEIGHT}
+                rx={UML_CORNER_RADIUS}
+                ry={UML_CORNER_RADIUS}
+                fill="var(--uml-package-name-bg)"
+                stroke="var(--uml-package-border)"
+                strokeWidth={1}
+                style={{ cursor: "grab" }}
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+                  const nodes = pkg.nodeIds
+                    .map((id) => nodeMap.get(id))
+                    .filter(Boolean)
+                    .map((node) => ({ id: node!.id, x: node!.x, y: node!.y }));
+                  setDraggingPackage({
+                    name: pkg.name,
+                    startX: point.x,
+                    startY: point.y,
+                    offsetX: point.x - pkg.x,
+                    offsetY: point.y - pkg.y,
+                    nodes,
+                    moved: false
+                  });
+                }}
+              />
+              <text
+                x={pkg.x + TEXT_PADDING / 2}
+                y={pkg.y + HEADER_HEIGHT / 2 + 5}
+                textAnchor="start"
+                style={{
+                  fill: "hsl(var(--foreground) / 0.8)",
+                  fontSize: UML_FONT_SIZE,
+                  fontWeight: 600,
+                  fontFamily: "var(--uml-font)"
+                }}
+                pointerEvents="none"
+              >
+                {pkg.name}
+              </text>
+            </g>
+          );
+        })}
+      </g>
 
       <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`} pointerEvents="none">
         {graph.edges

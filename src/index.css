@@ -74,6 +74,9 @@ body,
     --uml-class-invalid-border: hsl(36 85% 45% / 0.55);
     --uml-class-compiled-bg: #e7f7e7;
     --uml-class-compiled-border: rgba(110, 180, 110, 0.6);
+    --uml-package-bg: #d9d4c3;
+    --uml-package-border: hsl(var(--foreground) / 0.25);
+    --uml-package-name-bg: #efe6cc;
     --console-bg: #0b0b0b;
     --console-fg: #f5f5f5;
     --console-min-height: 60px;

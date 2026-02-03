@@ -2,6 +2,7 @@ export type UmlSettings = {
   showDependencies: boolean;
   panelBackground: string | null;
   codeHighlight: boolean;
+  showPackages: boolean;
 };
 
 export type EditorSettings = {
@@ -42,7 +43,8 @@ export const createDefaultSettings = (): AppSettings => ({
   uml: {
     showDependencies: true,
     panelBackground: null,
-    codeHighlight: true
+    codeHighlight: true,
+    showPackages: true
   },
   editor: {
     fontSize: 14,

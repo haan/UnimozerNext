@@ -14,6 +14,7 @@ type ObjectBenchSectionProps = {
   diagram: DiagramState | null;
   compiled: boolean;
   backgroundColor?: string | null;
+  showPackages?: boolean;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect: (id: string) => void;
   onCompileClass: (node: UmlNode) => void;
@@ -43,6 +44,7 @@ export const ObjectBenchSection = ({
   diagram,
   compiled,
   backgroundColor,
+  showPackages,
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
@@ -74,6 +76,7 @@ export const ObjectBenchSection = ({
           diagram={diagram}
           compiled={compiled}
           backgroundColor={backgroundColor}
+          showPackages={showPackages}
           onNodePositionChange={onNodePositionChange}
           onNodeSelect={onNodeSelect}
           onCompileClass={onCompileClass}

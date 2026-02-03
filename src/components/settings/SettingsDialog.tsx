@@ -110,9 +110,30 @@ export const SettingsDialog = ({
 
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
+                    <p className="text-sm font-medium">Show packages</p>
+                    <p className="text-xs text-muted-foreground">
+                      Group classes by package with a background container.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.uml.showPackages}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        uml: {
+                          ...settings.uml,
+                          showPackages: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
                     <p className="text-sm font-medium">Code highlight</p>
                     <p className="text-xs text-muted-foreground">
-                      Jump to and highlight code when selecting UML members.
+                      Jump to code location when selecting UML members.
                     </p>
                   </div>
                   <Switch
