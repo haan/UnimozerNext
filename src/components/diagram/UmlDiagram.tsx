@@ -460,7 +460,7 @@ export const UmlDiagram = ({
         height: maxY - minY + paddingTop + paddingBottom
       };
     });
-  }, [nodesWithLayout, showPackages]);
+  }, [nodesWithLayout, showPackages, headerHeight]);
 
   return (
     <svg
