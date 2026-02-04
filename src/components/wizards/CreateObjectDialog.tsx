@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -38,6 +38,23 @@ export const CreateObjectDialog = ({
   const [objectName, setObjectName] = useState("");
   const [paramValues, setParamValues] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const lastSuggestedRef = useRef("");
+
+  const suggestObjectName = (name: string, names: string[]) => {
+    const baseRaw = name.trim();
+    const base =
+      baseRaw.length > 0
+        ? `${baseRaw[0].toLowerCase()}${baseRaw.slice(1)}`
+        : "object";
+    const existing = new Set(names.map((item) => item.toLowerCase()));
+    for (let index = 0; index < 10_000; index += 1) {
+      const candidate = `${base}${index}`;
+      if (!existing.has(candidate.toLowerCase())) {
+        return candidate;
+      }
+    }
+    return `${base}${Date.now()}`;
+  };
 
   useEffect(() => {
     if (!open) {
@@ -47,7 +64,12 @@ export const CreateObjectDialog = ({
       return;
     }
     setParamValues(params.map(() => ""));
-  }, [open, params]);
+    const suggestion = suggestObjectName(className, existingNames);
+    if (!objectName.trim() || objectName === lastSuggestedRef.current) {
+      setObjectName(suggestion);
+    }
+    lastSuggestedRef.current = suggestion;
+  }, [open, params, className, existingNames, objectName]);
 
   const updateParam = (index: number, value: string) => {
     setParamValues((prev) => {

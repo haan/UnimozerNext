@@ -15,7 +15,7 @@ type ObjectBenchSectionProps = {
   compiled: boolean;
   backgroundColor?: string | null;
   showPackages?: boolean;
-  umlFontSize: number;
+  fontSize: number;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect: (id: string) => void;
   onCompileClass: (node: UmlNode) => void;
@@ -47,7 +47,7 @@ export const ObjectBenchSection = ({
   compiled,
   backgroundColor,
   showPackages,
-  umlFontSize,
+  fontSize,
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
@@ -81,7 +81,7 @@ export const ObjectBenchSection = ({
           compiled={compiled}
           backgroundColor={backgroundColor}
           showPackages={showPackages}
-          fontSize={umlFontSize}
+          fontSize={fontSize}
           onNodePositionChange={onNodePositionChange}
           onNodeSelect={onNodeSelect}
           onCompileClass={onCompileClass}
@@ -110,6 +110,7 @@ export const ObjectBenchSection = ({
       <div className="min-h-[var(--bench-min-height)] flex-1 overflow-hidden">
         <ObjectBenchPanel
           objects={objectBench}
+          fontSize={fontSize}
           showPrivate={showPrivate}
           showInherited={showInherited}
           showStatic={showStatic}

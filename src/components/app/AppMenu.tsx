@@ -26,7 +26,10 @@ type AppMenuProps = {
   showPrivateObjectFields: boolean;
   showInheritedObjectFields: boolean;
   showStaticObjectFields: boolean;
+  showDependencies: boolean;
+  showPackages: boolean;
   showSwingAttributes: boolean;
+  wordWrap: boolean;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onSave: () => void;
@@ -44,7 +47,10 @@ type AppMenuProps = {
   onToggleShowPrivate: (value: boolean) => void;
   onToggleShowInherited: (value: boolean) => void;
   onToggleShowStatic: (value: boolean) => void;
+  onToggleShowDependencies: (value: boolean) => void;
+  onToggleShowPackages: (value: boolean) => void;
   onToggleShowSwingAttributes: (value: boolean) => void;
+  onToggleWordWrap: (value: boolean) => void;
   onAddClass: () => void;
   onAddConstructor: () => void;
   onAddField: () => void;
@@ -65,7 +71,10 @@ export const AppMenu = ({
   showPrivateObjectFields,
   showInheritedObjectFields,
   showStaticObjectFields,
+  showDependencies,
+  showPackages,
   showSwingAttributes,
+  wordWrap,
   onRequestNewProject,
   onRequestOpenProject,
   onSave,
@@ -83,7 +92,10 @@ export const AppMenu = ({
   onToggleShowPrivate,
   onToggleShowInherited,
   onToggleShowStatic,
+  onToggleShowDependencies,
+  onToggleShowPackages,
   onToggleShowSwingAttributes,
+  onToggleWordWrap,
   onAddClass,
   onAddConstructor,
   onAddField,
@@ -172,6 +184,22 @@ export const AppMenu = ({
               <MenubarSubTrigger>UML</MenubarSubTrigger>
               <MenubarSubContent>
                 <MenubarCheckboxItem
+                  checked={showDependencies}
+                  onCheckedChange={(checked) =>
+                    onToggleShowDependencies(Boolean(checked))
+                  }
+                >
+                  Show dependencies
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={showPackages}
+                  onCheckedChange={(checked) =>
+                    onToggleShowPackages(Boolean(checked))
+                  }
+                >
+                  Show packages
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
                   checked={showSwingAttributes}
                   onCheckedChange={(checked) =>
                     onToggleShowSwingAttributes(Boolean(checked))
@@ -201,6 +229,17 @@ export const AppMenu = ({
                   onCheckedChange={(checked) => onToggleShowStatic(Boolean(checked))}
                 >
                   Show static fields
+                </MenubarCheckboxItem>
+              </MenubarSubContent>
+            </MenubarSub>
+            <MenubarSub>
+              <MenubarSubTrigger>Editor</MenubarSubTrigger>
+              <MenubarSubContent>
+                <MenubarCheckboxItem
+                  checked={wordWrap}
+                  onCheckedChange={(checked) => onToggleWordWrap(Boolean(checked))}
+                >
+                  Word wrap
                 </MenubarCheckboxItem>
               </MenubarSubContent>
             </MenubarSub>

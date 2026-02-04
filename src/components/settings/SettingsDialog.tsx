@@ -22,7 +22,7 @@ type SettingsDialogProps = {
   onChange: (next: AppSettings) => void;
 };
 
-const groups = ["General", "UML", "Appearance", "Editor", "Advanced"] as const;
+const groups = ["General", "UML", "Object Bench", "Editor", "Advanced"] as const;
 type SettingsGroup = (typeof groups)[number];
 
 export const SettingsDialog = ({
@@ -85,36 +85,39 @@ export const SettingsDialog = ({
           <section className="flex flex-1 flex-col overflow-y-auto p-6">
             <h2 className="text-lg font-semibold">{activeGroup}</h2>
 
-            {activeGroup === "UML" ? (
+            {activeGroup === "General" ? (
               <div className="mt-4 grid gap-2">
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium">UML font size</p>
+                    <p className="text-sm font-medium">Font size</p>
                     <p className="text-xs text-muted-foreground">
-                      Adjust the font size used in UML class boxes.
+                      Adjust the font size used in the editor, console, and UML panels.
                     </p>
                   </div>
                   <div className="flex w-44 items-center gap-3">
                     <Slider
-                      value={[settings.uml.fontSize]}
+                      value={[settings.general.fontSize]}
                       min={10}
                       max={40}
                       step={1}
                       onValueChange={(value) =>
                         onChange({
                           ...settings,
-                          uml: {
-                            ...settings.uml,
-                            fontSize: value[0] ?? 12
+                          general: {
+                            ...settings.general,
+                            fontSize: value[0] ?? 14
                           }
                         })
                       }
                     />
                     <span className="w-8 text-right text-xs text-muted-foreground">
-                      {settings.uml.fontSize}
+                      {settings.general.fontSize}
                     </span>
                   </div>
                 </div>
+              </div>
+            ) : activeGroup === "UML" ? (
+              <div className="mt-4 grid gap-2">
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show dependencies</p>
@@ -159,9 +162,29 @@ export const SettingsDialog = ({
 
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium">Code highlight</p>
+                    <p className="text-sm font-medium">Show javax.swing fields</p>
                     <p className="text-xs text-muted-foreground">
-                      Jump to code location when selecting UML members.
+                      Include Swing-specific fields in UML class attributes.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.view.showSwingAttributes}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        view: {
+                          ...settings.view,
+                          showSwingAttributes: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Jump to code</p>
+                    <p className="text-xs text-muted-foreground">
+                      Move the editor cursor when selecting UML members.
                     </p>
                   </div>
                   <Switch
@@ -214,36 +237,73 @@ export const SettingsDialog = ({
                   </Popover>
                 </div>
               </div>
-            ) : activeGroup === "Editor" ? (
+            ) : activeGroup === "Object Bench" ? (
               <div className="mt-4 grid gap-2">
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium">Font size</p>
+                    <p className="text-sm font-medium">Show private fields</p>
                     <p className="text-xs text-muted-foreground">
-                      Adjust the editor font size.
+                      Display private attributes in object cards.
                     </p>
                   </div>
-                  <div className="flex w-44 items-center gap-3">
-                    <Slider
-                      value={[settings.editor.fontSize]}
-                      min={10}
-                      max={40}
-                      step={1}
-                      onValueChange={(value) =>
-                        onChange({
-                          ...settings,
-                          editor: {
-                            ...settings.editor,
-                            fontSize: value[0] ?? 14
-                          }
-                        })
-                      }
-                    />
-                    <span className="w-8 text-right text-xs text-muted-foreground">
-                      {settings.editor.fontSize}
-                    </span>
-                  </div>
+                  <Switch
+                    checked={settings.view.showPrivateObjectFields}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        view: {
+                          ...settings.view,
+                          showPrivateObjectFields: checked
+                        }
+                      })
+                    }
+                  />
                 </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Show inherited fields</p>
+                    <p className="text-xs text-muted-foreground">
+                      Include fields inherited from parent classes.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.view.showInheritedObjectFields}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        view: {
+                          ...settings.view,
+                          showInheritedObjectFields: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Show static fields</p>
+                    <p className="text-xs text-muted-foreground">
+                      Display static attributes shared by all objects.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.view.showStaticObjectFields}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        view: {
+                          ...settings.view,
+                          showStaticObjectFields: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            ) : activeGroup === "Editor" ? (
+              <div className="mt-4 grid gap-2">
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Editor theme</p>

@@ -3,11 +3,9 @@ export type UmlSettings = {
   panelBackground: string | null;
   codeHighlight: boolean;
   showPackages: boolean;
-  fontSize: number;
 };
 
 export type EditorSettings = {
-  fontSize: number;
   theme: string;
   tabSize: number;
   insertSpaces: boolean;
@@ -22,6 +20,10 @@ export type AdvancedSettings = {
   debugLogging: boolean;
 };
 
+export type GeneralSettings = {
+  fontSize: number;
+};
+
 export type ViewSettings = {
   showPrivateObjectFields: boolean;
   showInheritedObjectFields: boolean;
@@ -30,6 +32,7 @@ export type ViewSettings = {
 };
 
 export type AppSettings = {
+  general: GeneralSettings;
   uml: UmlSettings;
   editor: EditorSettings;
   advanced: AdvancedSettings;
@@ -42,15 +45,16 @@ export type AppSettings = {
 };
 
 export const createDefaultSettings = (): AppSettings => ({
+  general: {
+    fontSize: 14
+  },
   uml: {
     showDependencies: true,
     panelBackground: null,
     codeHighlight: true,
-    showPackages: true,
-    fontSize: 12
+    showPackages: true
   },
   editor: {
-    fontSize: 14,
     theme: "default",
     tabSize: 4,
     insertSpaces: true,

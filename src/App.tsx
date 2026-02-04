@@ -94,12 +94,14 @@ export default function App() {
   } = useAppSettings();
   const debugLogging = settings.advanced?.debugLogging ?? false;
   const codeHighlightEnabled = settings.uml.codeHighlight ?? true;
+  const showDependencies = settings.uml.showDependencies ?? true;
   const showPackages = settings.uml.showPackages ?? true;
-  const umlFontSize = settings.uml.fontSize ?? 12;
+  const fontSize = settings.general.fontSize ?? 14;
   const showPrivateObjectFields = settings.view.showPrivateObjectFields ?? true;
   const showInheritedObjectFields = settings.view.showInheritedObjectFields ?? true;
   const showStaticObjectFields = settings.view.showStaticObjectFields ?? true;
   const showSwingAttributes = settings.view.showSwingAttributes ?? true;
+  const wordWrap = settings.editor.wordWrap ?? true;
   const {
     containerRef,
     consoleContainerRef,
@@ -202,6 +204,19 @@ export default function App() {
         ...settings,
         view: {
           ...settings.view,
+          ...partial
+        }
+      });
+    },
+    [handleSettingsChange, settings]
+  );
+
+  const updateUmlSettings = useCallback(
+    (partial: Partial<typeof settings.uml>) => {
+      handleSettingsChange({
+        ...settings,
+        uml: {
+          ...settings.uml,
           ...partial
         }
       });
@@ -508,7 +523,7 @@ export default function App() {
   const visibleGraph = useMemo(() => {
     if (!umlGraph) return null;
     let nextGraph: UmlGraph = umlGraph;
-    if (!settings.uml.showDependencies) {
+    if (!showDependencies) {
       nextGraph = {
         ...nextGraph,
         edges: nextGraph.edges.filter((edge) => edge.kind !== "dependency")
@@ -530,7 +545,7 @@ export default function App() {
       };
     }
     return nextGraph;
-  }, [umlGraph, settings.uml.showDependencies, showSwingAttributes]);
+  }, [umlGraph, showDependencies, showSwingAttributes]);
 
 
   const handleContentChange = useCallback((value: string) => {
@@ -1257,7 +1272,10 @@ export default function App() {
         showPrivateObjectFields={showPrivateObjectFields}
         showInheritedObjectFields={showInheritedObjectFields}
         showStaticObjectFields={showStaticObjectFields}
+        showDependencies={showDependencies}
+        showPackages={showPackages}
         showSwingAttributes={showSwingAttributes}
+        wordWrap={wordWrap}
         onRequestNewProject={() => requestProjectAction("new")}
         onRequestOpenProject={() => requestProjectAction("open")}
         onSave={() => {
@@ -1287,8 +1305,23 @@ export default function App() {
         onToggleShowStatic={(value) =>
           updateViewSettings({ showStaticObjectFields: value })
         }
+        onToggleShowDependencies={(value) =>
+          updateUmlSettings({ showDependencies: value })
+        }
+        onToggleShowPackages={(value) =>
+          updateUmlSettings({ showPackages: value })
+        }
         onToggleShowSwingAttributes={(value) =>
           updateViewSettings({ showSwingAttributes: value })
+        }
+        onToggleWordWrap={(value) =>
+          handleSettingsChange({
+            ...settings,
+            editor: {
+              ...settings.editor,
+              wordWrap: value
+            }
+          })
         }
         onAddClass={handleMenuAddClass}
         onAddConstructor={handleMenuAddConstructor}
@@ -1309,7 +1342,7 @@ export default function App() {
                   compiled={compileStatus === "success"}
                   backgroundColor={settings.uml.panelBackground}
                   showPackages={showPackages}
-                  umlFontSize={umlFontSize}
+                  fontSize={fontSize}
                   onNodePositionChange={handleNodePositionChange}
                 onNodeSelect={handleNodeSelect}
                 onCompileClass={handleCompileClass}
@@ -1361,7 +1394,7 @@ export default function App() {
                       fileUri={openFilePath ? toFileUri(openFilePath) : null}
                       content={content}
                       dirty={dirty}
-                      fontSize={settings.editor.fontSize}
+                      fontSize={fontSize}
                       theme={settings.editor.theme}
                       tabSize={settings.editor.tabSize}
                       insertSpaces={settings.editor.insertSpaces}
@@ -1391,7 +1424,7 @@ export default function App() {
                 <div className="min-h-[var(--console-min-height)] flex-1 overflow-hidden">
                   <ConsolePanel
                     output={consoleOutput}
-                    fontSize={settings.editor.fontSize}
+                    fontSize={fontSize}
                     running={runSessionId !== null}
                     onStop={handleCancelRun}
                   />

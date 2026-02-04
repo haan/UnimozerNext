@@ -14,6 +14,7 @@ import {
 
 type ObjectBenchPanelProps = {
   objects: ObjectInstance[];
+  fontSize: number;
   showPrivate: boolean;
   showInherited: boolean;
   showStatic: boolean;
@@ -83,6 +84,7 @@ const formatFieldValue = (value: string | null | undefined) => {
 
 export const ObjectBenchPanel = ({
   objects,
+  fontSize,
   showPrivate,
   showInherited,
   showStatic,
@@ -91,10 +93,13 @@ export const ObjectBenchPanel = ({
   onRemoveObject
 }: ObjectBenchPanelProps) => {
   return (
-    <div className="flex h-full flex-col bg-muted/30">
+    <div
+      className="flex h-full flex-col bg-muted/30"
+      style={{ fontSize, fontFamily: "var(--uml-font)" }}
+    >
       <div className="flex-1 overflow-auto p-3">
         {objects.length === 0 ? (
-          <div className="text-sm text-muted-foreground">
+          <div className="text-[0.9em] text-muted-foreground">
             No objects yet. Right-click a compiled class to create one.
           </div>
         ) : (
@@ -115,12 +120,12 @@ export const ObjectBenchPanel = ({
                         }}
                       >
                         <div
-                          className="border-b px-3 py-2 text-sm font-semibold"
+                          className="border-b px-3 py-2 text-[0.9em] font-semibold"
                           style={{ borderColor: "hsl(var(--objectbench-card-border))" }}
                         >
                           {object.name}: {object.type}
                         </div>
-                        <div className="space-y-1 px-3 py-2 text-xs text-muted-foreground">
+                        <div className="space-y-1 px-3 py-2 text-[0.8em] text-muted-foreground">
                           {object.fields
                             .filter((field) =>
                               shouldShowField(
