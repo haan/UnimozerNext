@@ -29,6 +29,11 @@ pnpm-debug.log*
 /java-parser/build/
 /java-parser/.gradle/
 
+# JShell bridge
+/resources/jshell-bridge/*.jar
+/jshell-bridge/build/
+/jshell-bridge/.gradle/
+
 # OS
 .DS_Store
 Thumbs.db
