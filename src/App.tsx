@@ -97,10 +97,13 @@ export default function App() {
   const showDependencies = settings.uml.showDependencies ?? true;
   const showPackages = settings.uml.showPackages ?? true;
   const fontSize = settings.general.fontSize ?? 14;
-  const showPrivateObjectFields = settings.view.showPrivateObjectFields ?? true;
-  const showInheritedObjectFields = settings.view.showInheritedObjectFields ?? true;
-  const showStaticObjectFields = settings.view.showStaticObjectFields ?? true;
-  const showSwingAttributes = settings.view.showSwingAttributes ?? true;
+  const showPrivateObjectFields =
+    settings.objectBench.showPrivateObjectFields ?? true;
+  const showInheritedObjectFields =
+    settings.objectBench.showInheritedObjectFields ?? true;
+  const showStaticObjectFields =
+    settings.objectBench.showStaticObjectFields ?? true;
+  const showSwingAttributes = settings.uml.showSwingAttributes ?? true;
   const wordWrap = settings.editor.wordWrap ?? true;
   const {
     containerRef,
@@ -198,12 +201,12 @@ export default function App() {
     []
   );
 
-  const updateViewSettings = useCallback(
-    (partial: Partial<typeof settings.view>) => {
+  const updateUmlSettings = useCallback(
+    (partial: Partial<typeof settings.uml>) => {
       handleSettingsChange({
         ...settings,
-        view: {
-          ...settings.view,
+        uml: {
+          ...settings.uml,
           ...partial
         }
       });
@@ -211,12 +214,12 @@ export default function App() {
     [handleSettingsChange, settings]
   );
 
-  const updateUmlSettings = useCallback(
-    (partial: Partial<typeof settings.uml>) => {
+  const updateObjectBenchSettings = useCallback(
+    (partial: Partial<typeof settings.objectBench>) => {
       handleSettingsChange({
         ...settings,
-        uml: {
-          ...settings.uml,
+        objectBench: {
+          ...settings.objectBench,
           ...partial
         }
       });
@@ -1297,13 +1300,13 @@ export default function App() {
         onZoomOut={() => zoomControlsRef.current?.zoomOut()}
         onZoomReset={() => zoomControlsRef.current?.resetZoom()}
         onToggleShowPrivate={(value) =>
-          updateViewSettings({ showPrivateObjectFields: value })
+          updateObjectBenchSettings({ showPrivateObjectFields: value })
         }
         onToggleShowInherited={(value) =>
-          updateViewSettings({ showInheritedObjectFields: value })
+          updateObjectBenchSettings({ showInheritedObjectFields: value })
         }
         onToggleShowStatic={(value) =>
-          updateViewSettings({ showStaticObjectFields: value })
+          updateObjectBenchSettings({ showStaticObjectFields: value })
         }
         onToggleShowDependencies={(value) =>
           updateUmlSettings({ showDependencies: value })
@@ -1312,7 +1315,7 @@ export default function App() {
           updateUmlSettings({ showPackages: value })
         }
         onToggleShowSwingAttributes={(value) =>
-          updateViewSettings({ showSwingAttributes: value })
+          updateUmlSettings({ showSwingAttributes: value })
         }
         onToggleWordWrap={(value) =>
           handleSettingsChange({

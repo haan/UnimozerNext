@@ -5,6 +5,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::windows::process::CommandExt;
 use std::{
     cmp::Ordering,
+    collections::HashMap,
     fs, io,
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -115,6 +116,10 @@ struct UmlGraph {
 #[serde(rename_all = "camelCase")]
 struct UmlSettings {
     show_dependencies: bool,
+    #[serde(default = "default_true")]
+    show_packages: bool,
+    #[serde(default = "default_true")]
+    show_swing_attributes: bool,
     #[serde(default)]
     panel_background: Option<String>,
     #[serde(default = "default_true")]
@@ -123,9 +128,22 @@ struct UmlSettings {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct EditorSettings {
+struct GeneralSettings {
     #[serde(default = "default_font_size")]
     font_size: u32,
+}
+
+impl Default for GeneralSettings {
+    fn default() -> Self {
+        Self {
+            font_size: default_font_size(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EditorSettings {
     #[serde(default = "default_editor_theme")]
     theme: String,
     #[serde(default = "default_tab_size")]
@@ -147,7 +165,6 @@ struct EditorSettings {
 impl Default for EditorSettings {
     fn default() -> Self {
         Self {
-            font_size: default_font_size(),
             theme: default_editor_theme(),
             tab_size: default_tab_size(),
             insert_spaces: default_insert_spaces(),
@@ -177,7 +194,7 @@ impl Default for AdvancedSettings {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-struct ViewSettings {
+struct ObjectBenchSettings {
     #[serde(default = "default_true")]
     show_private_object_fields: bool,
     #[serde(default = "default_true")]
@@ -186,7 +203,7 @@ struct ViewSettings {
     show_static_object_fields: bool,
 }
 
-impl Default for ViewSettings {
+impl Default for ObjectBenchSettings {
     fn default() -> Self {
         Self {
             show_private_object_fields: default_true(),
@@ -220,13 +237,15 @@ impl Default for LayoutSettings {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct AppSettings {
+    #[serde(default)]
+    general: GeneralSettings,
     uml: UmlSettings,
+    #[serde(default)]
+    object_bench: ObjectBenchSettings,
     #[serde(default)]
     editor: EditorSettings,
     #[serde(default)]
     advanced: AdvancedSettings,
-    #[serde(default)]
-    view: ViewSettings,
     #[serde(default)]
     layout: LayoutSettings,
 }
@@ -234,13 +253,22 @@ struct AppSettings {
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
+            general: GeneralSettings {
+                font_size: default_font_size(),
+            },
             uml: UmlSettings {
                 show_dependencies: true,
+                show_packages: default_true(),
+                show_swing_attributes: default_true(),
                 panel_background: None,
                 code_highlight: default_true(),
             },
+            object_bench: ObjectBenchSettings {
+                show_private_object_fields: default_true(),
+                show_inherited_object_fields: default_true(),
+                show_static_object_fields: default_true(),
+            },
             editor: EditorSettings {
-                font_size: default_font_size(),
                 theme: default_editor_theme(),
                 tab_size: default_tab_size(),
                 insert_spaces: default_insert_spaces(),
@@ -252,11 +280,6 @@ impl Default for AppSettings {
             },
             advanced: AdvancedSettings {
                 debug_logging: default_false(),
-            },
-            view: ViewSettings {
-                show_private_object_fields: default_true(),
-                show_inherited_object_fields: default_true(),
-                show_static_object_fields: default_true(),
             },
             layout: LayoutSettings {
                 uml_split_ratio: default_split_ratio(),
@@ -874,12 +897,20 @@ fn compile_project(
     let sources_file = build_dir.join("sources.txt");
     fs::write(&sources_file, sources_list).map_err(|error| error.to_string())?;
 
+    let classpath_entries = resolve_project_classpath(&root_path, "javac.classpath");
+    let classpath = join_classpath(&classpath_entries);
+
     let mut command = Command::new(javac_path);
     command
         .arg("-encoding")
         .arg("UTF-8")
         .arg("-d")
         .arg(&out_dir)
+        .args(if classpath.is_empty() {
+            Vec::<String>::new()
+        } else {
+            vec!["-cp".to_string(), classpath.clone()]
+        })
         .arg(format!("@{}", sources_file.display()))
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
@@ -918,6 +949,17 @@ fn run_main(
         return Err("Compiled classes not found (build/classes missing)".to_string());
     }
 
+    let mut classpath_entries = resolve_project_classpath(&root_path, "run.classpath");
+    if classpath_entries.is_empty() {
+        classpath_entries = resolve_project_classpath(&root_path, "javac.classpath");
+        classpath_entries.push(class_dir.clone());
+    }
+    let classpath = if classpath_entries.is_empty() {
+        class_dir.to_string_lossy().to_string()
+    } else {
+        join_classpath(&classpath_entries)
+    };
+
     let run_id = state.next_id();
     if let Ok(mut guard) = state.current.lock() {
         if let Some(handle) = guard.as_mut() {
@@ -928,7 +970,7 @@ fn run_main(
     let mut command = Command::new(java_path);
     command
         .arg("-cp")
-        .arg(&class_dir)
+        .arg(&classpath)
         .arg(&main_class)
         .current_dir(&root_path)
         .stdout(Stdio::piped())
@@ -1489,6 +1531,179 @@ fn javac_executable_name() -> String {
     } else {
         format!("{}/bin/javac", jdk_relative_dir())
     }
+}
+
+fn parse_properties_with_continuations(path: &Path) -> HashMap<String, String> {
+    let mut values = HashMap::new();
+    let Ok(contents) = fs::read_to_string(path) else {
+        return values;
+    };
+    let mut buffer = String::new();
+    for raw_line in contents.lines() {
+        let trimmed_end = raw_line.trim_end();
+        if buffer.is_empty() {
+            let trimmed_start = trimmed_end.trim_start();
+            if trimmed_start.is_empty()
+                || trimmed_start.starts_with('#')
+                || trimmed_start.starts_with('!')
+            {
+                continue;
+            }
+        }
+        let continues = trimmed_end.ends_with('\\');
+        let segment = if continues {
+            trimmed_end.trim_end_matches('\\')
+        } else {
+            trimmed_end
+        };
+        if buffer.is_empty() {
+            buffer.push_str(segment.trim_start());
+        } else {
+            buffer.push_str(segment.trim_start());
+        }
+        if continues {
+            continue;
+        }
+        let logical = buffer.trim().to_string();
+        buffer.clear();
+        let separator = logical
+            .find('=')
+            .or_else(|| logical.find(':'))
+            .unwrap_or(logical.len());
+        if separator == 0 || separator >= logical.len() {
+            continue;
+        }
+        let key = logical[..separator].trim();
+        let mut value = logical[separator + 1..].trim().to_string();
+        if value.contains("\\\\") {
+            value = value.replace("\\\\", "\\");
+        }
+        if !key.is_empty() {
+            values.insert(key.to_string(), value);
+        }
+    }
+    if !buffer.is_empty() {
+        let logical = buffer.trim();
+        let separator = logical
+            .find('=')
+            .or_else(|| logical.find(':'))
+            .unwrap_or(logical.len());
+        if separator > 0 && separator < logical.len() {
+            let key = logical[..separator].trim();
+            let mut value = logical[separator + 1..].trim().to_string();
+            if value.contains("\\\\") {
+                value = value.replace("\\\\", "\\");
+            }
+            if !key.is_empty() {
+                values.insert(key.to_string(), value);
+            }
+        }
+    }
+    values
+}
+
+fn resolve_property_value(key: &str, props: &HashMap<String, String>, depth: usize) -> String {
+    if depth > 8 {
+        return props.get(key).cloned().unwrap_or_default();
+    }
+    let Some(value) = props.get(key) else {
+        return String::new();
+    };
+    resolve_value(value, props, depth + 1)
+}
+
+fn resolve_value(value: &str, props: &HashMap<String, String>, depth: usize) -> String {
+    let mut output = String::new();
+    let mut rest = value;
+    while let Some(start) = rest.find("${") {
+        let (before, after_start) = rest.split_at(start);
+        output.push_str(before);
+        let Some(end) = after_start.find('}') else {
+            output.push_str(after_start);
+            return output;
+        };
+        let key = &after_start[2..end];
+        let resolved = resolve_property_value(key, props, depth + 1);
+        output.push_str(&resolved);
+        rest = &after_start[end + 1..];
+    }
+    output.push_str(rest);
+    output
+}
+
+fn split_classpath(value: &str) -> Vec<String> {
+    let mut entries = Vec::new();
+    let mut current = String::new();
+    let chars: Vec<char> = value.chars().collect();
+    let mut index = 0;
+    while index < chars.len() {
+        let ch = chars[index];
+        if ch == ';' {
+            let trimmed = current.trim();
+            if !trimmed.is_empty() {
+                entries.push(trimmed.to_string());
+            }
+            current.clear();
+            index += 1;
+            continue;
+        }
+        if ch == ':' {
+            let is_drive = index == 1
+                && chars[0].is_ascii_alphabetic()
+                && index + 1 < chars.len()
+                && (chars[index + 1] == '\\' || chars[index + 1] == '/');
+            if !is_drive {
+                let trimmed = current.trim();
+                if !trimmed.is_empty() {
+                    entries.push(trimmed.to_string());
+                }
+                current.clear();
+                index += 1;
+                continue;
+            }
+        }
+        current.push(ch);
+        index += 1;
+    }
+    let trimmed = current.trim();
+    if !trimmed.is_empty() {
+        entries.push(trimmed.to_string());
+    }
+    entries
+}
+
+fn resolve_project_classpath(root: &Path, key: &str) -> Vec<PathBuf> {
+    let props_path = root.join("nbproject").join("project.properties");
+    let props = parse_properties_with_continuations(&props_path);
+    let raw_value = props.get(key).cloned().unwrap_or_default();
+    if raw_value.trim().is_empty() {
+        return Vec::new();
+    }
+    let resolved = resolve_value(&raw_value, &props, 0);
+    split_classpath(&resolved)
+        .into_iter()
+        .filter_map(|entry| {
+            let trimmed = entry.trim();
+            if trimmed.is_empty() {
+                return None;
+            }
+            let path = PathBuf::from(trimmed);
+            if path.is_absolute() {
+                Some(path)
+            } else {
+                Some(root.join(path))
+            }
+        })
+        .collect()
+}
+
+fn join_classpath(entries: &[PathBuf]) -> String {
+    let separator = if cfg!(target_os = "windows") { ";" } else { ":" };
+    entries
+        .iter()
+        .map(|entry| entry.to_string_lossy().to_string())
+        .collect::<Vec<String>>()
+        .join(separator)
 }
 
 fn resolve_resource(app: &tauri::AppHandle, relative: &str) -> Option<PathBuf> {

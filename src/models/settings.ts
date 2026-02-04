@@ -3,6 +3,7 @@ export type UmlSettings = {
   panelBackground: string | null;
   codeHighlight: boolean;
   showPackages: boolean;
+  showSwingAttributes: boolean;
 };
 
 export type EditorSettings = {
@@ -24,19 +25,18 @@ export type GeneralSettings = {
   fontSize: number;
 };
 
-export type ViewSettings = {
+export type ObjectBenchSettings = {
   showPrivateObjectFields: boolean;
   showInheritedObjectFields: boolean;
   showStaticObjectFields: boolean;
-  showSwingAttributes: boolean;
 };
 
 export type AppSettings = {
   general: GeneralSettings;
   uml: UmlSettings;
+  objectBench: ObjectBenchSettings;
   editor: EditorSettings;
   advanced: AdvancedSettings;
-  view: ViewSettings;
   layout: {
     umlSplitRatio: number;
     consoleSplitRatio: number;
@@ -52,7 +52,13 @@ export const createDefaultSettings = (): AppSettings => ({
     showDependencies: true,
     panelBackground: null,
     codeHighlight: true,
-    showPackages: true
+    showPackages: true,
+    showSwingAttributes: true
+  },
+  objectBench: {
+    showPrivateObjectFields: true,
+    showInheritedObjectFields: true,
+    showStaticObjectFields: true
   },
   editor: {
     theme: "default",
@@ -66,12 +72,6 @@ export const createDefaultSettings = (): AppSettings => ({
   },
   advanced: {
     debugLogging: false
-  },
-  view: {
-    showPrivateObjectFields: true,
-    showInheritedObjectFields: true,
-    showStaticObjectFields: true,
-    showSwingAttributes: true
   },
   layout: {
     umlSplitRatio: 0.5,

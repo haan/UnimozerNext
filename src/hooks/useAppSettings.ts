@@ -27,10 +27,7 @@ export const useAppSettings = (): AppSettingsHook => {
         const stored = await readSettings();
         const defaults = createDefaultSettings();
         const storedSettings = stored as AppSettings;
-        const storedFontSize =
-          storedSettings.general?.fontSize ??
-          (storedSettings.editor as { fontSize?: number } | undefined)?.fontSize ??
-          (storedSettings.uml as { fontSize?: number } | undefined)?.fontSize;
+        const storedFontSize = storedSettings.general?.fontSize;
         const merged: AppSettings = {
           ...defaults,
           ...stored,
@@ -43,6 +40,10 @@ export const useAppSettings = (): AppSettingsHook => {
             ...defaults.uml,
             ...(stored as AppSettings).uml
           },
+          objectBench: {
+            ...defaults.objectBench,
+            ...(stored as AppSettings).objectBench
+          },
           editor: {
             ...defaults.editor,
             ...(stored as AppSettings).editor
@@ -50,10 +51,6 @@ export const useAppSettings = (): AppSettingsHook => {
           advanced: {
             ...defaults.advanced,
             ...(stored as AppSettings).advanced
-          },
-          view: {
-            ...defaults.view,
-            ...(stored as AppSettings).view
           },
           layout: {
             ...defaults.layout,

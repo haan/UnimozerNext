@@ -168,12 +168,12 @@ export const SettingsDialog = ({
                     </p>
                   </div>
                   <Switch
-                    checked={settings.view.showSwingAttributes}
+                    checked={settings.uml.showSwingAttributes}
                     onCheckedChange={(checked) =>
                       onChange({
                         ...settings,
-                        view: {
-                          ...settings.view,
+                        uml: {
+                          ...settings.uml,
                           showSwingAttributes: checked
                         }
                       })
@@ -247,12 +247,12 @@ export const SettingsDialog = ({
                     </p>
                   </div>
                   <Switch
-                    checked={settings.view.showPrivateObjectFields}
+                    checked={settings.objectBench.showPrivateObjectFields}
                     onCheckedChange={(checked) =>
                       onChange({
                         ...settings,
-                        view: {
-                          ...settings.view,
+                        objectBench: {
+                          ...settings.objectBench,
                           showPrivateObjectFields: checked
                         }
                       })
@@ -268,12 +268,12 @@ export const SettingsDialog = ({
                     </p>
                   </div>
                   <Switch
-                    checked={settings.view.showInheritedObjectFields}
+                    checked={settings.objectBench.showInheritedObjectFields}
                     onCheckedChange={(checked) =>
                       onChange({
                         ...settings,
-                        view: {
-                          ...settings.view,
+                        objectBench: {
+                          ...settings.objectBench,
                           showInheritedObjectFields: checked
                         }
                       })
@@ -289,12 +289,12 @@ export const SettingsDialog = ({
                     </p>
                   </div>
                   <Switch
-                    checked={settings.view.showStaticObjectFields}
+                    checked={settings.objectBench.showStaticObjectFields}
                     onCheckedChange={(checked) =>
                       onChange({
                         ...settings,
-                        view: {
-                          ...settings.view,
+                        objectBench: {
+                          ...settings.objectBench,
                           showStaticObjectFields: checked
                         }
                       })
