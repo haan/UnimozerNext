@@ -1,4 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader, Write};
 #[cfg(target_os = "windows")]
@@ -616,6 +617,22 @@ fn write_text_file(path: String, contents: String) -> Result<(), String> {
         fs::create_dir_all(parent).map_err(|error| error.to_string())?;
     }
     fs::write(path, contents).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn write_binary_file(path: String, contents_base64: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    let trimmed = contents_base64.trim();
+    let payload = trimmed
+        .strip_prefix("data:image/png;base64,")
+        .unwrap_or(trimmed);
+    let bytes = general_purpose::STANDARD
+        .decode(payload)
+        .map_err(|error| error.to_string())?;
+    fs::write(path, bytes).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -1965,6 +1982,7 @@ fn main() {
             list_project_tree,
             read_text_file,
             write_text_file,
+            write_binary_file,
             remove_text_file,
             export_netbeans_project,
             compile_project,

@@ -3,7 +3,7 @@ import type { DiagramState } from "../../models/diagram";
 import type { ObjectInstance } from "../../models/objectBench";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
 import { DiagramPanel } from "../diagram/DiagramPanel";
-import type { ZoomControls } from "../diagram/UmlDiagram";
+import type { ExportControls, ZoomControls } from "../diagram/UmlDiagram";
 import { ObjectBenchPanel } from "../objectBench/ObjectBenchPanel";
 
 type ObjectBenchSectionProps = {
@@ -16,8 +16,11 @@ type ObjectBenchSectionProps = {
   backgroundColor?: string | null;
   showPackages?: boolean;
   fontSize: number;
+  exportDefaultPath?: string | null;
+  onExportStatus?: (message: string) => void;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect: (id: string) => void;
+  onCompileProject?: () => void;
   onCompileClass: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
   onCreateObject?: (node: UmlNode, constructor: UmlConstructor) => void;
@@ -28,6 +31,7 @@ type ObjectBenchSectionProps = {
   onFieldSelect?: (field: UmlNode["fields"][number], node: UmlNode) => void;
   onMethodSelect?: (method: UmlNode["methods"][number], node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
+  onRegisterExport?: (controls: ExportControls | null) => void;
   onAddClass?: () => void;
   objectBench: ObjectInstance[];
   showPrivate: boolean;
@@ -48,8 +52,11 @@ export const ObjectBenchSection = ({
   backgroundColor,
   showPackages,
   fontSize,
+  exportDefaultPath,
+  onExportStatus,
   onNodePositionChange,
   onNodeSelect,
+  onCompileProject,
   onCompileClass,
   onRunMain,
   onCreateObject,
@@ -60,6 +67,7 @@ export const ObjectBenchSection = ({
   onFieldSelect,
   onMethodSelect,
   onRegisterZoom,
+  onRegisterExport,
   onAddClass,
   objectBench,
   showPrivate,
@@ -82,8 +90,11 @@ export const ObjectBenchSection = ({
           backgroundColor={backgroundColor}
           showPackages={showPackages}
           fontSize={fontSize}
+          exportDefaultPath={exportDefaultPath}
+          onExportStatus={onExportStatus}
           onNodePositionChange={onNodePositionChange}
           onNodeSelect={onNodeSelect}
+          onCompileProject={onCompileProject}
           onCompileClass={onCompileClass}
           onRunMain={onRunMain}
           onCreateObject={onCreateObject}
@@ -94,6 +105,7 @@ export const ObjectBenchSection = ({
           onFieldSelect={onFieldSelect}
           onMethodSelect={onMethodSelect}
           onRegisterZoom={onRegisterZoom}
+          onRegisterExport={onRegisterExport}
           onAddClass={onAddClass}
         />
       </div>

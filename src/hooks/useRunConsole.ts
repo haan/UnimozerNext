@@ -40,6 +40,7 @@ type UseRunConsoleResult = {
   runSessionId: number | null;
   appendConsoleOutput: (text: string) => void;
   resetConsoleOutput: (text?: string) => void;
+  handleCompileProject: () => Promise<void>;
   handleCompileClass: (node: UmlNode) => Promise<void>;
   handleRunMain: (node: UmlNode) => Promise<void>;
   handleCancelRun: () => Promise<void>;
@@ -167,8 +168,8 @@ export const useRunConsole = ({
     };
   }, [appendConsole, setRunSession, setStatus]);
 
-  const handleCompileClass = useCallback(
-    async (node: UmlNode) => {
+  const runCompile = useCallback(
+    async (label?: string) => {
       if (!projectPath) return;
       const overrides = Object.entries(fileDrafts)
         .filter(([, draft]) => draft.content !== draft.lastSavedContent)
@@ -182,7 +183,8 @@ export const useRunConsole = ({
       resetConsole();
       setCompileStatus(null);
       onCompileRequested?.();
-      appendConsole(`[${startedAt}] Compile requested for ${node.name}`);
+      const labelSuffix = label ? ` for ${label}` : "";
+      appendConsole(`[${startedAt}] Compile requested${labelSuffix}`);
       try {
         await formatAndSaveUmlFiles(false);
         const result = await invoke<{
@@ -236,6 +238,17 @@ export const useRunConsole = ({
     ]
   );
 
+  const handleCompileProject = useCallback(async () => {
+    await runCompile();
+  }, [runCompile]);
+
+  const handleCompileClass = useCallback(
+    async (node: UmlNode) => {
+      await runCompile(node.name);
+    },
+    [runCompile]
+  );
+
   const handleRunMain = useCallback(
     async (node: UmlNode) => {
       if (!projectPath) return;
@@ -280,6 +293,7 @@ export const useRunConsole = ({
     runSessionId,
     appendConsoleOutput: appendConsole,
     resetConsoleOutput: resetConsole,
+    handleCompileProject,
     handleCompileClass,
     handleRunMain,
     handleCancelRun

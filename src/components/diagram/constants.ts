@@ -11,3 +11,5 @@ export const REFLEXIVE_LOOP_INSET = 15; // How far reflexive loops extend outsid
 export const EDGE_SNAP_DELTA = 60; // Snap threshold for near-horizontal/vertical edges.
 export const UML_CORNER_RADIUS = 2; // Corner radius for UML class and package boxes.
 export const UML_PACKAGE_PADDING = 25; // Extra padding around classes inside package boxes.
+export const EXPORT_PADDING = 5; // PNG export margin around UML content.
+export const EXPORT_SCALE = 1.5; // PNG export scale multiplier.

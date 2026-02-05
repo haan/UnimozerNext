@@ -6,6 +6,7 @@ commands.allow = [
   "parse_uml_graph",
   "read_text_file",
   "write_text_file",
+  "write_binary_file",
   "remove_text_file",
   "export_netbeans_project",
   "add_field_to_class",

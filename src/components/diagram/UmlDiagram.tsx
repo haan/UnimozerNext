@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
+import { Image as TauriImage } from "@tauri-apps/api/image";
 
 import type { DiagramState } from "../../models/diagram";
 import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
+import { basename, joinPath } from "../../services/paths";
 import { Association } from "./Association";
 import { Class } from "./Class";
 import { Dependency } from "./Dependency";
@@ -19,7 +24,9 @@ import {
   REFLEXIVE_LOOP_INSET,
   EDGE_SNAP_DELTA,
   UML_CORNER_RADIUS,
-  UML_PACKAGE_PADDING
+  UML_PACKAGE_PADDING,
+  EXPORT_PADDING,
+  EXPORT_SCALE
 } from "./constants";
 
 const computeNodeHeight = (
@@ -45,6 +52,20 @@ const computeNodeHeight = (
 const UML_FONT_FAMILY =
   "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
 let measureCanvas: HTMLCanvasElement | null = null;
+const EXPORT_CSS_VARIABLES = [
+  "--foreground",
+  "--accent-foreground",
+  "--uml-font",
+  "--uml-class-bg",
+  "--uml-class-border",
+  "--uml-class-invalid-bg",
+  "--uml-class-invalid-border",
+  "--uml-class-compiled-bg",
+  "--uml-class-compiled-border",
+  "--uml-package-bg",
+  "--uml-package-border",
+  "--uml-package-name-bg"
+];
 
 const measureTextWidth = (text: string, font: string) => {
   if (!measureCanvas) {
@@ -186,6 +207,8 @@ export type UmlDiagramProps = {
   compiled?: boolean;
   showPackages?: boolean;
   fontSize?: number;
+  backgroundColor?: string | null;
+  exportDefaultPath?: string | null;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onNodeSelect?: (id: string) => void;
   onCompileClass?: (node: UmlNode) => void;
@@ -198,12 +221,23 @@ export type UmlDiagramProps = {
   onFieldSelect?: (field: UmlNode["fields"][number], node: UmlNode) => void;
   onMethodSelect?: (method: UmlNode["methods"][number], node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
+  onRegisterExport?: (controls: ExportControls | null) => void;
+  onExportStatus?: (message: string) => void;
 };
 
 export type ZoomControls = {
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
+};
+
+export type ExportStyle = "compiled" | "uncompiled";
+
+export type ExportControls = {
+  exportDiagramPng: (style?: ExportStyle) => void;
+  exportNodePng: (nodeId: string, style?: ExportStyle) => void;
+  copyDiagramPng: (style?: ExportStyle) => void;
+  copyNodePng: (nodeId: string, style?: ExportStyle) => void;
 };
 
 type DragState = {
@@ -239,6 +273,8 @@ export const UmlDiagram = ({
   compiled,
   showPackages,
   fontSize,
+  backgroundColor,
+  exportDefaultPath,
   onNodePositionChange,
   onNodeSelect,
   onCompileClass,
@@ -250,7 +286,9 @@ export const UmlDiagram = ({
   onAddMethod,
   onFieldSelect,
   onMethodSelect,
-  onRegisterZoom
+  onRegisterZoom,
+  onRegisterExport,
+  onExportStatus
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
@@ -462,12 +500,387 @@ export const UmlDiagram = ({
     });
   }, [nodesWithLayout, showPackages, headerHeight]);
 
+  const diagramBounds = useMemo(() => {
+    if (nodesWithLayout.length === 0) return null;
+    let minX = Math.min(...nodesWithLayout.map((node) => node.x));
+    let minY = Math.min(...nodesWithLayout.map((node) => node.y));
+    let maxX = Math.max(...nodesWithLayout.map((node) => node.x + node.width));
+    let maxY = Math.max(...nodesWithLayout.map((node) => node.y + node.height));
+    if (packages.length > 0) {
+      minX = Math.min(minX, ...packages.map((pkg) => pkg.x));
+      minY = Math.min(minY, ...packages.map((pkg) => pkg.y));
+      maxX = Math.max(maxX, ...packages.map((pkg) => pkg.x + pkg.width));
+      maxY = Math.max(maxY, ...packages.map((pkg) => pkg.y + pkg.height));
+    }
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY)
+    };
+  }, [nodesWithLayout, packages]);
+
+  const reportExportStatus = useCallback(
+    (message: string) => {
+      onExportStatus?.(message);
+    },
+    [onExportStatus]
+  );
+
+  const buildExportSvg = useCallback(
+    (
+      bounds: { minX: number; minY: number; width: number; height: number },
+      nodeId?: string,
+      exportStyle?: ExportStyle
+    ) => {
+      const svg = svgRef.current;
+      if (!svg) return null;
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+      clone.removeAttribute("class");
+
+      clone.querySelectorAll("[data-uml-layer]").forEach((layer) => {
+        layer.setAttribute("transform", "translate(0 0) scale(1)");
+      });
+
+      if (nodeId) {
+        clone
+          .querySelectorAll(
+            '[data-uml-layer="edges"], [data-uml-layer="reflexive"], [data-uml-layer="packages"]'
+          )
+          .forEach((layer) => layer.remove());
+        clone.querySelectorAll("[data-uml-node-id]").forEach((node) => {
+          if (node.getAttribute("data-uml-node-id") !== nodeId) {
+            node.remove();
+          }
+        });
+      }
+
+      const padding = EXPORT_PADDING;
+      const minX = bounds.minX - padding;
+      const minY = bounds.minY - padding;
+      const width = bounds.width + padding * 2;
+      const height = bounds.height + padding * 2;
+      clone.setAttribute("viewBox", `${minX} ${minY} ${width} ${height}`);
+      clone.setAttribute("width", `${width}`);
+      clone.setAttribute("height", `${height}`);
+
+      const rootStyles = getComputedStyle(document.documentElement);
+      const getVar = (name: string) => rootStyles.getPropertyValue(name).trim();
+      const variableStyles = EXPORT_CSS_VARIABLES.map((name) => {
+        const value = getVar(name);
+        return value ? `${name}: ${value};` : "";
+      })
+        .filter(Boolean)
+        .join(" ");
+      const overrides: string[] = [];
+      if (exportStyle === "compiled") {
+        const compiledBg = getVar("--uml-class-compiled-bg");
+        const compiledBorder = getVar("--uml-class-compiled-border");
+        if (compiledBg) overrides.push(`--uml-class-bg: ${compiledBg};`);
+        if (compiledBorder) overrides.push(`--uml-class-border: ${compiledBorder};`);
+      } else if (exportStyle === "uncompiled") {
+        const baseBg = getVar("--uml-class-bg");
+        const baseBorder = getVar("--uml-class-border");
+        if (baseBg) overrides.push(`--uml-class-compiled-bg: ${baseBg};`);
+        if (baseBorder) overrides.push(`--uml-class-compiled-border: ${baseBorder};`);
+      }
+      const exportStyleOverrides = overrides.join(" ");
+      if (variableStyles) {
+        const existingStyle = clone.getAttribute("style") ?? "";
+        clone.setAttribute(
+          "style",
+          `${existingStyle} ${variableStyles} ${exportStyleOverrides}`.trim()
+        );
+      } else if (exportStyleOverrides) {
+        clone.setAttribute("style", exportStyleOverrides.trim());
+      }
+
+      const background = backgroundColor ?? "#ffffff";
+      const backgroundRect = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "rect"
+      );
+      backgroundRect.setAttribute("x", `${minX}`);
+      backgroundRect.setAttribute("y", `${minY}`);
+      backgroundRect.setAttribute("width", `${width}`);
+      backgroundRect.setAttribute("height", `${height}`);
+      backgroundRect.setAttribute("fill", background);
+      clone.insertBefore(backgroundRect, clone.firstChild);
+
+      return { svg: clone, width, height };
+    },
+    [backgroundColor]
+  );
+
+  const renderSvgToCanvas = useCallback(
+    (svg: SVGSVGElement, width: number, height: number) =>
+      new Promise<HTMLCanvasElement>((resolve, reject) => {
+        const serializer = new XMLSerializer();
+        const raw = serializer.serializeToString(svg);
+        const blob = new Blob([raw], { type: "image/svg+xml;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const image = new Image();
+        image.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(width * EXPORT_SCALE));
+            canvas.height = Math.max(1, Math.round(height * EXPORT_SCALE));
+            const ctx = canvas.getContext("2d");
+            if (!ctx) {
+              reject(new Error("Failed to create canvas context."));
+              return;
+            }
+            ctx.imageSmoothingEnabled = true;
+            ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
+            ctx.drawImage(image, 0, 0, width, height);
+            resolve(canvas);
+          } catch (error) {
+            reject(error instanceof Error ? error : new Error(String(error)));
+          } finally {
+            URL.revokeObjectURL(url);
+          }
+        };
+        image.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("Failed to render SVG."));
+        };
+        image.src = url;
+      }),
+    []
+  );
+
+  const renderSvgToPngDataUrl = useCallback(
+    async (svg: SVGSVGElement, width: number, height: number) => {
+      const canvas = await renderSvgToCanvas(svg, width, height);
+      return canvas.toDataURL("image/png");
+    },
+    [renderSvgToCanvas]
+  );
+
+  const normalizePngPath = useCallback((path: string) => {
+    if (path.toLowerCase().endsWith(".png")) return path;
+    return `${path}.png`;
+  }, []);
+
+  const buildDefaultPath = useCallback(
+    (fileName: string) => {
+      if (!exportDefaultPath) return undefined;
+      return joinPath(exportDefaultPath, fileName);
+    },
+    [exportDefaultPath]
+  );
+
+  const formatExportError = useCallback((error: unknown) => {
+    if (typeof error === "string") return error;
+    if (error instanceof Error) return error.message;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }, []);
+
+  const exportPng = useCallback(
+    async (options: {
+      title: string;
+      fileName: string;
+      bounds: { minX: number; minY: number; width: number; height: number };
+      nodeId?: string;
+      style?: ExportStyle;
+      successLabel: string;
+    }) => {
+      try {
+        if (document.fonts?.ready) {
+          await document.fonts.ready;
+        }
+        const payload = buildExportSvg(options.bounds, options.nodeId, options.style);
+        if (!payload) {
+          reportExportStatus("UML diagram not ready for export.");
+          return;
+        }
+
+        const selection = await save({
+          title: options.title,
+          defaultPath: buildDefaultPath(options.fileName),
+          filters: [{ name: "PNG Image", extensions: ["png"] }]
+        });
+        if (!selection || typeof selection !== "string") {
+          reportExportStatus("Export cancelled.");
+          return;
+        }
+
+        const pngDataUrl = await renderSvgToPngDataUrl(
+          payload.svg,
+          payload.width,
+          payload.height
+        );
+        const base64 = pngDataUrl.split(",")[1] ?? "";
+        const targetPath = normalizePngPath(selection);
+        await invoke("write_binary_file", {
+          path: targetPath,
+          contentsBase64: base64
+        });
+        reportExportStatus(`${options.successLabel} ${targetPath}`);
+      } catch (error) {
+        reportExportStatus(`Failed to export PNG: ${formatExportError(error)}`);
+      }
+    },
+    [
+      buildDefaultPath,
+      buildExportSvg,
+      formatExportError,
+      normalizePngPath,
+      renderSvgToPngDataUrl,
+      reportExportStatus
+    ]
+  );
+
+  const copyPng = useCallback(
+    async (options: {
+      bounds: { minX: number; minY: number; width: number; height: number };
+      nodeId?: string;
+      style?: ExportStyle;
+      successLabel: string;
+    }) => {
+      try {
+        if (document.fonts?.ready) {
+          await document.fonts.ready;
+        }
+        const payload = buildExportSvg(options.bounds, options.nodeId, options.style);
+        if (!payload) {
+          reportExportStatus("UML diagram not ready for export.");
+          return;
+        }
+        const canvas = await renderSvgToCanvas(
+          payload.svg,
+          payload.width,
+          payload.height
+        );
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reportExportStatus("Failed to copy PNG: canvas unavailable.");
+          return;
+        }
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const rgba = new Uint8Array(imageData.data);
+        const image = await TauriImage.new(rgba, canvas.width, canvas.height);
+        await writeImage(image);
+        reportExportStatus(options.successLabel);
+      } catch (error) {
+        reportExportStatus(`Failed to copy PNG: ${formatExportError(error)}`);
+      }
+    },
+    [buildExportSvg, formatExportError, renderSvgToCanvas, reportExportStatus]
+  );
+
+  const exportDiagramPng = useCallback(
+    async (style?: ExportStyle) => {
+      if (!diagramBounds) {
+        reportExportStatus("No UML diagram to export.");
+        return;
+      }
+      const projectName = exportDefaultPath ? basename(exportDefaultPath) : "uml-diagram";
+      await exportPng({
+        title: "Export UML diagram as PNG",
+        fileName: `${projectName}-uml.png`,
+        bounds: diagramBounds,
+        style,
+        successLabel: "Exported diagram to"
+      });
+    },
+    [diagramBounds, exportDefaultPath, exportPng, reportExportStatus]
+  );
+
+  const copyDiagramPng = useCallback(
+    async (style?: ExportStyle) => {
+      if (!diagramBounds) {
+        reportExportStatus("No UML diagram to copy.");
+        return;
+      }
+      await copyPng({
+        bounds: diagramBounds,
+        style,
+        successLabel: "Copied diagram PNG to clipboard."
+      });
+    },
+    [copyPng, diagramBounds, reportExportStatus]
+  );
+
+  const exportNodePng = useCallback(
+    async (nodeId: string, style?: ExportStyle) => {
+      const target = nodesWithLayout.find((node) => node.id === nodeId);
+      if (!target) {
+        reportExportStatus("Class not found for export.");
+        return;
+      }
+      const bounds = {
+        minX: target.x,
+        minY: target.y,
+        width: Math.max(1, target.width),
+        height: Math.max(1, target.height)
+      };
+      await exportPng({
+        title: `Export ${target.name} as PNG`,
+        fileName: `${target.name}.png`,
+        bounds,
+        nodeId: target.id,
+        style,
+        successLabel: `Exported ${target.name} to`
+      });
+    },
+    [nodesWithLayout, exportPng, reportExportStatus]
+  );
+
+  const copyNodePng = useCallback(
+    async (nodeId: string, style?: ExportStyle) => {
+      const target = nodesWithLayout.find((node) => node.id === nodeId);
+      if (!target) {
+        reportExportStatus("Class not found for export.");
+        return;
+      }
+      const bounds = {
+        minX: target.x,
+        minY: target.y,
+        width: Math.max(1, target.width),
+        height: Math.max(1, target.height)
+      };
+      await copyPng({
+        bounds,
+        nodeId: target.id,
+        style,
+        successLabel: `Copied ${target.name} PNG to clipboard.`
+      });
+    },
+    [copyPng, nodesWithLayout, reportExportStatus]
+  );
+
+  useEffect(() => {
+    if (!onRegisterExport) return;
+    onRegisterExport({
+      exportDiagramPng,
+      exportNodePng,
+      copyDiagramPng,
+      copyNodePng
+    });
+    return () => {
+      onRegisterExport(null);
+    };
+  }, [copyDiagramPng, copyNodePng, exportDiagramPng, exportNodePng, onRegisterExport]);
+
   return (
     <svg
       ref={svgRef}
       className="h-full w-full select-none touch-none"
       role="img"
       onContextMenu={(event) => {
+        const target = event.target as Element | null;
+        if (target && target.closest("[data-uml-package]")) {
+          return;
+        }
         if (event.target !== svgRef.current) {
           event.stopPropagation();
         }
@@ -528,14 +941,14 @@ export const UmlDiagram = ({
         </marker>
       </defs>
 
-      <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+      <g data-uml-layer="packages" transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
         {packages.map((pkg) => {
           const labelWidth = Math.ceil(
             measureTextWidth(pkg.name, `600 ${umlFontSize}px ${UML_FONT_FAMILY}`) +
               TEXT_PADDING
           );
           return (
-            <g key={pkg.name}>
+            <g key={pkg.name} data-uml-package>
               <rect
                 x={pkg.x}
                 y={pkg.y}
@@ -618,7 +1031,11 @@ export const UmlDiagram = ({
         })}
       </g>
 
-      <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`} pointerEvents="none">
+      <g
+        data-uml-layer="edges"
+        transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}
+        pointerEvents="none"
+      >
         {graph.edges
           .filter((edge) => edge.kind !== "reflexive-association")
           .map((edge) => {
@@ -700,7 +1117,7 @@ export const UmlDiagram = ({
         })}
       </g>
 
-      <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+      <g data-uml-layer="nodes" transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
         {nodesWithLayout.map((node) => (
           <Class
             key={node.id}
@@ -732,9 +1149,13 @@ export const UmlDiagram = ({
             onAddMethod={() => onAddMethod?.(node)}
             onFieldSelect={onFieldSelect}
             onMethodSelect={onMethodSelect}
+            onExportPng={(target, style) => exportNodePng(target.id, style)}
+            onCopyPng={(target, style) => copyNodePng(target.id, style)}
           />
         ))}
+      </g>
 
+      <g data-uml-layer="reflexive" transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
         {graph.edges
           .filter((edge) => edge.kind === "reflexive-association")
           .map((edge) => {

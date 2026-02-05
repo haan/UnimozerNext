@@ -3,12 +3,15 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { editor as MonacoEditorType } from "monaco-editor";
 
+import { toast } from "sonner";
+
 import { ConsolePanel } from "./components/console/ConsolePanel";
 import { CodePanel } from "./components/editor/CodePanel";
 import { AppMenu } from "./components/app/AppMenu";
 import { ObjectBenchSection } from "./components/app/ObjectBenchSection";
 import { AppDialogs } from "./components/app/AppDialogs";
 import { SplitHandle } from "./components/ui/split-handle";
+import { Toaster } from "./components/ui/sonner";
 import type { AddClassForm } from "./components/wizards/AddClassDialog";
 import type { AddFieldForm } from "./components/wizards/AddFieldDialog";
 import type { AddConstructorForm } from "./components/wizards/AddConstructorDialog";
@@ -35,6 +38,7 @@ import { getThemeColors } from "./services/monacoThemes";
 import { jshellStart, jshellStop } from "./services/jshell";
 import { buildClassSource } from "./services/javaCodegen";
 import { getUmlSignature } from "./services/umlGraph";
+import type { ExportControls, ExportStyle } from "./components/diagram/UmlDiagram";
 
 const UML_HIGHLIGHT_SECONDS = 2;
 
@@ -145,6 +149,7 @@ export default function App() {
     zoomOut: () => void;
     resetZoom: () => void;
   } | null>(null);
+  const exportControlsRef = useRef<ExportControls | null>(null);
   const consoleThemeDefaults = useRef<{ bg: string; fg: string } | null>(null);
   const {
     monacoRef,
@@ -196,6 +201,7 @@ export default function App() {
   const canAddField = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
   const canAddConstructor = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
   const canAddMethod = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
+  const canCompileClass = Boolean(projectPath) && !busy;
 
   const isMac = useMemo(
     () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
@@ -430,6 +436,7 @@ export default function App() {
     runSessionId,
     appendConsoleOutput,
     resetConsoleOutput,
+    handleCompileProject,
     handleCompileClass,
     handleRunMain,
     handleCancelRun
@@ -443,6 +450,10 @@ export default function App() {
     onCompileSuccess: handleCompileSuccess,
     onCompileRequested: () => setObjectBench([])
   });
+
+  const handleMenuCompileProject = useCallback(() => {
+    void handleCompileProject();
+  }, [handleCompileProject]);
 
   useEffect(() => {
     if (compileStatus !== "success") {
@@ -460,6 +471,33 @@ export default function App() {
       appendConsoleOutput(text);
     },
     [appendConsoleOutput, debugLogging]
+  );
+
+  const handleExportStatus = useCallback(
+    (message: string) => {
+      setStatus(message);
+      const lowered = message.toLowerCase();
+      if (lowered.startsWith("failed") || lowered.includes("failed")) {
+        toast.error(message);
+      } else {
+        toast.success(message);
+      }
+    },
+    [setStatus]
+  );
+
+  const handleCopyDiagramPng = useCallback(
+    (style: ExportStyle) => {
+      exportControlsRef.current?.copyDiagramPng(style);
+    },
+    []
+  );
+
+  const handleExportDiagramPng = useCallback(
+    (style: ExportStyle) => {
+      exportControlsRef.current?.exportDiagramPng(style);
+    },
+    []
   );
 
   useEffect(() => {
@@ -568,6 +606,7 @@ export default function App() {
     }
     return nextGraph;
   }, [umlGraph, showDependencies, showSwingAttributes]);
+  const canExportDiagram = Boolean(visibleGraph && diagramState);
 
 
   const handleContentChange = useCallback((value: string) => {
@@ -1291,6 +1330,8 @@ export default function App() {
         canAddConstructor={canAddConstructor}
         canAddField={canAddField}
         canAddMethod={canAddMethod}
+        canCompileClass={canCompileClass}
+        canExportDiagram={canExportDiagram}
         showPrivateObjectFields={showPrivateObjectFields}
         showInheritedObjectFields={showInheritedObjectFields}
         showStaticObjectFields={showStaticObjectFields}
@@ -1349,6 +1390,9 @@ export default function App() {
         onAddConstructor={handleMenuAddConstructor}
         onAddField={handleMenuAddField}
         onAddMethod={handleMenuAddMethod}
+        onCompileClass={handleMenuCompileProject}
+        onCopyDiagramPng={handleCopyDiagramPng}
+        onExportDiagramPng={handleExportDiagramPng}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -1365,21 +1409,27 @@ export default function App() {
                   backgroundColor={settings.uml.panelBackground}
                   showPackages={showPackages}
                   fontSize={fontSize}
+                  exportDefaultPath={projectPath}
+                  onExportStatus={handleExportStatus}
                   onNodePositionChange={handleNodePositionChange}
-                onNodeSelect={handleNodeSelect}
-                onCompileClass={handleCompileClass}
-                onRunMain={handleRunMain}
-                onCreateObject={handleOpenCreateObject}
-                onRemoveClass={requestRemoveClass}
-                onAddField={handleOpenAddField}
-                onAddConstructor={handleOpenAddConstructor}
-                onAddMethod={handleOpenAddMethod}
-                onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
-                onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
-                onRegisterZoom={(controls) => {
-                  zoomControlsRef.current = controls;
-                }}
-                onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
+                  onNodeSelect={handleNodeSelect}
+                  onCompileProject={canCompileClass ? handleMenuCompileProject : undefined}
+                  onCompileClass={handleCompileClass}
+                  onRunMain={handleRunMain}
+                  onCreateObject={handleOpenCreateObject}
+                  onRemoveClass={requestRemoveClass}
+                  onAddField={handleOpenAddField}
+                  onAddConstructor={handleOpenAddConstructor}
+                  onAddMethod={handleOpenAddMethod}
+                  onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
+                  onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
+                  onRegisterZoom={(controls) => {
+                    zoomControlsRef.current = controls;
+                  }}
+                  onRegisterExport={(controls) => {
+                    exportControlsRef.current = controls;
+                  }}
+                  onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
                 objectBench={objectBench}
                 showPrivate={showPrivateObjectFields}
                 showInherited={showInheritedObjectFields}
@@ -1512,6 +1562,7 @@ export default function App() {
         methodReturnValue={methodReturnValue}
         busy={busy}
       />
+      <Toaster />
     </div>
   );
 }
