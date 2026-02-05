@@ -576,6 +576,11 @@ struct JshellState {
     current: Arc<Mutex<Option<JshellSession>>>,
 }
 
+#[derive(Default)]
+struct StartupLogState {
+    lines: Arc<Mutex<Vec<String>>>,
+}
+
 const SKIP_DIRS: [&str; 8] = [
     "node_modules",
     "target",
@@ -1517,6 +1522,24 @@ fn jdk_relative_dir() -> &'static str {
     }
 }
 
+fn jdtls_config_relative_dir() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "jdtls/config_win"
+    } else if cfg!(target_os = "macos") {
+        if cfg!(target_arch = "aarch64") {
+            "jdtls/config_mac_arm"
+        } else {
+            "jdtls/config_mac"
+        }
+    } else {
+        if cfg!(target_arch = "aarch64") {
+            "jdtls/config_linux_arm"
+        } else {
+            "jdtls/config_linux"
+        }
+    }
+}
+
 pub fn java_executable_name() -> String {
     if cfg!(target_os = "windows") {
         format!("{}/bin/java.exe", jdk_relative_dir())
@@ -1714,6 +1737,15 @@ fn resolve_resource(app: &tauri::AppHandle, relative: &str) -> Option<PathBuf> {
         }
     }
 
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let candidate = exe_dir.join("_up_").join("resources").join(relative);
+            if candidate.exists() {
+                return Some(fs::canonicalize(&candidate).unwrap_or(candidate));
+            }
+        }
+    }
+
     let fallback = PathBuf::from("resources").join(relative);
     if fallback.exists() {
         return Some(fs::canonicalize(&fallback).unwrap_or(fallback));
@@ -1797,8 +1829,129 @@ fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(config_dir.join("settings.json"))
 }
 
+fn load_startup_settings(app: &tauri::AppHandle) -> AppSettings {
+    let Ok(path) = settings_path(app) else {
+        return AppSettings::default();
+    };
+    if !path.exists() {
+        return AppSettings::default();
+    }
+    let Ok(contents) = fs::read_to_string(&path) else {
+        return AppSettings::default();
+    };
+    serde_json::from_str::<AppSettings>(&contents).unwrap_or_default()
+}
+
+fn resource_candidates(app: &tauri::AppHandle, relative: &str) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Ok(dir) = app.path().resource_dir() {
+        candidates.push(dir.join(relative));
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            candidates.push(exe_dir.join("_up_").join("resources").join(relative));
+        }
+    }
+    candidates.push(PathBuf::from("resources").join(relative));
+    candidates.push(PathBuf::from("..").join("resources").join(relative));
+    candidates
+}
+
+fn log_startup_diagnostics(app: &tauri::AppHandle) {
+    let mut lines: Vec<String> = Vec::new();
+    let mut push = |text: String| {
+        lines.push(text);
+    };
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs())
+        .unwrap_or_default();
+    push(format!("[startup] Unimozer Next diagnostics (debug logging enabled)"));
+    push(format!("[startup] timestamp_unix: {}", now));
+    push(format!(
+        "[startup] version: {}",
+        app.package_info().version.to_string()
+    ));
+    push(format!(
+        "[startup] os: {} / arch: {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    ));
+    if let Ok(exe) = std::env::current_exe() {
+        push(format!("[startup] exe: {}", exe.display()));
+    }
+    if let Ok(dir) = app.path().resource_dir() {
+        push(format!("[startup] resource_dir: {}", dir.display()));
+    }
+    if let Ok(dir) = app.path().app_data_dir() {
+        push(format!("[startup] app_data_dir: {}", dir.display()));
+    }
+    if let Ok(dir) = app.path().app_config_dir() {
+        push(format!("[startup] app_config_dir: {}", dir.display()));
+    }
+    if let Ok(path) = settings_path(app) {
+        push(format!("[startup] settings_path: {}", path.display()));
+    }
+
+    let jdk_dir = jdk_relative_dir();
+    let jdtls_config_dir = jdtls_config_relative_dir();
+    push(format!("[startup] jdk_relative_dir: {}", jdk_dir));
+    push(format!("[startup] jdtls_config_dir: {}", jdtls_config_dir));
+
+    for relative in [
+        jdk_dir,
+        &java_executable_name(),
+        &javac_executable_name(),
+        "java-parser/parser-bridge.jar",
+        "jshell-bridge/jshell-bridge.jar",
+        "jdtls",
+        "jdtls/plugins",
+        jdtls_config_dir,
+    ] {
+        push(format!("[startup] resource candidates for: {}", relative));
+        for candidate in resource_candidates(app, relative) {
+            let status = if candidate.exists() { "ok" } else { "missing" };
+            push(format!("  - {} [{}]", candidate.display(), status));
+        }
+        if let Some(resolved) = resolve_resource(app, relative) {
+            push(format!("[startup] resolved: {}", resolved.display()));
+        } else {
+            push(format!("[startup] resolved: <none>"));
+        }
+    }
+
+    for line in &lines {
+        println!("{}", line);
+    }
+    if let Some(state) = app.try_state::<StartupLogState>() {
+        if let Ok(mut guard) = state.lines.lock() {
+            guard.extend(lines);
+        }
+    }
+}
+
+#[tauri::command]
+fn take_startup_logs(state: tauri::State<StartupLogState>) -> Vec<String> {
+    let mut guard = match state.lines.lock() {
+        Ok(guard) => guard,
+        Err(error) => error.into_inner(),
+    };
+    let mut out = Vec::new();
+    std::mem::swap(&mut *guard, &mut out);
+    out
+}
+
 fn main() {
     tauri::Builder::default()
+        .manage(StartupLogState::default())
+        .setup(|app| {
+            let settings = load_startup_settings(app.handle());
+            if settings.advanced.debug_logging {
+                log_startup_diagnostics(app.handle());
+            }
+            Ok(())
+        })
         .manage(RunState {
             current: Arc::new(Mutex::new(None)),
             run_id: AtomicU64::new(0),
@@ -1834,7 +1987,8 @@ fn main() {
             ls::ls_did_open,
             ls::ls_did_change,
             ls::ls_did_close,
-            ls::ls_format_document
+            ls::ls_format_document,
+            take_startup_logs
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

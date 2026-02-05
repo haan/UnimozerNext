@@ -68,6 +68,14 @@ pub fn resolve_resource(app: &AppHandle, relative: &str) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let candidate = exe_dir.join("_up_").join("resources").join(relative);
+            if candidate.exists() {
+                return Some(candidate);
+            }
+        }
+    }
     let fallback = PathBuf::from("resources").join(relative);
     if fallback.exists() {
         return Some(fallback);

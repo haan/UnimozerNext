@@ -1,7 +1,7 @@
 {
   "bundle": {
     "resources": [
-      "../resources/jdk/win-x64/**",
+      "../resources/jdk/win-x64/**/*",
       "../resources/java-parser/**/*",
       "../resources/jshell-bridge/**/*",
       "../resources/jdtls/plugins/**/*",

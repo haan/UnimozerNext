@@ -121,6 +121,42 @@ export const CodePanel = memo(
       syncExternalContent(editorRef.current);
     }, [syncExternalContent]);
 
+    const registerEditorEventListeners = useCallback(
+      (editor: MonacoEditorType.IStandaloneCodeEditor) => {
+        subscriptionsRef.current.forEach((subscription) => subscription.dispose());
+        subscriptionsRef.current = [
+          editor.onDidChangeCursorPosition((event) => {
+            logEvent(
+              `cursor ${event.position.lineNumber}:${event.position.column} reason=${event.reason}`
+            );
+          }),
+          editor.onDidChangeModel((event) => {
+            logEvent(
+              `model change${event.newModelUrl ? ` -> ${event.newModelUrl.toString()}` : ""}`
+            );
+          }),
+          editor.onDidChangeModelContent((event) => {
+            const model = editor.getModel();
+            logEvent(
+              `content change (changes=${event.changes.length}) version=${model?.getVersionId() ?? "?"}`
+            );
+          }),
+          editor.onDidFocusEditorText(() => {
+            logEvent("focus");
+          }),
+          editor.onDidBlurEditorText(() => {
+            logEvent("blur");
+          })
+        ];
+      },
+      [logEvent]
+    );
+
+    useEffect(() => {
+      if (!editorRef.current) return;
+      registerEditorEventListeners(editorRef.current);
+    }, [registerEditorEventListeners]);
+
     return (
       <div className="flex h-full flex-col overflow-hidden">
         <div className="flex-1 min-h-0">
@@ -138,33 +174,7 @@ export const CodePanel = memo(
               }}
               onMount={(editor) => {
                 editorRef.current = editor;
-                subscriptionsRef.current.forEach((subscription) =>
-                  subscription.dispose()
-                );
-                subscriptionsRef.current = [
-                  editor.onDidChangeCursorPosition((event) => {
-                    logEvent(
-                      `cursor ${event.position.lineNumber}:${event.position.column} reason=${event.reason}`
-                    );
-                  }),
-                  editor.onDidChangeModel((event) => {
-                    logEvent(
-                      `model change${event.newModelUrl ? ` -> ${event.newModelUrl.toString()}` : ""}`
-                    );
-                  }),
-                  editor.onDidChangeModelContent((event) => {
-                    const model = editor.getModel();
-                    logEvent(
-                      `content change (changes=${event.changes.length}) version=${model?.getVersionId() ?? "?"}`
-                    );
-                  }),
-                  editor.onDidFocusEditorText(() => {
-                    logEvent("focus");
-                  }),
-                  editor.onDidBlurEditorText(() => {
-                    logEvent("blur");
-                  })
-                ];
+                registerEditorEventListeners(editor);
                 onEditorMount?.(editor);
                 syncExternalContent(editor);
               }}

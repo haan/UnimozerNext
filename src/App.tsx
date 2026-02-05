@@ -8,6 +8,7 @@ import { CodePanel } from "./components/editor/CodePanel";
 import { AppMenu } from "./components/app/AppMenu";
 import { ObjectBenchSection } from "./components/app/ObjectBenchSection";
 import { AppDialogs } from "./components/app/AppDialogs";
+import { SplitHandle } from "./components/ui/split-handle";
 import type { AddClassForm } from "./components/wizards/AddClassDialog";
 import type { AddFieldForm } from "./components/wizards/AddFieldDialog";
 import type { AddConstructorForm } from "./components/wizards/AddConstructorDialog";
@@ -460,6 +461,24 @@ export default function App() {
     },
     [appendConsoleOutput, debugLogging]
   );
+
+  useEffect(() => {
+    if (!debugLogging) return;
+    let active = true;
+    const loadStartupLogs = async () => {
+      try {
+        const lines = await invoke<string[]>("take_startup_logs");
+        if (!active || !lines.length) return;
+        lines.forEach((line) => appendConsoleOutput(line));
+      } catch {
+        // Ignore startup log failures.
+      }
+    };
+    void loadStartupLogs();
+    return () => {
+      active = false;
+    };
+  }, [appendConsoleOutput, debugLogging]);
 
   const { umlStatus, lastGoodGraphRef } = useUmlGraph({
     projectPath,
@@ -1371,16 +1390,12 @@ export default function App() {
               />
             </div>
 
-            <div
-              className="absolute top-0 h-full w-3 -translate-x-1.5 cursor-col-resize transition hover:bg-border/40"
-              style={{ left: `${splitRatio * 100}%` }}
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize information panel"
+            <SplitHandle
+              orientation="vertical"
+              positionPercent={splitRatio * 100}
+              ariaLabel="Resize information panel"
               onPointerDown={startUmlResize}
-            >
-              <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60" />
-            </div>
+            />
 
             <section className="flex min-w-0 flex-1 flex-col">
               <div
@@ -1414,16 +1429,12 @@ export default function App() {
                       }}
                     />
                 </div>
-                <div
-                  className="editor-separator-handle absolute left-0 w-full h-3 -translate-y-1.5 cursor-row-resize"
-                  style={{ top: `${consoleSplitRatio * 100}%` }}
-                  role="separator"
-                  aria-orientation="horizontal"
-                  aria-label="Resize console panel"
+                <SplitHandle
+                  orientation="horizontal"
+                  positionPercent={consoleSplitRatio * 100}
+                  ariaLabel="Resize console panel"
                   onPointerDown={startConsoleResize}
-                >
-                <div className="editor-separator-line pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2" />
-                </div>
+                />
                 <div className="min-h-[var(--console-min-height)] flex-1 overflow-hidden">
                   <ConsolePanel
                     output={consoleOutput}

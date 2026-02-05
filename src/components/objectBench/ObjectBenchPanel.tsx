@@ -95,15 +95,18 @@ export const ObjectBenchPanel = ({
   return (
     <div
       className="flex h-full flex-col bg-muted/30"
-      style={{ fontSize, fontFamily: "var(--uml-font)" }}
+      style={{ fontSize }}
     >
-      <div className="flex-1 overflow-auto p-3">
+      <div className="flex-1 overflow-auto">
         {objects.length === 0 ? (
-          <div className="text-[0.9em] text-muted-foreground">
+          <div className="flex h-full items-center justify-center p-3 text-sm text-muted-foreground">
             No objects yet. Right-click a compiled class to create one.
           </div>
         ) : (
-            <div className="flex flex-wrap items-start gap-3">
+          <div
+            className="flex flex-wrap items-start gap-3 p-3"
+            style={{ fontFamily: "var(--uml-font)" }}
+          >
               {objects.map((object) => {
                 const methods = getMethodsForObject?.(object) ?? [];
                 const inheritedGroups = buildInheritedGroups(
