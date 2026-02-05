@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { editor as MonacoEditorType } from "monaco-editor";
@@ -271,7 +272,6 @@ export default function App() {
     editor.focus();
     let text = "";
     try {
-      const { readText } = await import("@tauri-apps/plugin-clipboard-manager");
       text = await readText();
     } catch {
       text = "";
