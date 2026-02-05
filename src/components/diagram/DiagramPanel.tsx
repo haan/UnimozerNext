@@ -55,7 +55,7 @@ export const DiagramPanel = ({
     <ContextMenuTrigger asChild>
       <div className="flex h-full flex-col">
         <div
-          className="flex-1 bg-muted/20"
+          className="flex-1 bg-white"
           style={backgroundColor ? { backgroundColor } : undefined}
         >
           {graph && diagram ? (
