@@ -127,15 +127,23 @@ Unimozer Next must recognize and open projects like the original Unimozer:
 #### C) Plain Java Folder
 - Fallback mode if it contains `.java` files under something like `src/` (optional in MVP)
 
+#### D) Packed Unimozer Next Project File (future)
+- Single-file project container with a custom extension (for example `.umz`)
+- Technically a ZIP archive with a defined internal layout (project metadata + `src/` + diagram/layout data)
+- Goal: student-friendly sharing and submission as one file instead of a folder tree
+- Not part of MVP; keep folder-based projects as the primary runtime format
+
 ### 4.2 Open Project UX
 The Open Project UI should show a directory listing with icons:
 - 🟩 Turtle icon: recognized legacy Unimozer project (`unimozer.pck`)
 - 🟦 Cube icon: recognized NetBeans project (`nbproject/project.xml`)
 - 📁 Folder icon: ordinary folder
+- 🗜️ Project-file icon: packed Unimozer Next project file (future)
 
 Implementation:
 - Either a custom in-app picker UI (preferred)
 - Or use system folder picker + detection after selection (MVP)
+- Future: add `Open Project File...` and `Save As Project File...` for packed project workflow
 
 ---
 
