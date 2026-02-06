@@ -577,6 +577,36 @@ struct JshellState {
     current: Arc<Mutex<Option<JshellSession>>>,
 }
 
+struct ParserBridgeSession {
+    child: std::process::Child,
+    stdin: std::process::ChildStdin,
+    stdout: BufReader<std::process::ChildStdout>,
+    stderr: Arc<Mutex<Vec<String>>>,
+}
+
+impl ParserBridgeSession {
+    fn stderr_snapshot(&self) -> String {
+        if let Ok(lines) = self.stderr.lock() {
+            if lines.is_empty() {
+                return String::new();
+            }
+            return format!("\n{}", lines.join("\n"));
+        }
+        String::new()
+    }
+}
+
+impl Drop for ParserBridgeSession {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+    }
+}
+
+#[derive(Default)]
+struct ParserBridgeState {
+    current: Arc<Mutex<Option<ParserBridgeSession>>>,
+}
+
 #[derive(Default)]
 struct StartupLogState {
     lines: Arc<Mutex<Vec<String>>>,
@@ -662,103 +692,173 @@ fn write_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), St
     fs::write(path, payload).map_err(|error| error.to_string())
 }
 
+fn spawn_parser_bridge(app: &tauri::AppHandle) -> Result<ParserBridgeSession, String> {
+    let java_rel = java_executable_name();
+    let java_path = resolve_resource(app, &java_rel)
+        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
+    let jar_path = resolve_resource(app, "java-parser/parser-bridge.jar")
+        .ok_or_else(|| "Java parser bridge not found".to_string())?;
+
+    let mut command = Command::new(java_path);
+    command
+        .arg("-jar")
+        .arg(jar_path)
+        .arg("--stdio")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    #[cfg(target_os = "windows")]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let stderr_lines = Arc::new(Mutex::new(Vec::new()));
+    let stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| "Failed to open parser bridge stdin".to_string())?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Failed to open parser bridge stdout".to_string())?;
+    if let Some(stderr) = child.stderr.take() {
+        let stderr_buffer = stderr_lines.clone();
+        std::thread::spawn(move || {
+            let mut reader = BufReader::new(stderr);
+            let mut line = String::new();
+            loop {
+                line.clear();
+                if reader.read_line(&mut line).ok().filter(|n| *n > 0).is_none() {
+                    break;
+                }
+                let trimmed = line.trim_end().to_string();
+                if let Ok(mut buffer) = stderr_buffer.lock() {
+                    if buffer.len() >= 50 {
+                        buffer.remove(0);
+                    }
+                    buffer.push(trimmed);
+                }
+            }
+        });
+    }
+
+    Ok(ParserBridgeSession {
+        child,
+        stdin,
+        stdout: BufReader::new(stdout),
+        stderr: stderr_lines,
+    })
+}
+
+fn parser_send_once(session: &mut ParserBridgeSession, payload: &str) -> Result<String, String> {
+    session
+        .stdin
+        .write_all(payload.as_bytes())
+        .map_err(|error| format!("{}{}", error, session.stderr_snapshot()))?;
+    session
+        .stdin
+        .write_all(b"\n")
+        .map_err(|error| format!("{}{}", error, session.stderr_snapshot()))?;
+    session
+        .stdin
+        .flush()
+        .map_err(|error| format!("{}{}", error, session.stderr_snapshot()))?;
+
+    let mut response = String::new();
+    let bytes = session
+        .stdout
+        .read_line(&mut response)
+        .map_err(|error| format!("{}{}", error, session.stderr_snapshot()))?;
+    if bytes == 0 {
+        return Err(format!(
+            "Parser bridge closed unexpectedly{}",
+            session.stderr_snapshot()
+        ));
+    }
+
+    Ok(response)
+}
+
+fn parser_send_raw(
+    app: &tauri::AppHandle,
+    state: &tauri::State<ParserBridgeState>,
+    request: serde_json::Value,
+) -> Result<String, String> {
+    let payload = serde_json::to_string(&request).map_err(|error| error.to_string())?;
+    let mut last_error = String::new();
+
+    for attempt in 0..2 {
+        let mut guard = state
+            .current
+            .lock()
+            .map_err(|_| "Failed to lock parser bridge state".to_string())?;
+
+        if guard.is_none() {
+            *guard = Some(spawn_parser_bridge(app)?);
+        }
+
+        let result = {
+            let session = guard
+                .as_mut()
+                .ok_or_else(|| "Parser bridge session unavailable".to_string())?;
+            parser_send_once(session, &payload)
+        };
+
+        match result {
+            Ok(raw) => {
+                drop(guard);
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&raw) {
+                    if value.get("ok").and_then(|item| item.as_bool()) == Some(false) {
+                        if let Some(error) = value.get("error").and_then(|item| item.as_str()) {
+                            return Err(format!("Parser bridge failed: {}", error));
+                        }
+                    }
+                }
+                return Ok(raw);
+            }
+            Err(error) => {
+                last_error = error;
+                let _ = guard.take();
+                drop(guard);
+                if attempt == 0 {
+                    continue;
+                }
+            }
+        }
+    }
+
+    Err(last_error)
+}
+
 #[tauri::command]
 fn parse_uml_graph(
     app: tauri::AppHandle,
+    state: tauri::State<ParserBridgeState>,
     root: String,
     src_root: String,
     overrides: Vec<SourceOverride>,
 ) -> Result<ParseUmlGraphResponse, String> {
-    let java_rel = java_executable_name();
-    let java_path = resolve_resource(&app, &java_rel)
-        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
-    let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
-        .ok_or_else(|| "Java parser bridge not found".to_string())?;
-
     let request = ParserRequest {
         root,
         src_root,
         overrides,
     };
-
-    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
-
-    let mut command = Command::new(java_path);
-    command
-        .arg("-jar")
-        .arg(jar_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    #[cfg(target_os = "windows")]
-    {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(&payload)
-            .map_err(|error| error.to_string())?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| error.to_string())?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Parser bridge failed: {}", stderr.trim()));
-    }
-
-    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+    let request_value = serde_json::to_value(&request).map_err(|error| error.to_string())?;
+    let raw = parser_send_raw(&app, &state, request_value)?;
     let graph = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     Ok(ParseUmlGraphResponse { graph, raw })
 }
 
 #[tauri::command]
-fn add_field_to_class(app: tauri::AppHandle, request: AddFieldRequest) -> Result<String, String> {
-    let java_rel = java_executable_name();
-    let java_path = resolve_resource(&app, &java_rel)
-        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
-    let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
-        .ok_or_else(|| "Java parser bridge not found".to_string())?;
-
-    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
-
-    let mut command = Command::new(java_path);
-    command
-        .arg("-jar")
-        .arg(jar_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    #[cfg(target_os = "windows")]
-    {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(&payload)
-            .map_err(|error| error.to_string())?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| error.to_string())?;
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    if !output.status.success() {
-        return Err(format!("Parser bridge failed: {}", stderr.trim()));
-    }
-
-    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+fn add_field_to_class(
+    app: tauri::AppHandle,
+    state: tauri::State<ParserBridgeState>,
+    request: AddFieldRequest,
+) -> Result<String, String> {
+    let request_value = serde_json::to_value(&request).map_err(|error| error.to_string())?;
+    let raw = parser_send_raw(&app, &state, request_value)?;
     let response: AddFieldResponse =
         serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     if !response.ok {
@@ -772,47 +872,11 @@ fn add_field_to_class(app: tauri::AppHandle, request: AddFieldRequest) -> Result
 #[tauri::command]
 fn add_constructor_to_class(
     app: tauri::AppHandle,
+    state: tauri::State<ParserBridgeState>,
     request: AddConstructorRequest,
 ) -> Result<String, String> {
-    let java_rel = java_executable_name();
-    let java_path = resolve_resource(&app, &java_rel)
-        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
-    let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
-        .ok_or_else(|| "Java parser bridge not found".to_string())?;
-
-    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
-
-    let mut command = Command::new(java_path);
-    command
-        .arg("-jar")
-        .arg(jar_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    #[cfg(target_os = "windows")]
-    {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(&payload)
-            .map_err(|error| error.to_string())?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| error.to_string())?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Parser bridge failed: {}", stderr.trim()));
-    }
-
-    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+    let request_value = serde_json::to_value(&request).map_err(|error| error.to_string())?;
+    let raw = parser_send_raw(&app, &state, request_value)?;
     let response: AddConstructorResponse =
         serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     if !response.ok {
@@ -828,46 +892,13 @@ fn add_constructor_to_class(
 }
 
 #[tauri::command]
-fn add_method_to_class(app: tauri::AppHandle, request: AddMethodRequest) -> Result<String, String> {
-    let java_rel = java_executable_name();
-    let java_path = resolve_resource(&app, &java_rel)
-        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
-    let jar_path = resolve_resource(&app, "java-parser/parser-bridge.jar")
-        .ok_or_else(|| "Java parser bridge not found".to_string())?;
-
-    let payload = serde_json::to_vec(&request).map_err(|error| error.to_string())?;
-
-    let mut command = Command::new(java_path);
-    command
-        .arg("-jar")
-        .arg(jar_path)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-
-    #[cfg(target_os = "windows")]
-    {
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
-
-    let mut child = command.spawn().map_err(|error| error.to_string())?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-        stdin
-            .write_all(&payload)
-            .map_err(|error| error.to_string())?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| error.to_string())?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("Parser bridge failed: {}", stderr.trim()));
-    }
-
-    let raw = String::from_utf8_lossy(&output.stdout).to_string();
+fn add_method_to_class(
+    app: tauri::AppHandle,
+    state: tauri::State<ParserBridgeState>,
+    request: AddMethodRequest,
+) -> Result<String, String> {
+    let request_value = serde_json::to_value(&request).map_err(|error| error.to_string())?;
+    let raw = parser_send_raw(&app, &state, request_value)?;
     let response: AddMethodResponse =
         serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     if !response.ok {
@@ -1996,6 +2027,7 @@ fn main() {
             current: Arc::new(Mutex::new(None)),
             run_id: AtomicU64::new(0),
         })
+        .manage(ParserBridgeState::default())
         .manage(JshellState::default())
         .manage(ls::LsState::default())
         .plugin(tauri_plugin_window_state::Builder::new().build())

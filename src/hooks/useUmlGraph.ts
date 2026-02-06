@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { FileNode } from "../models/files";
 import type { FileDraft } from "../models/drafts";
@@ -18,6 +18,16 @@ type UseUmlGraphArgs = {
 type UseUmlGraphResult = {
   umlStatus: string | null;
   lastGoodGraphRef: React.MutableRefObject<UmlGraph | null>;
+};
+
+type PendingParseRequest = {
+  seq: number;
+  projectPath: string;
+  tree: FileNode;
+  overrides: Array<{
+    path: string;
+    content: string;
+  }>;
 };
 
 const mergeWithLastGoodGraph = (graph: UmlGraph, previous: UmlGraph | null): UmlGraph => {
@@ -100,11 +110,106 @@ export const useUmlGraph = ({
   formatStatus
 }: UseUmlGraphArgs): UseUmlGraphResult => {
   const [umlStatus, setUmlStatus] = useState<string | null>(null);
-  const parseSeq = useRef(0);
+  const parseSeqRef = useRef(0);
+  const parseInFlightRef = useRef(false);
+  const pendingParseRef = useRef<PendingParseRequest | null>(null);
+  const isMountedRef = useRef(true);
+  const onDebugLogRef = useRef(onDebugLog);
+  const formatStatusRef = useRef(formatStatus);
   const lastGoodGraphRef = useRef<UmlGraph | null>(null);
 
   useEffect(() => {
-    if (!projectPath || !tree) return;
+    onDebugLogRef.current = onDebugLog;
+    formatStatusRef.current = formatStatus;
+  }, [onDebugLog, formatStatus]);
+
+  const drainParseQueue = useCallback(() => {
+    if (parseInFlightRef.current) return;
+    parseInFlightRef.current = true;
+
+    void (async () => {
+      try {
+        while (isMountedRef.current) {
+          const request = pendingParseRef.current;
+          if (!request) break;
+          pendingParseRef.current = null;
+
+          setUmlStatus("Parsing UML...");
+          try {
+            const result = await parseUmlGraph(
+              request.projectPath,
+              "src",
+              request.overrides
+            );
+            const isLatest = request.seq === parseSeqRef.current;
+            const hasPendingNewer = pendingParseRef.current !== null;
+            if (!isMountedRef.current || !isLatest || hasPendingNewer) {
+              continue;
+            }
+
+            const graph = result.graph;
+            const debugLog = onDebugLogRef.current;
+            if (debugLog) {
+              debugLog(`[UML] ${new Date().toLocaleTimeString()}\n${result.raw}`);
+            }
+            const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraphRef.current);
+            const withFailedNodes = ensureFailedNodes(
+              mergedGraph,
+              graph.failedFiles,
+              request.projectPath,
+              "src"
+            );
+            const nextGraph = applyInvalidFlags(withFailedNodes, graph.failedFiles);
+            lastGoodGraphRef.current = nextGraph;
+            setUmlGraph(nextGraph);
+            if (graph.failedFiles && graph.failedFiles.length > 0) {
+              const count = graph.failedFiles.length;
+              setUmlStatus(
+                `UML parse incomplete (${count} file${count === 1 ? "" : "s"}).`
+              );
+            } else {
+              setUmlStatus(null);
+            }
+          } catch (error) {
+            const isLatest = request.seq === parseSeqRef.current;
+            const hasPendingNewer = pendingParseRef.current !== null;
+            if (!isMountedRef.current || !isLatest || hasPendingNewer) {
+              continue;
+            }
+
+            const formatError = formatStatusRef.current;
+            setUmlStatus(`UML parse failed: ${formatError(error)}`);
+            if (lastGoodGraphRef.current) {
+              setUmlGraph(lastGoodGraphRef.current);
+            } else {
+              const fallback = buildMockGraph(request.tree, request.projectPath);
+              setUmlGraph(fallback);
+            }
+          }
+        }
+      } finally {
+        parseInFlightRef.current = false;
+        if (isMountedRef.current && pendingParseRef.current) {
+          drainParseQueue();
+        }
+      }
+    })();
+  }, [setUmlGraph]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      pendingParseRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!projectPath || !tree) {
+      parseSeqRef.current += 1;
+      pendingParseRef.current = null;
+      return;
+    }
 
     const overrides = Object.entries(fileDrafts)
       .filter(([, draft]) => draft.content !== draft.lastSavedContent)
@@ -113,58 +218,15 @@ export const useUmlGraph = ({
         content: draft.content
       }));
 
-    parseSeq.current += 1;
-    const currentSeq = parseSeq.current;
-    let active = true;
-    const runParse = async () => {
-      setUmlStatus("Parsing UML...");
-      try {
-        const result = await parseUmlGraph(projectPath, "src", overrides);
-        const graph = result.graph;
-        if (!active || currentSeq !== parseSeq.current) {
-          return;
-        }
-        if (onDebugLog) {
-          onDebugLog(`[UML] ${new Date().toLocaleTimeString()}\n${result.raw}`);
-        }
-        const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraphRef.current);
-        const withFailedNodes = ensureFailedNodes(
-          mergedGraph,
-          graph.failedFiles,
-          projectPath,
-          "src"
-        );
-        const nextGraph = applyInvalidFlags(withFailedNodes, graph.failedFiles);
-        lastGoodGraphRef.current = nextGraph;
-        setUmlGraph(nextGraph);
-        if (graph.failedFiles && graph.failedFiles.length > 0) {
-          const count = graph.failedFiles.length;
-          setUmlStatus(
-            `UML parse incomplete (${count} file${count === 1 ? "" : "s"}).`
-          );
-        } else {
-          setUmlStatus(null);
-        }
-      } catch (error) {
-        if (!active || currentSeq !== parseSeq.current) {
-          return;
-        }
-        setUmlStatus(`UML parse failed: ${formatStatus(error)}`);
-        if (lastGoodGraphRef.current) {
-          setUmlGraph(lastGoodGraphRef.current);
-        } else {
-          const fallback = buildMockGraph(tree, projectPath);
-          setUmlGraph(fallback);
-        }
-      }
+    parseSeqRef.current += 1;
+    pendingParseRef.current = {
+      seq: parseSeqRef.current,
+      projectPath,
+      tree,
+      overrides
     };
-
-    void runParse();
-
-    return () => {
-      active = false;
-    };
-  }, [projectPath, tree, fileDrafts, onDebugLog, formatStatus, setUmlGraph]);
+    drainParseQueue();
+  }, [projectPath, tree, fileDrafts, drainParseQueue]);
 
   return {
     umlStatus,

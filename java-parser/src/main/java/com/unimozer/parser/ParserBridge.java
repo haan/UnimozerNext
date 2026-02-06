@@ -32,7 +32,11 @@ import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -180,6 +184,11 @@ public class ParserBridge {
     public String content;
     public String error;
   }
+
+  static class ErrorResponse {
+    public boolean ok;
+    public String error;
+  }
   static class Context {
     public String pkg;
     public Map<String, String> explicitImports = new HashMap<>();
@@ -197,34 +206,71 @@ public class ParserBridge {
 
   public static void main(String[] args) throws Exception {
     ObjectMapper mapper = new ObjectMapper();
+    if (hasArg(args, "--stdio")) {
+      runPersistent(mapper);
+      return;
+    }
+
     JsonNode rootNode = mapper.readTree(System.in);
     if (rootNode == null || rootNode.isNull()) {
       throw new IllegalArgumentException("Missing request body");
     }
 
+    Object response = handleRequest(mapper, rootNode);
+    mapper.writeValue(System.out, response);
+  }
+
+  private static boolean hasArg(String[] args, String expected) {
+    if (args == null || expected == null) return false;
+    for (String arg : args) {
+      if (expected.equals(arg)) return true;
+    }
+    return false;
+  }
+
+  private static void runPersistent(ObjectMapper mapper) throws IOException {
+    BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(System.out));
+    String line;
+    while ((line = reader.readLine()) != null) {
+      if (line.isBlank()) continue;
+      try {
+        JsonNode rootNode = mapper.readTree(line);
+        if (rootNode == null || rootNode.isNull()) {
+          throw new IllegalArgumentException("Missing request body");
+        }
+        Object response = handleRequest(mapper, rootNode);
+        writer.write(mapper.writeValueAsString(response));
+      } catch (Exception error) {
+        ErrorResponse response = new ErrorResponse();
+        response.ok = false;
+        response.error = error.getMessage() == null
+          ? error.getClass().getSimpleName()
+          : error.getMessage();
+        writer.write(mapper.writeValueAsString(response));
+      }
+      writer.newLine();
+      writer.flush();
+    }
+  }
+
+  private static Object handleRequest(ObjectMapper mapper, JsonNode rootNode) throws Exception {
     String action = rootNode.has("action") ? rootNode.get("action").asText() : "parseGraph";
     if ("addField".equals(action)) {
       AddFieldRequest request = mapper.treeToValue(rootNode, AddFieldRequest.class);
-      AddFieldResponse response = addField(request);
-      mapper.writeValue(System.out, response);
-      return;
+      return addField(request);
     }
     if ("addConstructor".equals(action)) {
       AddConstructorRequest request = mapper.treeToValue(rootNode, AddConstructorRequest.class);
-      AddConstructorResponse response = addConstructor(request);
-      mapper.writeValue(System.out, response);
-      return;
+      return addConstructor(request);
     }
     if ("addMethod".equals(action)) {
       AddMethodRequest request = mapper.treeToValue(rootNode, AddMethodRequest.class);
-      AddMethodResponse response = addMethod(request);
-      mapper.writeValue(System.out, response);
-      return;
+      return addMethod(request);
     }
 
     Request request = mapper.treeToValue(rootNode, Request.class);
-    Graph graph = parseGraph(request);
-    mapper.writeValue(System.out, graph);
+    return parseGraph(request);
   }
 
   static Graph parseGraph(Request request) throws IOException {
