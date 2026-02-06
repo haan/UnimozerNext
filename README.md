@@ -66,6 +66,106 @@ unimozer-next/
 - JDK 17+ (to build Java bridge modules)
 - Gradle (or Gradle wrapper if added later)
 
+## External Resources (Required, Not Tracked in Git)
+
+This repository intentionally does **not** commit large bundled runtime resources.
+They are excluded in `.gitignore`:
+
+- `/resources/jdk/`
+- `/resources/jdtls/`
+- `/resources/java-parser/*.jar`
+- `/resources/jshell-bridge/*.jar`
+
+You must populate these before running `npm run tauri dev` or `npm run tauri build`.
+
+### 1) Prepare directory structure
+
+Create these directories if they do not exist:
+
+```powershell
+New-Item -ItemType Directory -Force -Path resources\jdk\win-x64 | Out-Null
+New-Item -ItemType Directory -Force -Path resources\jdtls | Out-Null
+New-Item -ItemType Directory -Force -Path resources\java-parser | Out-Null
+New-Item -ItemType Directory -Force -Path resources\jshell-bridge | Out-Null
+```
+
+### 2) Install bundled JDK files
+
+Download a **Windows x64 JDK ZIP** (not an installer) and extract it so these files exist:
+
+- `resources/jdk/win-x64/bin/java.exe`
+- `resources/jdk/win-x64/bin/javac.exe`
+
+Important: If the archive extracts as a nested top folder (for example `jdk-xx/...`), move the folder **contents** into `resources/jdk/win-x64/` so `bin/` is directly under `win-x64`.
+
+Current project metadata references Temurin `25.0.1+8-LTS` in `resources/jdk/win-x64/release`, so that version is the safest match.
+
+Verify:
+
+```powershell
+Test-Path resources\jdk\win-x64\bin\java.exe
+Test-Path resources\jdk\win-x64\bin\javac.exe
+```
+
+### 3) Install bundled JDT LS files
+
+Download an Eclipse JDT Language Server distribution archive and extract it so these paths exist:
+
+- `resources/jdtls/plugins/`
+- `resources/jdtls/features/`
+- `resources/jdtls/config_win/config.ini`
+
+Verify:
+
+```powershell
+Test-Path resources\jdtls\plugins
+Test-Path resources\jdtls\features
+Test-Path resources\jdtls\config_win\config.ini
+Get-ChildItem resources\jdtls\plugins\org.eclipse.equinox.launcher_*.jar
+```
+
+### 4) Build local Java bridge JARs
+
+Build and copy bridge artifacts into `resources/`:
+
+```bash
+npm run build:parser
+npm run build:jshell
+```
+
+Expected outputs:
+
+- `resources/java-parser/parser-bridge.jar`
+- `resources/jshell-bridge/jshell-bridge.jar`
+
+Verify:
+
+```powershell
+Test-Path resources\java-parser\parser-bridge.jar
+Test-Path resources\jshell-bridge\jshell-bridge.jar
+```
+
+### 5) Quick preflight checks
+
+Run:
+
+```bash
+npm run typecheck
+npm run cargo:check
+```
+
+Then launch:
+
+```bash
+npm run tauri dev
+```
+
+If resources are missing, common errors include:
+
+- `Bundled Java compiler not found`
+- `Bundled Java runtime not found`
+- `JDT LS not found`
+
 ## Getting Started
 
 1. Install dependencies:
@@ -74,14 +174,16 @@ unimozer-next/
 npm install
 ```
 
-2. Build Java bridge JARs (recommended after bridge changes):
+2. Prepare external resources (JDK, JDT LS, bridge JARs) using the section above.
+
+3. Build Java bridge JARs (recommended after bridge changes):
 
 ```bash
 npm run build:parser
 npm run build:jshell
 ```
 
-3. Run in development mode:
+4. Run in development mode:
 
 ```bash
 npm run tauri dev
