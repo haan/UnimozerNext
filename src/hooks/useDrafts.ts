@@ -20,7 +20,7 @@ type UseDraftsArgs = {
   lsReadyRef: MutableRefObject<boolean>;
   isLsOpen: (path: string) => boolean;
   notifyLsOpen: (path: string, text: string) => void;
-  notifyLsChange: (path: string, text: string) => void;
+  notifyLsChangeImmediate: (path: string, text: string) => void;
   notifyLsClose: (path: string) => void;
   setStatus: (status: string) => void;
   onExternalContent?: () => void;
@@ -44,7 +44,7 @@ export const useDrafts = ({
   lsReadyRef,
   isLsOpen,
   notifyLsOpen,
-  notifyLsChange,
+  notifyLsChangeImmediate,
   notifyLsClose,
   setStatus,
   onExternalContent
@@ -118,7 +118,7 @@ export const useDrafts = ({
             notifyLsOpen(path, text);
             tempOpened.push(path);
           } else {
-            notifyLsChange(path, text);
+            notifyLsChangeImmediate(path, text);
           }
         }
 
@@ -165,7 +165,7 @@ export const useDrafts = ({
               if (entry.hasDraft) {
                 updateDraftForPath(path, next);
               }
-              notifyLsChange(path, next);
+              notifyLsChangeImmediate(path, next);
             }
           } catch {
             // Formatting failed; keep original content.
@@ -203,7 +203,7 @@ export const useDrafts = ({
       isLsOpen,
       lsReadyRef,
       monacoRef,
-      notifyLsChange,
+      notifyLsChangeImmediate,
       notifyLsClose,
       notifyLsOpen,
       openFilePath,

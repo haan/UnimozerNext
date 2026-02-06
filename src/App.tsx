@@ -141,6 +141,7 @@ export default function App() {
     line: number;
     column: number;
     durationSeconds: number;
+    requestedAtMs: number;
   } | null>(null);
   const umlSignatureRef = useRef<string>("");
   const lastCompileOutDirRef = useRef<string | null>(null);
@@ -159,6 +160,7 @@ export default function App() {
     notifyLsOpen,
     notifyLsClose,
     notifyLsChange,
+    notifyLsChangeImmediate,
     resetLsState
   } = useLanguageServer({
     projectPath,
@@ -182,7 +184,7 @@ export default function App() {
     lsReadyRef,
     isLsOpen,
     notifyLsOpen,
-    notifyLsChange,
+    notifyLsChangeImmediate,
     notifyLsClose,
     setStatus,
     onExternalContent: bumpEditorResetKey
@@ -245,6 +247,11 @@ export default function App() {
   const applyPendingReveal = useCallback(() => {
     const pending = pendingRevealRef.current;
     if (!pending) return;
+    const expiresAtMs = pending.requestedAtMs + pending.durationSeconds * 1000;
+    if (Date.now() > expiresAtMs) {
+      pendingRevealRef.current = null;
+      return;
+    }
     const editor = editorRef.current;
     const monaco = monacoRef.current;
     if (!editor || !monaco) return;
@@ -262,9 +269,9 @@ export default function App() {
     pendingRevealRef.current = null;
   }, [monacoRef]);
 
-  useEffect(() => {
-    applyPendingReveal();
-  }, [applyPendingReveal, openFilePath, content]);
+  const clearPendingReveal = useCallback(() => {
+    pendingRevealRef.current = null;
+  }, []);
 
   const handlePaste = useCallback(async () => {
     const editor = editorRef.current;
@@ -736,7 +743,8 @@ export default function App() {
         path,
         line: range.startLine,
         column: range.startColumn ?? 1,
-        durationSeconds
+        durationSeconds,
+        requestedAtMs: Date.now()
       };
       appendDebugOutput(
         `[UML] Reveal ${basename(path)} @ ${range.startLine}:${range.startColumn ?? 1}`
@@ -752,6 +760,7 @@ export default function App() {
   const handleNodeSelect = (id: string) => {
     const node = getNodeById(id);
     if (!node) return;
+    clearPendingReveal();
     setSelectedClassId(node.id);
     void openFileByPath(node.path);
   };
@@ -765,10 +774,11 @@ export default function App() {
       if (field.range) {
         void queueEditorReveal(node.path, field.range);
       } else {
+        clearPendingReveal();
         void openFileByPath(node.path);
       }
     },
-    [appendDebugOutput, openFileByPath, queueEditorReveal]
+    [appendDebugOutput, clearPendingReveal, openFileByPath, queueEditorReveal]
   );
 
   const handleMethodSelect = useCallback(
@@ -780,10 +790,11 @@ export default function App() {
       if (method.range) {
         void queueEditorReveal(node.path, method.range);
       } else {
+        clearPendingReveal();
         void openFileByPath(node.path);
       }
     },
-    [appendDebugOutput, openFileByPath, queueEditorReveal]
+    [appendDebugOutput, clearPendingReveal, openFileByPath, queueEditorReveal]
   );
 
   const handleRemoveClass = useCallback(
@@ -1023,6 +1034,7 @@ export default function App() {
         const nextTree = await invoke<FileNode>("list_project_tree", { root: projectPath });
         setTree(nextTree);
         setCompileStatus(null);
+        clearPendingReveal();
         await openFileByPath(filePath);
         updateDraftForPath(filePath, source, "");
         setContent(source);
@@ -1039,6 +1051,7 @@ export default function App() {
       projectPath,
       setStatus,
       setBusy,
+      clearPendingReveal,
       openFileByPath,
       setTree,
       setCompileStatus,
@@ -1091,7 +1104,7 @@ export default function App() {
           setContent(updated);
           setLastSavedContent(savedBaseline);
           bumpEditorResetKey();
-          notifyLsChange(target.path, updated);
+          notifyLsChangeImmediate(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
@@ -1113,7 +1126,7 @@ export default function App() {
       projectPath,
       fileDrafts,
       openFilePath,
-      notifyLsChange,
+      notifyLsChangeImmediate,
       notifyLsOpen,
       bumpEditorResetKey,
       setBusy,
@@ -1163,7 +1176,7 @@ export default function App() {
           setContent(updated);
           setLastSavedContent(savedBaseline);
           bumpEditorResetKey();
-          notifyLsChange(target.path, updated);
+          notifyLsChangeImmediate(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
@@ -1185,7 +1198,7 @@ export default function App() {
       projectPath,
       fileDrafts,
       openFilePath,
-      notifyLsChange,
+      notifyLsChangeImmediate,
       notifyLsOpen,
       bumpEditorResetKey,
       setBusy,
@@ -1242,7 +1255,7 @@ export default function App() {
           setContent(updated);
           setLastSavedContent(savedBaseline);
           bumpEditorResetKey();
-          notifyLsChange(target.path, updated);
+          notifyLsChangeImmediate(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
@@ -1264,7 +1277,7 @@ export default function App() {
       projectPath,
       fileDrafts,
       openFilePath,
-      notifyLsChange,
+      notifyLsChangeImmediate,
       notifyLsOpen,
       bumpEditorResetKey,
       setBusy,
