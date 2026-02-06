@@ -177,7 +177,7 @@ export const useJshellActions = ({
       resetConsoleOutput();
       appendConsoleOutput(`[${startedAt}] Create object requested for ${form.objectName}`);
 
-      const logJshellOutput = (stdout?: string, stderr?: string) => {
+      const logJshellOutput = (stdout?: string | null, stderr?: string | null) => {
         const jshellTime = new Date().toLocaleTimeString();
         if (stdout) {
           appendDebugOutput(`[${jshellTime}] JShell output\n${stdout.trim()}`);

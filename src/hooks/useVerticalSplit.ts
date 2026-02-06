@@ -10,7 +10,7 @@ type UseVerticalSplitArgs = {
 };
 
 type UseVerticalSplitResult = {
-  containerRef: RefObject<HTMLDivElement>;
+  containerRef: RefObject<HTMLDivElement | null>;
   splitRatio: number;
   startResize: (event: ReactPointerEvent<HTMLElement>) => void;
 };

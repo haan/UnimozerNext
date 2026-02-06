@@ -7,7 +7,7 @@ import type { ExportControls, ZoomControls } from "../diagram/UmlDiagram";
 import { ObjectBenchPanel } from "../objectBench/ObjectBenchPanel";
 
 type ObjectBenchSectionProps = {
-  benchContainerRef: RefObject<HTMLDivElement>;
+  benchContainerRef: RefObject<HTMLDivElement | null>;
   objectBenchSplitRatio: number;
   startBenchResize: (event: PointerEvent<HTMLDivElement>) => void;
   graph: UmlGraph | null;

@@ -8,7 +8,7 @@ import type { FileDraft } from "../models/drafts";
 import type { UmlGraph } from "../models/uml";
 import type { LspTextEdit } from "../services/lsp";
 import { applyTextEdits, sortTextEditsDescending, toFileUri } from "../services/lsp";
-import type { Monaco } from "monaco-editor";
+import type { Monaco } from "@monaco-editor/react";
 
 type UseDraftsArgs = {
   umlGraph: UmlGraph | null;
@@ -78,9 +78,15 @@ export const useDrafts = ({
 
   const formatAndSaveUmlFiles = useCallback(
     async (setStatusMessage: boolean) => {
+      const dirtyDraftPaths = Object.entries(fileDrafts)
+        .filter(([, draft]) => draft.content !== draft.lastSavedContent)
+        .map(([path]) => path);
+      const umlNodePaths = umlGraph?.nodes?.length
+        ? umlGraph.nodes.map((node) => node.path)
+        : [];
       const targetPaths =
-        umlGraph?.nodes?.length
-          ? Array.from(new Set(umlGraph.nodes.map((node) => node.path)))
+        umlNodePaths.length > 0
+          ? Array.from(new Set([...umlNodePaths, ...dirtyDraftPaths]))
           : Object.keys(fileDrafts);
       if (targetPaths.length === 0) return 0;
 

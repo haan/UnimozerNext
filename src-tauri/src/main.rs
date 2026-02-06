@@ -1,7 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 use base64::{engine::general_purpose, Engine as _};
 use serde::{Deserialize, Serialize};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::{
@@ -942,12 +942,35 @@ fn compile_project(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let output = command.output().map_err(|error| error.to_string())?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+    let mut child = command.spawn().map_err(|error| error.to_string())?;
+    let stdout_pipe = child
+        .stdout
+        .take()
+        .ok_or_else(|| "Failed to capture javac stdout".to_string())?;
+    let stderr_pipe = child
+        .stderr
+        .take()
+        .ok_or_else(|| "Failed to capture javac stderr".to_string())?;
+
+    let stdout_reader = std::thread::spawn(move || {
+        let mut reader = BufReader::new(stdout_pipe);
+        let mut buffer = String::new();
+        let _ = reader.read_to_string(&mut buffer);
+        buffer
+    });
+    let stderr_reader = std::thread::spawn(move || {
+        let mut reader = BufReader::new(stderr_pipe);
+        let mut buffer = String::new();
+        let _ = reader.read_to_string(&mut buffer);
+        buffer
+    });
+
+    let status = child.wait().map_err(|error| error.to_string())?;
+    let stdout = stdout_reader.join().unwrap_or_default();
+    let stderr = stderr_reader.join().unwrap_or_default();
 
     Ok(CompileResult {
-        ok: output.status.success(),
+        ok: status.success(),
         stdout,
         stderr,
         out_dir: out_dir.to_string_lossy().to_string(),

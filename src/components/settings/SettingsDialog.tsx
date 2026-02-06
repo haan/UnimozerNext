@@ -12,7 +12,7 @@ import {
 } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { cn } from "../../lib/utils";
-import { ChromePicker } from "react-color";
+import { ChromePicker, type ColorResult } from "react-color";
 import { loadEditorThemeOptions, type ThemeOption } from "../../services/monacoThemes";
 
 type SettingsDialogProps = {
@@ -222,7 +222,7 @@ export const SettingsDialog = ({
                     <PopoverContent className="w-auto p-3">
                       <ChromePicker
                         color={settings.uml.panelBackground ?? "#f3f4f6"}
-                        onChange={(color) =>
+                        onChange={(color: ColorResult) =>
                           onChange({
                             ...settings,
                             uml: {

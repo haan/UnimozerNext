@@ -2,8 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
 import type { MutableRefObject, RefObject } from "react";
-import type { Monaco } from "monaco-editor";
-import { useMonaco } from "@monaco-editor/react";
+import { useMonaco, type Monaco } from "@monaco-editor/react";
 
 import type { LsDiagnosticsEvent } from "../services/lsp";
 import { toFileUri } from "../services/lsp";

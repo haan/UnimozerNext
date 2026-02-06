@@ -11,8 +11,8 @@ type UseSplitRatiosArgs = {
 };
 
 type UseSplitRatiosResult = {
-  containerRef: RefObject<HTMLDivElement>;
-  consoleContainerRef: RefObject<HTMLDivElement>;
+  containerRef: RefObject<HTMLDivElement | null>;
+  consoleContainerRef: RefObject<HTMLDivElement | null>;
   splitRatio: number;
   consoleSplitRatio: number;
   startUmlResize: (event: ReactPointerEvent<HTMLElement>) => void;

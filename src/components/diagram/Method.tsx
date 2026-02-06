@@ -1,8 +1,8 @@
-import type { UmlMethod } from "../../models/uml";
+import type { UmlMethod as UmlMethodModel } from "../../models/uml";
 import { TEXT_PADDING } from "./constants";
 
 export type UmlMethodProps = {
-  method: UmlMethod;
+  method: UmlMethodModel;
   y: number;
   fontSize: number;
   onSelect?: () => void;
