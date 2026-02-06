@@ -126,7 +126,7 @@ export const AppMenu = ({
               Open
               <MenubarShortcut>{isMac ? "⌘O" : "Ctrl+O"}</MenubarShortcut>
             </MenubarItem>
-            <MenubarItem onClick={onSave} disabled={!hasUnsavedChanges || busy}>
+            <MenubarItem onClick={onSave} disabled={busy || !projectName}>
               Save
               <MenubarShortcut>{isMac ? "⌘S" : "Ctrl+S"}</MenubarShortcut>
             </MenubarItem>

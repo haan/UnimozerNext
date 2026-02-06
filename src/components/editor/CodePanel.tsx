@@ -117,10 +117,6 @@ export const CodePanel = memo(
       [content, logEvent, openFile]
     );
 
-    useEffect(() => {
-      syncExternalContent(editorRef.current);
-    }, [syncExternalContent]);
-
     const registerEditorEventListeners = useCallback(
       (editor: MonacoEditorType.IStandaloneCodeEditor) => {
         subscriptionsRef.current.forEach((subscription) => subscription.dispose());

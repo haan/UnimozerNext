@@ -186,8 +186,7 @@ export default function App() {
     notifyLsOpen,
     notifyLsChangeImmediate,
     notifyLsClose,
-    setStatus,
-    onExternalContent: bumpEditorResetKey
+    setStatus
   });
 
   const dirty = useMemo(() => {
@@ -915,7 +914,7 @@ export default function App() {
       }
       if (key === "s") {
         event.preventDefault();
-        if (!hasUnsavedChanges || busy) return;
+        if (busy || !projectPath) return;
         void handleSave();
         return;
       }
@@ -938,7 +937,7 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [hasUnsavedChanges, busy, handleSave, requestProjectAction]);
+  }, [busy, handleSave, projectPath, requestProjectAction]);
 
   const handleOpenAddField = useCallback((node: UmlNode) => {
     setSelectedClassId(node.id);
