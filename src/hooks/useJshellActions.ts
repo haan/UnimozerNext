@@ -29,7 +29,7 @@ type UseJshellActionsArgs = {
   lastCompileOutDirRef: MutableRefObject<string | null>;
   appendConsoleOutput: (text: string) => void;
   resetConsoleOutput: () => void;
-  appendDebugOutput: (text: string) => void;
+  appendDebugOutput?: (text: string) => void;
   setStatus: (status: string) => void;
   setBusy: (busy: boolean) => void;
   formatStatus: (input: unknown) => string;
@@ -62,6 +62,17 @@ export const useJshellActions = ({
   trimStatus
 }: UseJshellActionsArgs) => {
   const objectBenchRef = useRef<ObjectInstance[]>([]);
+  const logDebug = useCallback(
+    (message: string | (() => string)) => {
+      if (!appendDebugOutput) return;
+      if (typeof message === "function") {
+        appendDebugOutput(message());
+        return;
+      }
+      appendDebugOutput(message);
+    },
+    [appendDebugOutput]
+  );
 
   useEffect(() => {
     objectBenchRef.current = objectBench;
@@ -101,21 +112,24 @@ export const useJshellActions = ({
         const inspect = await jshellInspect(obj.name);
         if (!inspect.ok) {
           const message = trimStatus(inspect.error || "Unknown error");
-          appendDebugOutput(
-            `[${new Date().toLocaleTimeString()}] JShell inspect failed for ${obj.name}\n${message}`
+          logDebug(
+            () =>
+              `[${new Date().toLocaleTimeString()}] JShell inspect failed for ${obj.name}\n${message}`
           );
           if (inspect.error && inspect.error.includes("payload:")) {
-            appendDebugOutput(
-              `[${new Date().toLocaleTimeString()}] JShell inspect payload\n${inspect.error}`
+            logDebug(
+              () =>
+                `[${new Date().toLocaleTimeString()}] JShell inspect payload\n${inspect.error}`
             );
           }
           refreshed.push(fallback.get(obj.name) ?? obj);
           continue;
         }
-        appendDebugOutput(
-          `[${new Date().toLocaleTimeString()}] JShell inspect ${obj.name} inheritedGroups=${
-            inspect.inheritedMethods?.length ?? 0
-          }`
+        logDebug(
+          () =>
+            `[${new Date().toLocaleTimeString()}] JShell inspect ${obj.name} inheritedGroups=${
+              inspect.inheritedMethods?.length ?? 0
+            }`
         );
         const inheritedMethods: ObjectInheritedMethodGroup[] = (inspect.inheritedMethods ?? [])
           .map((group) => ({
@@ -143,7 +157,7 @@ export const useJshellActions = ({
       }
       return refreshed;
     },
-    [appendDebugOutput, trimStatus]
+    [logDebug, trimStatus]
   );
 
   const handleCreateObject = useCallback(
@@ -172,7 +186,7 @@ export const useJshellActions = ({
       const code = usesDefaultPackage
         ? `var ${form.objectName} = Class.forName("${target.id}").${constructorSelector}.newInstance(${args.join(", ")});`
         : `var ${form.objectName} = new ${target.id}(${args.join(", ")});`;
-      appendDebugOutput(`[${new Date().toLocaleTimeString()}] JShell eval\n${code}`);
+      logDebug(() => `[${new Date().toLocaleTimeString()}] JShell eval\n${code}`);
       const startedAt = new Date().toLocaleTimeString();
       resetConsoleOutput();
       appendConsoleOutput(`[${startedAt}] Create object requested for ${form.objectName}`);
@@ -180,10 +194,10 @@ export const useJshellActions = ({
       const logJshellOutput = (stdout?: string | null, stderr?: string | null) => {
         const jshellTime = new Date().toLocaleTimeString();
         if (stdout) {
-          appendDebugOutput(`[${jshellTime}] JShell output\n${stdout.trim()}`);
+          logDebug(() => `[${jshellTime}] JShell output\n${stdout.trim()}`);
         }
         if (stderr) {
-          appendDebugOutput(`[${jshellTime}] JShell error output\n${stderr.trim()}`);
+          logDebug(() => `[${jshellTime}] JShell error output\n${stderr.trim()}`);
         }
       };
 
@@ -206,17 +220,19 @@ export const useJshellActions = ({
           )}`;
           appendConsoleOutput(message);
           if (inspect.error && inspect.error.includes("payload:")) {
-            appendDebugOutput(
-              `[${new Date().toLocaleTimeString()}] JShell inspect payload\n${inspect.error}`
+            logDebug(
+              () =>
+                `[${new Date().toLocaleTimeString()}] JShell inspect payload\n${inspect.error}`
             );
           }
           setStatus("Object creation failed.");
           return null;
         }
-        appendDebugOutput(
-          `[${new Date().toLocaleTimeString()}] JShell inspect ${form.objectName} inheritedGroups=${
-            inspect.inheritedMethods?.length ?? 0
-          }`
+        logDebug(
+          () =>
+            `[${new Date().toLocaleTimeString()}] JShell inspect ${form.objectName} inheritedGroups=${
+              inspect.inheritedMethods?.length ?? 0
+            }`
         );
         const inheritedMethods: ObjectInheritedMethodGroup[] = (inspect.inheritedMethods ?? [])
           .map((group) => ({
@@ -258,7 +274,7 @@ export const useJshellActions = ({
         await createAndRefresh();
       } catch (error) {
         const message = formatStatus(error);
-        appendDebugOutput(`[${new Date().toLocaleTimeString()}] JShell error\n${message}`);
+        logDebug(() => `[${new Date().toLocaleTimeString()}] JShell error\n${message}`);
         if (isBrokenPipe(message)) {
           setJshellReady(false);
           const outDir = lastCompileOutDirRef.current;
@@ -270,10 +286,11 @@ export const useJshellActions = ({
               const retryOk = await createAndRefresh();
               if (retryOk) return;
             } catch (restartError) {
-              appendDebugOutput(
-                `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
-                  restartError
-                )}`
+              logDebug(
+                () =>
+                  `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
+                    restartError
+                  )}`
               );
             }
           }
@@ -285,10 +302,10 @@ export const useJshellActions = ({
     },
     [
       appendConsoleOutput,
-      appendDebugOutput,
       formatStatus,
       jshellReady,
       lastCompileOutDirRef,
+      logDebug,
       projectPath,
       refreshObjectBench,
       resetConsoleOutput,
@@ -394,7 +411,7 @@ export const useJshellActions = ({
         await invokeMethod();
       } catch (error) {
         const message = formatStatus(error);
-        appendDebugOutput(`[${new Date().toLocaleTimeString()}] JShell error\n${message}`);
+        logDebug(() => `[${new Date().toLocaleTimeString()}] JShell error\n${message}`);
         if (isBrokenPipe(message)) {
           setJshellReady(false);
           const outDir = lastCompileOutDirRef.current;
@@ -406,10 +423,11 @@ export const useJshellActions = ({
               const retryOk = await invokeMethod();
               if (retryOk) return;
             } catch (restartError) {
-              appendDebugOutput(
-                `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
-                  restartError
-                )}`
+              logDebug(
+                () =>
+                  `[${new Date().toLocaleTimeString()}] JShell restart failed\n${formatStatus(
+                    restartError
+                  )}`
               );
             }
           }
@@ -421,10 +439,10 @@ export const useJshellActions = ({
     },
     [
       appendConsoleOutput,
-      appendDebugOutput,
       formatStatus,
       jshellReady,
       lastCompileOutDirRef,
+      logDebug,
       projectPath,
       refreshObjectBench,
       resetConsoleOutput,

@@ -12,6 +12,14 @@ type LsCrashedEvent = {
   code?: number | null;
 };
 
+type LsReadyEvent = {
+  projectRoot?: string;
+};
+
+type LsErrorEvent = {
+  projectRoot?: string;
+};
+
 type UseLanguageServerArgs = {
   projectPath: string | null;
   openFilePath: string | null;
@@ -45,6 +53,9 @@ export const useLanguageServer = ({
   const lsPendingTextRef = useRef<Record<string, string>>({});
   const lsPendingTimerRef = useRef<Record<string, number>>({});
   const prevOpenFileRef = useRef<string | null>(null);
+  const latestProjectPathRef = useRef<string | null>(projectPath);
+  const latestOpenFilePathRef = useRef<string | null>(openFilePath);
+  const latestOpenFileContentRef = useRef(openFileContent);
   const lsReadyRef = useRef(false);
 
   useEffect(() => {
@@ -52,6 +63,15 @@ export const useLanguageServer = ({
       monacoRef.current = monaco;
     }
   }, [monaco]);
+
+  useEffect(() => {
+    latestProjectPathRef.current = projectPath;
+  }, [projectPath]);
+
+  useEffect(() => {
+    latestOpenFilePathRef.current = openFilePath;
+    latestOpenFileContentRef.current = openFileContent;
+  }, [openFileContent, openFilePath]);
 
   const notifyLsOpen = useCallback((path: string, text: string) => {
     if (!lsReadyRef.current) return;
@@ -213,9 +233,12 @@ export const useLanguageServer = ({
     const setup = async () => {
       const crashUnlisten = await listen<LsCrashedEvent>("ls_crashed", (event) => {
         if (!active) return;
-        lsReadyRef.current = false;
-        if (projectPath && event.payload.projectRoot === projectPath) {
-          void invoke<string>("ls_start", { projectRoot: projectPath }).catch(() => undefined);
+        const currentProjectPath = latestProjectPathRef.current;
+        if (currentProjectPath && event.payload.projectRoot === currentProjectPath) {
+          resetLsState();
+          void invoke<string>("ls_start", { projectRoot: currentProjectPath }).catch(
+            () => undefined
+          );
         }
       });
       if (!active) {
@@ -230,7 +253,7 @@ export const useLanguageServer = ({
       active = false;
       if (unlisten) unlisten();
     };
-  }, [projectPath]);
+  }, [resetLsState]);
 
   useEffect(() => {
     let unlistenReady: (() => void) | null = null;
@@ -238,10 +261,16 @@ export const useLanguageServer = ({
     let active = true;
 
     const setup = async () => {
-      const readyUnlisten = await listen("ls_ready", () => {
+      const readyUnlisten = await listen<LsReadyEvent>("ls_ready", (event) => {
+        const currentProjectPath = latestProjectPathRef.current;
+        if (!currentProjectPath) return;
+        if (event.payload.projectRoot && event.payload.projectRoot !== currentProjectPath) {
+          return;
+        }
         lsReadyRef.current = true;
-        if (openFilePath) {
-          notifyLsOpen(openFilePath, openFileContent);
+        const currentOpenFilePath = latestOpenFilePathRef.current;
+        if (currentOpenFilePath) {
+          notifyLsOpen(currentOpenFilePath, latestOpenFileContentRef.current);
         }
       });
       if (!active) {
@@ -250,7 +279,15 @@ export const useLanguageServer = ({
       }
       unlistenReady = readyUnlisten;
 
-      const errorUnlisten = await listen("ls_error", () => {
+      const errorUnlisten = await listen<LsErrorEvent>("ls_error", (event) => {
+        const currentProjectPath = latestProjectPathRef.current;
+        if (
+          currentProjectPath &&
+          event.payload.projectRoot &&
+          event.payload.projectRoot !== currentProjectPath
+        ) {
+          return;
+        }
         lsReadyRef.current = false;
       });
       if (!active) {
@@ -266,7 +303,7 @@ export const useLanguageServer = ({
       if (unlistenReady) unlistenReady();
       if (unlistenError) unlistenError();
     };
-  }, [notifyLsOpen, openFileContent, openFilePath]);
+  }, [notifyLsOpen]);
 
   useEffect(() => {
     let unlistenDiagnostics: (() => void) | null = null;

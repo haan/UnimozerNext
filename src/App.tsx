@@ -42,6 +42,7 @@ import { getUmlSignature } from "./services/umlGraph";
 import type { ExportControls, ExportStyle } from "./components/diagram/UmlDiagram";
 
 const UML_HIGHLIGHT_SECONDS = 2;
+const UML_PARSE_DRAFT_DEBOUNCE_MS = 300;
 
 const formatStatus = (input: unknown) =>
   typeof input === "string" ? input : JSON.stringify(input);
@@ -85,10 +86,6 @@ export default function App() {
   const [fieldTarget, setFieldTarget] = useState<UmlNode | null>(null);
   const [constructorTarget, setConstructorTarget] = useState<UmlNode | null>(null);
   const [methodTarget, setMethodTarget] = useState<UmlNode | null>(null);
-  const [editorResetKey, setEditorResetKey] = useState(0);
-  const bumpEditorResetKey = useCallback(() => {
-    setEditorResetKey((prev) => prev + 1);
-  }, []);
   const {
     settings,
     settingsOpen,
@@ -188,6 +185,20 @@ export default function App() {
     notifyLsClose,
     setStatus
   });
+  const [umlParseDrafts, setUmlParseDrafts] = useState(fileDrafts);
+
+  useEffect(() => {
+    if (!projectPath) {
+      setUmlParseDrafts({});
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setUmlParseDrafts(fileDrafts);
+    }, UML_PARSE_DRAFT_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [fileDrafts, projectPath]);
 
   const dirty = useMemo(() => {
     if (!openFile) return false;
@@ -527,9 +538,9 @@ export default function App() {
   const { umlStatus, lastGoodGraphRef } = useUmlGraph({
     projectPath,
     tree,
-    fileDrafts,
+    fileDrafts: umlParseDrafts,
     setUmlGraph,
-    onDebugLog: appendDebugOutput,
+    onDebugLog: debugLogging ? appendDebugOutput : undefined,
     formatStatus
   });
 
@@ -547,7 +558,7 @@ export default function App() {
     lastCompileOutDirRef,
     appendConsoleOutput,
     resetConsoleOutput,
-    appendDebugOutput,
+    appendDebugOutput: debugLogging ? appendDebugOutput : undefined,
     setStatus,
     setBusy,
     formatStatus,
@@ -582,8 +593,7 @@ export default function App() {
     notifyLsOpen,
     updateDraftForPath,
     formatAndSaveUmlFiles,
-    formatStatus,
-    onExternalContent: bumpEditorResetKey
+    formatStatus
   });
 
   const visibleGraph = useMemo(() => {
@@ -1038,7 +1048,6 @@ export default function App() {
         updateDraftForPath(filePath, source, "");
         setContent(source);
         setLastSavedContent("");
-        bumpEditorResetKey();
         setStatus(`Created ${name}.java`);
       } catch (error) {
         setStatus(`Failed to create class: ${formatStatus(error)}`);
@@ -1054,8 +1063,7 @@ export default function App() {
       openFileByPath,
       setTree,
       setCompileStatus,
-      updateDraftForPath,
-      bumpEditorResetKey
+      updateDraftForPath
     ]
   );
 
@@ -1102,13 +1110,11 @@ export default function App() {
         if (openFilePath === target.path) {
           setContent(updated);
           setLastSavedContent(savedBaseline);
-          bumpEditorResetKey();
           notifyLsChangeImmediate(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
           setLastSavedContent(savedBaseline);
-          bumpEditorResetKey();
           notifyLsOpen(target.path, updated);
         }
         setCompileStatus(null);
@@ -1127,7 +1133,6 @@ export default function App() {
       openFilePath,
       notifyLsChangeImmediate,
       notifyLsOpen,
-      bumpEditorResetKey,
       setBusy,
       setCompileStatus,
       setContent,
@@ -1174,13 +1179,11 @@ export default function App() {
         if (openFilePath === target.path) {
           setContent(updated);
           setLastSavedContent(savedBaseline);
-          bumpEditorResetKey();
           notifyLsChangeImmediate(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
           setLastSavedContent(savedBaseline);
-          bumpEditorResetKey();
           notifyLsOpen(target.path, updated);
         }
         setCompileStatus(null);
@@ -1199,7 +1202,6 @@ export default function App() {
       openFilePath,
       notifyLsChangeImmediate,
       notifyLsOpen,
-      bumpEditorResetKey,
       setBusy,
       setCompileStatus,
       setContent,
@@ -1253,13 +1255,11 @@ export default function App() {
         if (openFilePath === target.path) {
           setContent(updated);
           setLastSavedContent(savedBaseline);
-          bumpEditorResetKey();
           notifyLsChangeImmediate(target.path, updated);
         } else {
           setOpenFile({ name: basename(target.path), path: target.path });
           setContent(updated);
           setLastSavedContent(savedBaseline);
-          bumpEditorResetKey();
           notifyLsOpen(target.path, updated);
         }
         setCompileStatus(null);
@@ -1278,7 +1278,6 @@ export default function App() {
       openFilePath,
       notifyLsChangeImmediate,
       notifyLsOpen,
-      bumpEditorResetKey,
       setBusy,
       setCompileStatus,
       setContent,
@@ -1469,7 +1468,6 @@ export default function App() {
                   style={{ height: `${consoleSplitRatio * 100}%` }}
                 >
                     <CodePanel
-                      key={openFilePath ? `${openFilePath}:${editorResetKey}` : "no-file"}
                       openFile={openFile}
                       fileUri={openFilePath ? toFileUri(openFilePath) : null}
                       content={content}
@@ -1484,7 +1482,7 @@ export default function App() {
                       wordWrap={settings.editor.wordWrap}
                       onChange={handleContentChange}
                       debugLogging={debugLogging}
-                      onDebugLog={appendDebugOutput}
+                      onDebugLog={debugLogging ? appendDebugOutput : undefined}
                       onEditorMount={(editor) => {
                         editorRef.current = editor;
                         applyPendingReveal();

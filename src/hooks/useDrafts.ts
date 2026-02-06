@@ -138,6 +138,7 @@ export const useDrafts = ({
             });
             if (edits && edits.length > 0) {
               let next = draftContent;
+              const editedOpenModel = Boolean(model && openFilePath === path);
               if (model && monacoInstance) {
                 const monacoEdits = [...edits]
                   .sort(sortTextEditsDescending)
@@ -162,7 +163,9 @@ export const useDrafts = ({
               if (entry.hasDraft) {
                 updateDraftForPath(path, next);
               }
-              notifyLsChangeImmediate(path, next);
+              if (!editedOpenModel) {
+                notifyLsChangeImmediate(path, next);
+              }
             }
           } catch {
             // Formatting failed; keep original content.

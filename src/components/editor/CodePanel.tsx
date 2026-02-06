@@ -53,13 +53,14 @@ export const CodePanel = memo(
     const subscriptionsRef = useRef<Disposable[]>([]);
     const lastEditorValueRef = useRef<string | null>(null);
     const resolvedTheme = resolveMonacoTheme(theme);
+    const debugEnabled = Boolean(debugLogging && onDebugLog);
 
     const logEvent = useCallback(
       (message: string) => {
-        if (!debugLogging || !onDebugLog) return;
+        if (!debugEnabled || !onDebugLog) return;
         onDebugLog(`[Editor] ${new Date().toLocaleTimeString()} ${message}`);
       },
-      [debugLogging, onDebugLog]
+      [debugEnabled, onDebugLog]
     );
 
     const applyTheme = useCallback(
@@ -98,9 +99,11 @@ export const CodePanel = memo(
         }
         if (content === lastEditorValueRef.current) return;
         const selection = editor.getSelection();
-        logEvent(
-          `prop content differs from model (len ${content.length} vs ${modelValue.length})`
-        );
+        if (debugEnabled) {
+          logEvent(
+            `prop content differs from model (len ${content.length} vs ${modelValue.length})`
+          );
+        }
         editor.executeEdits("external", [
           {
             range: model.getFullModelRange(),
@@ -112,14 +115,20 @@ export const CodePanel = memo(
           editor.setSelection(selection);
         }
         lastEditorValueRef.current = content;
-        logEvent(`synced content into model (len ${content.length})`);
+        if (debugEnabled) {
+          logEvent(`synced content into model (len ${content.length})`);
+        }
       },
-      [content, logEvent, openFile]
+      [content, debugEnabled, logEvent, openFile]
     );
 
     const registerEditorEventListeners = useCallback(
       (editor: MonacoEditorType.IStandaloneCodeEditor) => {
         subscriptionsRef.current.forEach((subscription) => subscription.dispose());
+        if (!debugEnabled) {
+          subscriptionsRef.current = [];
+          return;
+        }
         subscriptionsRef.current = [
           editor.onDidChangeCursorPosition((event) => {
             logEvent(
@@ -145,13 +154,17 @@ export const CodePanel = memo(
           })
         ];
       },
-      [logEvent]
+      [debugEnabled, logEvent]
     );
 
     useEffect(() => {
       if (!editorRef.current) return;
       registerEditorEventListeners(editorRef.current);
     }, [registerEditorEventListeners]);
+
+    useEffect(() => {
+      syncExternalContent(editorRef.current);
+    }, [syncExternalContent]);
 
     return (
       <div className="flex h-full flex-col overflow-hidden">

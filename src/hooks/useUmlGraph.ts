@@ -115,49 +115,54 @@ export const useUmlGraph = ({
 
     parseSeq.current += 1;
     const currentSeq = parseSeq.current;
-    const timer = window.setTimeout(async () => {
+    let active = true;
+    const runParse = async () => {
       setUmlStatus("Parsing UML...");
       try {
         const result = await parseUmlGraph(projectPath, "src", overrides);
         const graph = result.graph;
-        if (currentSeq === parseSeq.current) {
-          if (onDebugLog) {
-            onDebugLog(`[UML] ${new Date().toLocaleTimeString()}\n${result.raw}`);
-          }
-          const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraphRef.current);
-          const withFailedNodes = ensureFailedNodes(
-            mergedGraph,
-            graph.failedFiles,
-            projectPath,
-            "src"
+        if (!active || currentSeq !== parseSeq.current) {
+          return;
+        }
+        if (onDebugLog) {
+          onDebugLog(`[UML] ${new Date().toLocaleTimeString()}\n${result.raw}`);
+        }
+        const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraphRef.current);
+        const withFailedNodes = ensureFailedNodes(
+          mergedGraph,
+          graph.failedFiles,
+          projectPath,
+          "src"
+        );
+        const nextGraph = applyInvalidFlags(withFailedNodes, graph.failedFiles);
+        lastGoodGraphRef.current = nextGraph;
+        setUmlGraph(nextGraph);
+        if (graph.failedFiles && graph.failedFiles.length > 0) {
+          const count = graph.failedFiles.length;
+          setUmlStatus(
+            `UML parse incomplete (${count} file${count === 1 ? "" : "s"}).`
           );
-          const nextGraph = applyInvalidFlags(withFailedNodes, graph.failedFiles);
-          lastGoodGraphRef.current = nextGraph;
-          setUmlGraph(nextGraph);
-          if (graph.failedFiles && graph.failedFiles.length > 0) {
-            const count = graph.failedFiles.length;
-            setUmlStatus(
-              `UML parse incomplete (${count} file${count === 1 ? "" : "s"}).`
-            );
-          } else {
-            setUmlStatus(null);
-          }
+        } else {
+          setUmlStatus(null);
         }
       } catch (error) {
-        if (currentSeq === parseSeq.current) {
-          setUmlStatus(`UML parse failed: ${formatStatus(error)}`);
-          if (lastGoodGraphRef.current) {
-            setUmlGraph(lastGoodGraphRef.current);
-          } else {
-            const fallback = buildMockGraph(tree, projectPath);
-            setUmlGraph(fallback);
-          }
+        if (!active || currentSeq !== parseSeq.current) {
+          return;
+        }
+        setUmlStatus(`UML parse failed: ${formatStatus(error)}`);
+        if (lastGoodGraphRef.current) {
+          setUmlGraph(lastGoodGraphRef.current);
+        } else {
+          const fallback = buildMockGraph(tree, projectPath);
+          setUmlGraph(fallback);
         }
       }
-    }, 500);
+    };
+
+    void runParse();
 
     return () => {
-      window.clearTimeout(timer);
+      active = false;
     };
   }, [projectPath, tree, fileDrafts, onDebugLog, formatStatus, setUmlGraph]);
 

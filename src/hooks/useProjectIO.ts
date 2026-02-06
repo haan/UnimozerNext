@@ -33,7 +33,6 @@ type UseProjectIOArgs = {
   updateDraftForPath: (path: string, content: string, savedOverride?: string) => void;
   formatAndSaveUmlFiles: (setStatusMessage: boolean) => Promise<number>;
   formatStatus: (input: unknown) => string;
-  onExternalContent: () => void;
 };
 
 type UseProjectIOResult = {
@@ -66,8 +65,7 @@ export const useProjectIO = ({
   notifyLsOpen,
   updateDraftForPath,
   formatAndSaveUmlFiles,
-  formatStatus,
-  onExternalContent
+  formatStatus
 }: UseProjectIOArgs): UseProjectIOResult => {
   const refreshTree = useCallback(
     async (root: string) => {
@@ -139,7 +137,6 @@ export const useProjectIO = ({
           setOpenFile({ name, path });
           setContent(existingDraft.content);
           setLastSavedContent(existingDraft.lastSavedContent);
-          onExternalContent();
           notifyLsOpen(path, existingDraft.content);
           setStatus(`Opened ${name}`);
         } else {
@@ -147,7 +144,6 @@ export const useProjectIO = ({
           setOpenFile({ name, path });
           setContent(text);
           setLastSavedContent(text);
-          onExternalContent();
           updateDraftForPath(path, text, text);
           notifyLsOpen(path, text);
           setStatus(`Opened ${name}`);
@@ -167,8 +163,7 @@ export const useProjectIO = ({
       setLastSavedContent,
       setOpenFile,
       setStatus,
-      updateDraftForPath,
-      onExternalContent
+      updateDraftForPath
     ]
   );
 
