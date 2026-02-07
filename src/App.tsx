@@ -211,6 +211,7 @@ function AppContent({
   const packedSyncProjectRootRef = useRef<string | null>(null);
   const packedSyncArchivePathRef = useRef<string | null>(null);
   const allowWindowCloseRef = useRef(false);
+  const closeRequestedUnlistenRef = useRef<(() => void) | null>(null);
   const zoomControlsRef = useRef<{
     zoomIn: () => void;
     zoomOut: () => void;
@@ -349,7 +350,8 @@ function AppContent({
   const canAddField = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
   const canAddConstructor = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
   const canAddMethod = Boolean(selectedNode) && Boolean(openFilePath) && !busy;
-  const canCompileClass = Boolean(projectPath) && !busy;
+  const hasUmlClasses = Boolean(umlGraph?.nodes.length);
+  const canCompileClass = Boolean(projectPath) && !busy && hasUmlClasses;
 
   const isMac = useMemo(
     () => typeof navigator !== "undefined" && /mac/i.test(navigator.platform),
@@ -450,6 +452,11 @@ function AppContent({
   const handleExit = useCallback(() => {
     const closeWindow = async () => {
       await awaitPackedArchiveSync();
+      const unlisten = closeRequestedUnlistenRef.current;
+      if (unlisten) {
+        closeRequestedUnlistenRef.current = null;
+        unlisten();
+      }
       const window = getCurrentWindow();
       allowWindowCloseRef.current = true;
       await window.close();
@@ -533,10 +540,12 @@ function AppContent({
     }
   }, [selectedClassId, selectedNode]);
 
-  const projectName = useMemo(
-    () => (projectPath ? basename(projectPath) : ""),
-    [projectPath]
-  );
+  const projectName = useMemo(() => {
+    if (projectStorageMode === "scratch") {
+      return "Unsaved Project";
+    }
+    return projectPath ? basename(projectPath) : "";
+  }, [projectPath, projectStorageMode]);
 
   useEffect(() => {
     if (!projectPath) {
@@ -678,6 +687,7 @@ function AppContent({
 
   const { umlStatus, lastGoodGraphRef } = useUmlGraph({
     projectPath,
+    projectStorageMode,
     tree,
     fileDrafts: umlParseDrafts,
     setUmlGraph,
@@ -801,7 +811,7 @@ function AppContent({
     }
     return nextGraph;
   }, [umlGraph, showDependencies, showSwingAttributes]);
-  const canExportDiagram = Boolean(visibleGraph && diagramState);
+  const canExportDiagram = Boolean(visibleGraph && diagramState) && hasUmlClasses;
 
 
   const handleContentChange = useCallback((value: string) => {
@@ -830,10 +840,14 @@ function AppContent({
 
   useEffect(() => {
     const window = getCurrentWindow();
-    const titlePath =
-      projectStorageMode === "packed" ? packedArchivePath ?? projectPath : projectPath;
-    const nextTitle = titlePath
-      ? `${defaultTitle} - ${toDisplayPath(titlePath)}`
+    const titleValue =
+      projectStorageMode === "scratch"
+        ? "Unsaved Project"
+        : projectStorageMode === "packed"
+          ? packedArchivePath ?? projectPath
+          : projectPath;
+    const nextTitle = titleValue
+      ? `${defaultTitle} - ${toDisplayPath(titleValue)}`
       : defaultTitle;
     window.setTitle(nextTitle).catch(() => undefined);
   }, [packedArchivePath, projectPath, projectStorageMode]);
@@ -1098,45 +1112,52 @@ function AppContent({
 
   useEffect(() => {
     const window = getCurrentWindow();
-    let unlisten: (() => void) | null = null;
     const register = async () => {
-      unlisten = await window.onCloseRequested((event) => {
+      const unlisten = await window.onCloseRequested((event) => {
         if (allowWindowCloseRef.current) {
           return;
         }
         event.preventDefault();
         requestProjectAction("exit");
       });
+      closeRequestedUnlistenRef.current = unlisten;
     };
     void register();
     return () => {
+      const unlisten = closeRequestedUnlistenRef.current;
       if (unlisten) {
+        closeRequestedUnlistenRef.current = null;
         unlisten();
       }
     };
   }, [requestProjectAction]);
 
   useEffect(() => {
+    if (projectPath) return;
     let active = true;
     const loadLaunchProject = async () => {
       try {
         const launchPaths = await invoke<string[]>("take_launch_open_paths");
-        if (!active || launchPaths.length === 0) {
+        if (!active) {
           return;
         }
         const packedPath = launchPaths.find((path) => path.toLowerCase().endsWith(".umz"));
         if (packedPath) {
           await handleOpenPackedProjectPath(packedPath);
+          return;
         }
       } catch {
         // Ignore launch-open path lookup failures.
+      }
+      if (active) {
+        await handleNewProject();
       }
     };
     void loadLaunchProject();
     return () => {
       active = false;
     };
-  }, [handleOpenPackedProjectPath]);
+  }, [handleNewProject, handleOpenPackedProjectPath, projectPath]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

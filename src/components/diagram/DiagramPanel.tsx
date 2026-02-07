@@ -66,6 +66,7 @@ export const DiagramPanel = ({
   onRegisterExport
 }: DiagramPanelProps) => {
   const exportControlsRef = useRef<ExportControls | null>(null);
+  const canExportDiagram = Boolean(graph && diagram && graph.nodes.length > 0);
 
   return (
     <ContextMenu>
@@ -153,7 +154,7 @@ export const DiagramPanel = ({
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuSub>
-          <ContextMenuSubTriggerItem disabled={!graph || !diagram}>
+          <ContextMenuSubTriggerItem disabled={!canExportDiagram}>
             <span className="inline-flex items-center gap-2">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -170,13 +171,13 @@ export const DiagramPanel = ({
           </ContextMenuSubTriggerItem>
           <ContextMenuSubContent>
             <ContextMenuItem
-              disabled={!graph || !diagram}
+              disabled={!canExportDiagram}
               onSelect={() => exportControlsRef.current?.copyDiagramPng("uncompiled")}
             >
               Uncompiled
             </ContextMenuItem>
             <ContextMenuItem
-              disabled={!graph || !diagram}
+              disabled={!canExportDiagram}
               onSelect={() => exportControlsRef.current?.copyDiagramPng("compiled")}
             >
               Compiled
@@ -184,7 +185,7 @@ export const DiagramPanel = ({
           </ContextMenuSubContent>
         </ContextMenuSub>
         <ContextMenuSub>
-          <ContextMenuSubTriggerItem disabled={!graph || !diagram}>
+          <ContextMenuSubTriggerItem disabled={!canExportDiagram}>
             <span className="inline-flex items-center gap-2">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -201,13 +202,13 @@ export const DiagramPanel = ({
           </ContextMenuSubTriggerItem>
           <ContextMenuSubContent>
             <ContextMenuItem
-              disabled={!graph || !diagram}
+              disabled={!canExportDiagram}
               onSelect={() => exportControlsRef.current?.exportDiagramPng("uncompiled")}
             >
               Uncompiled
             </ContextMenuItem>
             <ContextMenuItem
-              disabled={!graph || !diagram}
+              disabled={!canExportDiagram}
               onSelect={() => exportControlsRef.current?.exportDiagramPng("compiled")}
             >
               Compiled

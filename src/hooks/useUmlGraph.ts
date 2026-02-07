@@ -8,6 +8,7 @@ import { basename, toFqnFromPath } from "../services/paths";
 
 type UseUmlGraphArgs = {
   projectPath: string | null;
+  projectStorageMode: "folder" | "packed" | "scratch" | null;
   tree: FileNode | null;
   fileDrafts: Record<string, FileDraft>;
   setUmlGraph: React.Dispatch<React.SetStateAction<UmlGraph | null>>;
@@ -101,8 +102,16 @@ const ensureFailedNodes = (
   };
 };
 
+const hasJavaFiles = (node: FileNode): boolean => {
+  if (node.kind === "file") {
+    return true;
+  }
+  return (node.children ?? []).some((child) => hasJavaFiles(child));
+};
+
 export const useUmlGraph = ({
   projectPath,
+  projectStorageMode,
   tree,
   fileDrafts,
   setUmlGraph,
@@ -211,6 +220,16 @@ export const useUmlGraph = ({
       return;
     }
 
+    if (projectStorageMode === "scratch" && !hasJavaFiles(tree)) {
+      parseSeqRef.current += 1;
+      pendingParseRef.current = null;
+      const mockGraph = buildMockGraph(tree, projectPath);
+      lastGoodGraphRef.current = mockGraph;
+      setUmlGraph(mockGraph);
+      setUmlStatus(null);
+      return;
+    }
+
     const overrides = Object.entries(fileDrafts)
       .filter(([, draft]) => draft.content !== draft.lastSavedContent)
       .map(([path, draft]) => ({
@@ -226,7 +245,7 @@ export const useUmlGraph = ({
       overrides
     };
     drainParseQueue();
-  }, [projectPath, tree, fileDrafts, drainParseQueue]);
+  }, [projectPath, projectStorageMode, tree, fileDrafts, setUmlGraph, drainParseQueue]);
 
   return {
     umlStatus,

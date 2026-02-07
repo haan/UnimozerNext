@@ -577,6 +577,13 @@ struct OpenPackedProjectResponse {
     project_name: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OpenScratchProjectResponse {
+    project_root: String,
+    project_name: String,
+}
+
 struct RunHandle {
     id: u64,
     child: std::process::Child,
@@ -761,6 +768,16 @@ fn packed_workspace_dir(app: &tauri::AppHandle, archive_path: &Path) -> Result<P
     let safe_stem = sanitize_project_name(stem);
     let hash = stable_hash(&archive_path.to_string_lossy());
     Ok(workspace_root.join(format!("{}-{:016x}", safe_stem, hash)))
+}
+
+fn scratch_workspace_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let local_data = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?;
+    let workspace_root = local_data.join("scratch-workspaces");
+    fs::create_dir_all(&workspace_root).map_err(|error| error.to_string())?;
+    Ok(workspace_root)
 }
 
 fn should_skip_packed_component(component: &str) -> bool {
@@ -1020,6 +1037,22 @@ fn create_packed_project(
     Ok(OpenPackedProjectResponse {
         archive_path: archive_output.to_string_lossy().to_string(),
         workspace_dir: workspace_dir.to_string_lossy().to_string(),
+        project_root: project_root.to_string_lossy().to_string(),
+        project_name,
+    })
+}
+
+#[tauri::command]
+fn create_scratch_project(app: tauri::AppHandle) -> Result<OpenScratchProjectResponse, String> {
+    let workspace_root = scratch_workspace_root(&app)?;
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_millis();
+    let project_name = format!("UnsavedProject{}", timestamp);
+    let project_root = workspace_root.join(&project_name);
+    create_netbeans_project(project_root.to_string_lossy().to_string())?;
+    Ok(OpenScratchProjectResponse {
         project_root: project_root.to_string_lossy().to_string(),
         project_name,
     })
@@ -2443,6 +2476,7 @@ fn main() {
             remove_text_file,
             open_packed_project,
             create_packed_project,
+            create_scratch_project,
             save_packed_project,
             export_netbeans_project,
             compile_project,

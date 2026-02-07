@@ -213,7 +213,7 @@ export const CodePanel = memo(
             />
           ) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Open a Java file from the diagram to start editing.
+              Select a Java class from the diagram to start editing.
             </div>
           )}
         </div>

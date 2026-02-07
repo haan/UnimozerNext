@@ -22,7 +22,12 @@ type OpenPackedProjectResponse = {
   projectName: string;
 };
 
-export type ProjectStorageMode = "folder" | "packed";
+type OpenScratchProjectResponse = {
+  projectRoot: string;
+  projectName: string;
+};
+
+export type ProjectStorageMode = "folder" | "packed" | "scratch";
 
 type UseProjectIOArgs = {
   projectPath: string | null;
@@ -337,39 +342,17 @@ export const useProjectIO = ({
 
   const handleNewProject = useCallback(async () => {
     setStatus("Creating project...");
-    const suggestedName = projectPath
-      ? `${basename(projectPath)}.${PACKED_PROJECT_EXTENSION}`
-      : DEFAULT_NEW_PROJECT_FILE_NAME;
-    const selection = await save({
-      title: "Create New Unimozer Project",
-      defaultPath: packedArchivePath ?? suggestedName,
-      filters: [
-        {
-          name: "Unimozer Project",
-          extensions: [PACKED_PROJECT_EXTENSION]
-        }
-      ]
-    });
-
-    if (!selection || typeof selection !== "string") {
-      setStatus("New project cancelled.");
-      return;
-    }
-
-    const archivePath = ensureUmzPath(selection);
     setBusy(true);
     clearConsole();
     await prepareProjectSwitch();
     try {
-      const response = await invoke<OpenPackedProjectResponse>("create_packed_project", {
-        archivePath
-      });
+      const response = await invoke<OpenScratchProjectResponse>("create_scratch_project");
       await refreshTree(response.projectRoot);
       setProjectPath(response.projectRoot);
-      setProjectStorageMode("packed");
-      setPackedArchivePath(response.archivePath);
+      setProjectStorageMode("scratch");
+      setPackedArchivePath(null);
       resetProjectSession();
-      setStatus(`Project created: ${toDisplayPath(response.archivePath)}`);
+      setStatus("Unsaved project ready.");
     } catch (error) {
       setStatus(`Failed to create project: ${formatStatus(error)}`);
     } finally {
@@ -378,10 +361,7 @@ export const useProjectIO = ({
   }, [
     clearConsole,
     formatStatus,
-    ensureUmzPath,
-    packedArchivePath,
     prepareProjectSwitch,
-    projectPath,
     refreshTree,
     resetProjectSession,
     setBusy,
@@ -394,6 +374,41 @@ export const useProjectIO = ({
   const handleSave = useCallback(async () => {
     if (!projectPath) {
       setStatus("Open a project before saving.");
+      return;
+    }
+    if (projectStorageMode === "scratch") {
+      const suggestedName = DEFAULT_NEW_PROJECT_FILE_NAME;
+      const selection = await save({
+        title: "Save Project As",
+        defaultPath: packedArchivePath ?? suggestedName,
+        filters: [
+          {
+            name: "Unimozer Project",
+            extensions: [PACKED_PROJECT_EXTENSION]
+          }
+        ]
+      });
+      if (!selection || typeof selection !== "string") {
+        setStatus("Save As cancelled.");
+        return;
+      }
+
+      const archivePath = ensureUmzPath(selection);
+      setBusy(true);
+      try {
+        await formatAndSaveUmlFiles(true);
+        await invoke("save_packed_project", {
+          projectRoot: projectPath,
+          archivePath
+        });
+        setProjectStorageMode("packed");
+        setPackedArchivePath(archivePath);
+        setStatus(`Project saved to ${toDisplayPath(archivePath)}`);
+      } catch (error) {
+        setStatus(`Save As failed: ${formatStatus(error)}`);
+      } finally {
+        setBusy(false);
+      }
       return;
     }
     setBusy(true);
@@ -415,12 +430,15 @@ export const useProjectIO = ({
       setBusy(false);
     }
   }, [
+    ensureUmzPath,
     formatAndSaveUmlFiles,
     formatStatus,
     packedArchivePath,
     projectPath,
     projectStorageMode,
     setBusy,
+    setPackedArchivePath,
+    setProjectStorageMode,
     setStatus
   ]);
 
@@ -429,7 +447,10 @@ export const useProjectIO = ({
       setStatus("Open a project before saving.");
       return;
     }
-    const suggestedName = `${basename(projectPath)}.${PACKED_PROJECT_EXTENSION}`;
+    const suggestedName =
+      projectStorageMode === "scratch"
+        ? DEFAULT_NEW_PROJECT_FILE_NAME
+        : `${basename(projectPath)}.${PACKED_PROJECT_EXTENSION}`;
     const selection = await save({
       title: "Save Project As",
       defaultPath: packedArchivePath ?? suggestedName,
@@ -453,7 +474,8 @@ export const useProjectIO = ({
         projectRoot: projectPath,
         archivePath
       });
-      if (projectStorageMode === "packed") {
+      if (projectStorageMode === "packed" || projectStorageMode === "scratch") {
+        setProjectStorageMode("packed");
         setPackedArchivePath(archivePath);
       }
       setStatus(`Project saved to ${toDisplayPath(archivePath)}`);
@@ -471,6 +493,7 @@ export const useProjectIO = ({
     projectStorageMode,
     setBusy,
     setPackedArchivePath,
+    setProjectStorageMode,
     setStatus
   ]);
 
