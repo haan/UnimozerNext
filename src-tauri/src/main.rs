@@ -914,6 +914,22 @@ fn build_archive_backup_path(archive_path: &Path) -> PathBuf {
     PathBuf::from(format!("{}.bak", archive_path.to_string_lossy()))
 }
 
+fn archive_root_name_from_path(archive_path: &Path) -> String {
+    let stem = archive_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("project");
+    sanitize_project_name(stem)
+}
+
+fn remap_archive_entry_name(relative: &Path, root_name: &str) -> String {
+    let entry = relative.to_string_lossy().replace('\\', "/");
+    match entry.split_once('/') {
+        Some((_, tail)) if !tail.is_empty() => format!("{}/{}", root_name, tail),
+        _ => root_name.to_string(),
+    }
+}
+
 fn write_packed_archive(project_root: &Path, archive_path: &Path) -> Result<(), String> {
     if !project_root.is_dir() {
         return Err("Project root directory not found".to_string());
@@ -921,6 +937,7 @@ fn write_packed_archive(project_root: &Path, archive_path: &Path) -> Result<(), 
     let base_parent = project_root
         .parent()
         .ok_or_else(|| "Project root has no parent directory".to_string())?;
+    let archive_root_name = archive_root_name_from_path(archive_path);
 
     let mut paths = Vec::new();
     collect_pack_paths(base_parent, project_root, &mut paths).map_err(|error| error.to_string())?;
@@ -949,7 +966,7 @@ fn write_packed_archive(project_root: &Path, archive_path: &Path) -> Result<(), 
 
         for path in paths {
             let relative = path.strip_prefix(base_parent).unwrap_or(&path);
-            let mut entry_name = relative.to_string_lossy().replace('\\', "/");
+            let mut entry_name = remap_archive_entry_name(relative, &archive_root_name);
             if path.is_dir() {
                 if !entry_name.ends_with('/') {
                     entry_name.push('/');

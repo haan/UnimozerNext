@@ -155,23 +155,23 @@ Implementation:
 ### 4.3 Packed Project Implementation Checklist
 
 #### Phase 1 - Foundation and OS integration
-- [ ] Register `.umz` file association in installers (`msi`, `nsis`) so double-click opens Unimozer Next
-- [ ] Capture launch/open arguments (`.umz` path) at startup
-- [ ] Add backend command to expose pending startup project-file open requests to frontend
-- [ ] Add project session mode model: `packed` vs `folder` (frontend state shape + backend metadata)
+- [x] Register `.umz` file association in installer targets (currently `nsis`) so double-click opens Unimozer Next
+- [x] Capture launch/open arguments (`.umz` path) at startup
+- [x] Add backend command to expose pending startup project-file open requests to frontend
+- [x] Add project session mode model: `packed` vs `folder` (frontend state shape + backend metadata)
 
 #### Phase 2 - Backend pack/unpack pipeline
-- [ ] Add backend command `open_packed_project(path)`:
+- [x] Add backend command `open_packed_project(path)`:
   - validate ZIP
   - enforce one top-level folder
   - extract to managed workspace folder
   - return extracted root path + project metadata
-- [ ] Add backend command `save_packed_project(workspace_root, archive_path)`:
+- [x] Add backend command `save_packed_project(workspace_root, archive_path)`:
   - recreate archive from workspace
   - enforce one top-level folder in output ZIP
   - atomic write (`.tmp` then replace)
-- [ ] Exclude transient folders from archive (`build/`, `dist/`, `target/`, `.git/`, etc.)
-- [ ] Ensure `unimozer.json` is always included before archive write
+- [x] Exclude transient folders from archive (`build/`, `dist/`, `target/`, `.git/`, etc.)
+- [x] Persist `unimozer.json` whenever diagram state exists; if missing, auto-generate defaults on open/save
 
 #### Phase 3 - Frontend file menu behavior
 - [x] Replace current `Open Project` action with `.umz` open flow (`File > Open...`)
@@ -181,15 +181,15 @@ Implementation:
 - [x] Update `Save As` to always prompt for `.umz` output
 
 #### Phase 4 - Compile and consistency guarantees
-- [ ] For packed projects, compile action must save/repack first
-- [ ] If save/repack fails, compile must abort with clear status message
-- [ ] Ensure UML/layout state is flushed before compile-triggered repack
+- [x] For packed projects, compile action triggers archive repack after successful compile (async/non-blocking)
+- [x] If archive repack fails, keep project dirty and surface a clear status/toast message
+- [x] Ensure UML/layout state is flushed before compile-triggered repack
 
 #### Phase 5 - Interoperability and hardening
-- [ ] Preserve NetBeans metadata (`nbproject/`, `build.xml`) in `.umz`
-- [ ] Validate import/export compatibility with NetBeans ZIP structure expectations
-- [ ] Add ZIP-slip protections for extraction
-- [ ] Add recovery path for interrupted save (keep last known good archive)
+- [x] Preserve NetBeans metadata (`nbproject/`, `build.xml`) in `.umz`
+- [x] Validate import/export compatibility with NetBeans ZIP structure expectations
+- [x] Add ZIP-slip protections for extraction
+- [x] Add recovery path for interrupted save (keep last known good archive)
 
 ---
 
