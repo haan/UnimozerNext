@@ -103,11 +103,7 @@ export const DiagramPanel = ({
                   onRegisterExport?.(controls);
                 }}
               />
-            ) : (
-              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Open a project to generate the UML view.
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </ContextMenuTrigger>

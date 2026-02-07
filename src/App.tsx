@@ -59,6 +59,14 @@ const formatStatus = (input: unknown) =>
 const trimStatus = (input: string, max = STATUS_TEXT_MAX_CHARS) =>
   input.length > max ? `${input.slice(0, max)}...` : input;
 
+const hasClassFilesInTree = (node: FileNode | null): boolean => {
+  if (!node) return false;
+  if (node.kind === "file") {
+    return node.name.toLowerCase().endsWith(".java");
+  }
+  return (node.children ?? []).some((child) => hasClassFilesInTree(child));
+};
+
 type LoadedAppSettings = {
   settings: AppSettings;
   settingsOpen: boolean;
@@ -321,6 +329,9 @@ function AppContent({
     notifyLsClose,
     setStatus
   });
+  const scratchHasClasses = useMemo(() => hasClassFilesInTree(tree), [tree]);
+  const hasPendingProjectChanges =
+    hasUnsavedChanges || (projectStorageMode === "scratch" && scratchHasClasses);
   const [umlParseDrafts, setUmlParseDrafts] = useState(fileDrafts);
 
   useEffect(() => {
@@ -544,8 +555,11 @@ function AppContent({
     if (projectStorageMode === "scratch") {
       return "Unsaved Project";
     }
+    if (projectStorageMode === "packed" && packedArchivePath) {
+      return basename(packedArchivePath).replace(/\.umz$/i, "");
+    }
     return projectPath ? basename(projectPath) : "";
-  }, [projectPath, projectStorageMode]);
+  }, [packedArchivePath, projectPath, projectStorageMode]);
 
   useEffect(() => {
     if (!projectPath) {
@@ -1091,15 +1105,20 @@ function AppContent({
 
   const requestProjectAction = useCallback(
     (action: "open" | "openFolder" | "new" | "exit") => {
-      if (!hasUnsavedChanges) {
+      if (!hasPendingProjectChanges) {
         runProjectAction(action);
         return;
       }
       setPendingProjectAction(action);
       setConfirmProjectActionOpen(true);
     },
-    [hasUnsavedChanges, runProjectAction]
+    [hasPendingProjectChanges, runProjectAction]
   );
+  const requestProjectActionRef = useRef(requestProjectAction);
+
+  useEffect(() => {
+    requestProjectActionRef.current = requestProjectAction;
+  }, [requestProjectAction]);
 
   const confirmProjectAction = useCallback(() => {
     const action = pendingProjectAction;
@@ -1111,6 +1130,7 @@ function AppContent({
   }, [pendingProjectAction, runProjectAction]);
 
   useEffect(() => {
+    let disposed = false;
     const window = getCurrentWindow();
     const register = async () => {
       const unlisten = await window.onCloseRequested((event) => {
@@ -1118,19 +1138,24 @@ function AppContent({
           return;
         }
         event.preventDefault();
-        requestProjectAction("exit");
+        requestProjectActionRef.current("exit");
       });
+      if (disposed) {
+        unlisten();
+        return;
+      }
       closeRequestedUnlistenRef.current = unlisten;
     };
     void register();
     return () => {
+      disposed = true;
       const unlisten = closeRequestedUnlistenRef.current;
       if (unlisten) {
         closeRequestedUnlistenRef.current = null;
         unlisten();
       }
     };
-  }, [requestProjectAction]);
+  }, []);
 
   useEffect(() => {
     if (projectPath) return;
@@ -1587,7 +1612,7 @@ function AppContent({
     <div className="flex h-full flex-col">
       <AppMenu
         busy={busy}
-        hasUnsavedChanges={hasUnsavedChanges}
+        hasUnsavedChanges={hasPendingProjectChanges}
         projectName={projectName}
         isMac={isMac}
         editDisabled={editDisabled}

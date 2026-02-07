@@ -33,6 +33,18 @@ const PARSER_SEND_MAX_ATTEMPTS: usize = 2;
 // Polling interval while waiting for a launched Java process to complete.
 const RUN_POLL_INTERVAL_MS: u64 = 200;
 
+// Retry count when cleaning an existing extracted project workspace.
+const WORKSPACE_CLEANUP_RETRIES: usize = 6;
+
+// Delay between workspace cleanup retries.
+const WORKSPACE_CLEANUP_RETRY_DELAY_MS: u64 = 120;
+
+// Max number of fallback workspace names we try if the primary workspace stays locked.
+const WORKSPACE_FALLBACK_SUFFIX_ATTEMPTS: usize = 32;
+
+// Name of the reusable scratch project directory.
+const SCRATCH_PROJECT_DIR_NAME: &str = "UnsavedProject";
+
 // Stream chunk size when forwarding process output lines to the frontend.
 const RUN_OUTPUT_CHUNK_SIZE_BYTES: usize = 8 * 1024;
 
@@ -780,6 +792,78 @@ fn scratch_workspace_root(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(workspace_root)
 }
 
+fn recreate_workspace_dir(path: &Path) -> io::Result<()> {
+    if path.exists() {
+        fs::remove_dir_all(path)?;
+    }
+    fs::create_dir_all(path)?;
+    Ok(())
+}
+
+fn prepare_workspace_dir(base_workspace: &Path) -> Result<PathBuf, String> {
+    let mut last_error: Option<String> = None;
+    for attempt in 0..=WORKSPACE_CLEANUP_RETRIES {
+        match recreate_workspace_dir(base_workspace) {
+            Ok(()) => return Ok(base_workspace.to_path_buf()),
+            Err(error) => {
+                last_error = Some(error.to_string());
+                if attempt < WORKSPACE_CLEANUP_RETRIES {
+                    std::thread::sleep(Duration::from_millis(WORKSPACE_CLEANUP_RETRY_DELAY_MS));
+                }
+            }
+        }
+    }
+
+    let parent = base_workspace
+        .parent()
+        .ok_or_else(|| "Workspace directory has no parent".to_string())?;
+    let base_name = base_workspace
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("workspace");
+
+    for attempt in 0..WORKSPACE_FALLBACK_SUFFIX_ATTEMPTS {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|error| error.to_string())?
+            .as_millis();
+        let candidate = parent.join(format!("{}-session-{}-{}", base_name, timestamp, attempt + 1));
+        if candidate.exists() {
+            continue;
+        }
+        match fs::create_dir_all(&candidate) {
+            Ok(()) => return Ok(candidate),
+            Err(error) => {
+                last_error = Some(error.to_string());
+            }
+        }
+    }
+
+    Err(format!(
+        "Failed to prepare workspace directory: {}",
+        last_error.unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
+
+fn prepare_fixed_workspace_dir(path: &Path) -> Result<(), String> {
+    let mut last_error: Option<String> = None;
+    for attempt in 0..=WORKSPACE_CLEANUP_RETRIES {
+        match recreate_workspace_dir(path) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last_error = Some(error.to_string());
+                if attempt < WORKSPACE_CLEANUP_RETRIES {
+                    std::thread::sleep(Duration::from_millis(WORKSPACE_CLEANUP_RETRY_DELAY_MS));
+                }
+            }
+        }
+    }
+    Err(format!(
+        "Failed to prepare scratch workspace directory: {}",
+        last_error.unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
+
 fn should_skip_packed_component(component: &str) -> bool {
     PACKED_SKIP_DIRS
         .iter()
@@ -956,11 +1040,8 @@ fn open_packed_project(
     }
 
     let project_name = top_level.ok_or_else(|| "Archive has no project folder".to_string())?;
-    let workspace_dir = packed_workspace_dir(&app, &canonical_archive)?;
-    if workspace_dir.exists() {
-        fs::remove_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
-    }
-    fs::create_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
+    let workspace_base = packed_workspace_dir(&app, &canonical_archive)?;
+    let workspace_dir = prepare_workspace_dir(&workspace_base)?;
 
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
@@ -1018,11 +1099,8 @@ fn create_packed_project(
     }
 
     let archive_identity = fs::canonicalize(&archive_target).unwrap_or(archive_target.clone());
-    let workspace_dir = packed_workspace_dir(&app, &archive_identity)?;
-    if workspace_dir.exists() {
-        fs::remove_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
-    }
-    fs::create_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
+    let workspace_base = packed_workspace_dir(&app, &archive_identity)?;
+    let workspace_dir = prepare_workspace_dir(&workspace_base)?;
 
     let stem = archive_target
         .file_stem()
@@ -1045,12 +1123,9 @@ fn create_packed_project(
 #[tauri::command]
 fn create_scratch_project(app: tauri::AppHandle) -> Result<OpenScratchProjectResponse, String> {
     let workspace_root = scratch_workspace_root(&app)?;
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(|error| error.to_string())?
-        .as_millis();
-    let project_name = format!("UnsavedProject{}", timestamp);
+    let project_name = SCRATCH_PROJECT_DIR_NAME.to_string();
     let project_root = workspace_root.join(&project_name);
+    prepare_fixed_workspace_dir(&project_root)?;
     create_netbeans_project(project_root.to_string_lossy().to_string())?;
     Ok(OpenScratchProjectResponse {
         project_root: project_root.to_string_lossy().to_string(),
