@@ -151,7 +151,7 @@ function AppContent({
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
   const [confirmProjectActionOpen, setConfirmProjectActionOpen] = useState(false);
   const [pendingProjectAction, setPendingProjectAction] = useState<
-    "open" | "openFolder" | "new" | null
+    "open" | "openFolder" | "new" | "exit" | null
   >(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [fieldTarget, setFieldTarget] = useState<UmlNode | null>(null);
@@ -205,6 +205,12 @@ function AppContent({
   const umlSignatureRef = useRef<string>("");
   const lastCompileOutDirRef = useRef<string | null>(null);
   const lastCompileStatusRef = useRef<"success" | "failed" | null>(null);
+  const packedSyncInFlightRef = useRef(false);
+  const packedSyncTaskRef = useRef<Promise<void> | null>(null);
+  const packedSyncPendingRef = useRef(false);
+  const packedSyncProjectRootRef = useRef<string | null>(null);
+  const packedSyncArchivePathRef = useRef<string | null>(null);
+  const allowWindowCloseRef = useRef(false);
   const zoomControlsRef = useRef<{
     zoomIn: () => void;
     zoomOut: () => void;
@@ -226,6 +232,73 @@ function AppContent({
     openFilePath,
     openFileContent: content
   });
+
+  const flushPackedArchiveSync = useCallback((): Promise<void> => {
+    if (packedSyncInFlightRef.current) {
+      return packedSyncTaskRef.current ?? Promise.resolve();
+    }
+    packedSyncInFlightRef.current = true;
+    const task = (async () => {
+      while (packedSyncPendingRef.current) {
+        packedSyncPendingRef.current = false;
+        const root = packedSyncProjectRootRef.current;
+        const archivePath = packedSyncArchivePathRef.current;
+        if (!root || !archivePath) {
+          continue;
+        }
+        try {
+          await invoke("save_packed_project", {
+            projectRoot: root,
+            archivePath
+          });
+        } catch {
+          // Keep archive sync fully silent for now.
+        }
+      }
+    })().finally(() => {
+      packedSyncInFlightRef.current = false;
+      packedSyncTaskRef.current = null;
+      if (packedSyncPendingRef.current) {
+        void flushPackedArchiveSync();
+      }
+    });
+    packedSyncTaskRef.current = task;
+    return task;
+  }, []);
+
+  const awaitPackedArchiveSync = useCallback(async () => {
+    if (packedSyncPendingRef.current && !packedSyncInFlightRef.current) {
+      await flushPackedArchiveSync();
+      return;
+    }
+    if (packedSyncTaskRef.current) {
+      await packedSyncTaskRef.current;
+    }
+  }, [flushPackedArchiveSync]);
+
+  const requestPackedArchiveSync = useCallback(() => {
+    if (projectStorageMode !== "packed" || !projectPath || !packedArchivePath) {
+      return;
+    }
+    packedSyncProjectRootRef.current = projectPath;
+    packedSyncArchivePathRef.current = packedArchivePath;
+    packedSyncPendingRef.current = true;
+    if (packedSyncInFlightRef.current) {
+      return;
+    }
+    void flushPackedArchiveSync();
+  }, [flushPackedArchiveSync, packedArchivePath, projectPath, projectStorageMode]);
+
+  useEffect(() => {
+    if (projectStorageMode === "packed" && projectPath && packedArchivePath) {
+      packedSyncProjectRootRef.current = projectPath;
+      packedSyncArchivePathRef.current = packedArchivePath;
+      return;
+    }
+    packedSyncPendingRef.current = false;
+    packedSyncProjectRootRef.current = null;
+    packedSyncArchivePathRef.current = null;
+  }, [packedArchivePath, projectPath, projectStorageMode]);
 
   const {
     fileDrafts,
@@ -375,9 +448,14 @@ function AppContent({
   }, []);
 
   const handleExit = useCallback(() => {
-    const window = getCurrentWindow();
-    window.close().catch(() => undefined);
-  }, []);
+    const closeWindow = async () => {
+      await awaitPackedArchiveSync();
+      const window = getCurrentWindow();
+      allowWindowCloseRef.current = true;
+      await window.close();
+    };
+    void closeWindow().catch(() => undefined);
+  }, [awaitPackedArchiveSync]);
 
   const handleMenuAddClass = useCallback(() => {
     setAddClassOpen(true);
@@ -491,6 +569,7 @@ function AppContent({
     async (outDir: string) => {
       if (!projectPath) return;
       lastCompileOutDirRef.current = outDir;
+      requestPackedArchiveSync();
       try {
         await jshellStop();
       } catch {
@@ -505,7 +584,7 @@ function AppContent({
         setStatus(`JShell failed to start: ${trimStatus(formatStatus(error))}`);
       }
     },
-    [projectPath, setStatus]
+    [projectPath, requestPackedArchiveSync, setStatus]
   );
 
   const {
@@ -628,6 +707,7 @@ function AppContent({
   });
 
   const beforeProjectSwitch = useCallback(async () => {
+    await awaitPackedArchiveSync();
     try {
       await invoke("cancel_run");
     } catch {
@@ -645,7 +725,7 @@ function AppContent({
     }
     setJshellReady(false);
     setObjectBench([]);
-  }, []);
+  }, [awaitPackedArchiveSync]);
 
   const {
     handleOpenProject,
@@ -653,8 +733,8 @@ function AppContent({
     handleOpenPackedProjectPath,
     handleNewProject,
     openFileByPath,
-    handleSave,
-    handleSaveAs,
+    handleSave: saveProject,
+    handleSaveAs: saveProjectAs,
     loadDiagramState
   } = useProjectIO({
     projectPath,
@@ -684,6 +764,16 @@ function AppContent({
     formatAndSaveUmlFiles,
     formatStatus
   });
+
+  const handleSave = useCallback(async () => {
+    await awaitPackedArchiveSync();
+    await saveProject();
+  }, [awaitPackedArchiveSync, saveProject]);
+
+  const handleSaveAs = useCallback(async () => {
+    await awaitPackedArchiveSync();
+    await saveProjectAs();
+  }, [awaitPackedArchiveSync, saveProjectAs]);
 
   const visibleGraph = useMemo(() => {
     if (!umlGraph) return null;
@@ -971,20 +1061,22 @@ function AppContent({
   }, [handleRemoveClass, removeTarget]);
 
   const runProjectAction = useCallback(
-    (action: "open" | "openFolder" | "new") => {
+    (action: "open" | "openFolder" | "new" | "exit") => {
       if (action === "open") {
         void handleOpenProject();
       } else if (action === "openFolder") {
         void handleOpenFolderProject();
+      } else if (action === "exit") {
+        handleExit();
       } else {
         void handleNewProject();
       }
     },
-    [handleNewProject, handleOpenFolderProject, handleOpenProject]
+    [handleExit, handleNewProject, handleOpenFolderProject, handleOpenProject]
   );
 
   const requestProjectAction = useCallback(
-    (action: "open" | "openFolder" | "new") => {
+    (action: "open" | "openFolder" | "new" | "exit") => {
       if (!hasUnsavedChanges) {
         runProjectAction(action);
         return;
@@ -1003,6 +1095,26 @@ function AppContent({
       runProjectAction(action);
     }
   }, [pendingProjectAction, runProjectAction]);
+
+  useEffect(() => {
+    const window = getCurrentWindow();
+    let unlisten: (() => void) | null = null;
+    const register = async () => {
+      unlisten = await window.onCloseRequested((event) => {
+        if (allowWindowCloseRef.current) {
+          return;
+        }
+        event.preventDefault();
+        requestProjectAction("exit");
+      });
+    };
+    void register();
+    return () => {
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [requestProjectAction]);
 
   useEffect(() => {
     let active = true;
@@ -1033,11 +1145,7 @@ function AppContent({
       if (key === "o") {
         event.preventDefault();
         if (!busy) {
-          if (event.shiftKey) {
-            requestProjectAction("openFolder");
-          } else {
-            requestProjectAction("open");
-          }
+          requestProjectAction("open");
         }
         return;
       }
@@ -1486,7 +1594,7 @@ function AppContent({
           void handleSaveAs();
         }}
         onOpenSettings={() => setSettingsOpen(true)}
-        onExit={handleExit}
+        onExit={() => requestProjectAction("exit")}
         onUndo={() => triggerEditorAction("undo")}
         onRedo={() => triggerEditorAction("redo")}
         onCut={() => triggerEditorAction("editor.action.clipboardCutAction")}

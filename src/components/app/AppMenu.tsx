@@ -129,8 +129,7 @@ export const AppMenu = ({
               <MenubarShortcut>{isMac ? "⌘O" : "Ctrl+O"}</MenubarShortcut>
             </MenubarItem>
             <MenubarItem onClick={onRequestOpenFolderProject} disabled={busy}>
-              Open Folder Project...
-              <MenubarShortcut>{isMac ? "⇧⌘O" : "Ctrl+Shift+O"}</MenubarShortcut>
+              Open Folder Project
             </MenubarItem>
             <MenubarItem onClick={onSave} disabled={busy || !projectName}>
               Save

@@ -809,6 +809,10 @@ fn build_archive_temp_path(archive_path: &Path) -> PathBuf {
     PathBuf::from(format!("{}.tmp", archive_path.to_string_lossy()))
 }
 
+fn build_archive_backup_path(archive_path: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.bak", archive_path.to_string_lossy()))
+}
+
 fn write_packed_archive(project_root: &Path, archive_path: &Path) -> Result<(), String> {
     if !project_root.is_dir() {
         return Err("Project root directory not found".to_string());
@@ -868,10 +872,30 @@ fn write_packed_archive(project_root: &Path, archive_path: &Path) -> Result<(), 
         return Err(error);
     }
 
-    if archive_path.exists() {
-        fs::remove_file(archive_path).map_err(|error| error.to_string())?;
+    let backup_path = build_archive_backup_path(archive_path);
+    let had_existing_archive = archive_path.exists();
+    if had_existing_archive {
+        if backup_path.exists() {
+            fs::remove_file(&backup_path).map_err(|error| error.to_string())?;
+        }
+        fs::rename(archive_path, &backup_path).map_err(|error| error.to_string())?;
     }
-    fs::rename(&temp_path, archive_path).map_err(|error| error.to_string())
+
+    match fs::rename(&temp_path, archive_path) {
+        Ok(()) => {
+            if had_existing_archive && backup_path.exists() {
+                let _ = fs::remove_file(&backup_path);
+            }
+            Ok(())
+        }
+        Err(error) => {
+            let _ = fs::remove_file(&temp_path);
+            if had_existing_archive && backup_path.exists() {
+                let _ = fs::rename(&backup_path, archive_path);
+            }
+            Err(error.to_string())
+        }
+    }
 }
 
 #[tauri::command]
