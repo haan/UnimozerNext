@@ -62,10 +62,10 @@ type UseProjectIOResult = {
   handleOpenProject: () => Promise<void>;
   handleOpenFolderProject: () => Promise<void>;
   handleOpenPackedProjectPath: (archivePath: string) => Promise<void>;
-  handleNewProject: () => Promise<void>;
+  handleNewProject: (options?: { clearConsole?: boolean }) => Promise<void>;
   openFileByPath: (path: string) => Promise<void>;
-  handleSave: () => Promise<void>;
-  handleSaveAs: () => Promise<void>;
+  handleSave: () => Promise<boolean>;
+  handleSaveAs: () => Promise<boolean>;
   loadDiagramState: (root: string, graph: UmlGraph) => Promise<void>;
 };
 
@@ -340,10 +340,13 @@ export const useProjectIO = ({
     setStatus
   ]);
 
-  const handleNewProject = useCallback(async () => {
+  const handleNewProject = useCallback(async (options?: { clearConsole?: boolean }) => {
+    const shouldClearConsole = options?.clearConsole ?? true;
     setStatus("Creating project...");
     setBusy(true);
-    clearConsole();
+    if (shouldClearConsole) {
+      clearConsole();
+    }
     await prepareProjectSwitch();
     try {
       const response = await invoke<OpenScratchProjectResponse>("create_scratch_project");
@@ -371,10 +374,35 @@ export const useProjectIO = ({
     setStatus
   ]);
 
+  const switchToPackedArchive = useCallback(
+    async (archivePath: string) => {
+      clearConsole();
+      await prepareProjectSwitch();
+      const response = await invoke<OpenPackedProjectResponse>("open_packed_project", {
+        archivePath
+      });
+      await refreshTree(response.projectRoot);
+      setProjectPath(response.projectRoot);
+      setProjectStorageMode("packed");
+      setPackedArchivePath(response.archivePath);
+      resetProjectSession();
+      return response.archivePath;
+    },
+    [
+      clearConsole,
+      prepareProjectSwitch,
+      refreshTree,
+      resetProjectSession,
+      setPackedArchivePath,
+      setProjectPath,
+      setProjectStorageMode
+    ]
+  );
+
   const handleSave = useCallback(async () => {
     if (!projectPath) {
       setStatus("Open a project before saving.");
-      return;
+      return false;
     }
     if (projectStorageMode === "scratch") {
       const suggestedName = DEFAULT_NEW_PROJECT_FILE_NAME;
@@ -390,7 +418,7 @@ export const useProjectIO = ({
       });
       if (!selection || typeof selection !== "string") {
         setStatus("Save As cancelled.");
-        return;
+        return false;
       }
 
       const archivePath = ensureUmzPath(selection);
@@ -401,15 +429,15 @@ export const useProjectIO = ({
           projectRoot: projectPath,
           archivePath
         });
-        setProjectStorageMode("packed");
-        setPackedArchivePath(archivePath);
-        setStatus(`Project saved to ${toDisplayPath(archivePath)}`);
+        const activeArchivePath = await switchToPackedArchive(archivePath);
+        setStatus(`Project saved to ${toDisplayPath(activeArchivePath)}`);
+        return true;
       } catch (error) {
         setStatus(`Save As failed: ${formatStatus(error)}`);
+        return false;
       } finally {
         setBusy(false);
       }
-      return;
     }
     setBusy(true);
     try {
@@ -424,8 +452,10 @@ export const useProjectIO = ({
         });
         setStatus(`Project saved: ${toDisplayPath(packedArchivePath)}`);
       }
+      return true;
     } catch (error) {
       setStatus(`Failed to save file: ${formatStatus(error)}`);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -437,15 +467,14 @@ export const useProjectIO = ({
     projectPath,
     projectStorageMode,
     setBusy,
-    setPackedArchivePath,
-    setProjectStorageMode,
-    setStatus
+    setStatus,
+    switchToPackedArchive
   ]);
 
   const handleSaveAs = useCallback(async () => {
     if (!projectPath) {
       setStatus("Open a project before saving.");
-      return;
+      return false;
     }
     const suggestedName =
       projectStorageMode === "scratch"
@@ -463,7 +492,7 @@ export const useProjectIO = ({
     });
     if (!selection || typeof selection !== "string") {
       setStatus("Save As cancelled.");
-      return;
+      return false;
     }
 
     const archivePath = ensureUmzPath(selection);
@@ -475,12 +504,15 @@ export const useProjectIO = ({
         archivePath
       });
       if (projectStorageMode === "packed" || projectStorageMode === "scratch") {
-        setProjectStorageMode("packed");
-        setPackedArchivePath(archivePath);
+        const activeArchivePath = await switchToPackedArchive(archivePath);
+        setStatus(`Project saved to ${toDisplayPath(activeArchivePath)}`);
+      } else {
+        setStatus(`Project saved to ${toDisplayPath(archivePath)}`);
       }
-      setStatus(`Project saved to ${toDisplayPath(archivePath)}`);
+      return true;
     } catch (error) {
       setStatus(`Save As failed: ${formatStatus(error)}`);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -492,9 +524,8 @@ export const useProjectIO = ({
     projectPath,
     projectStorageMode,
     setBusy,
-    setPackedArchivePath,
-    setProjectStorageMode,
-    setStatus
+    setStatus,
+    switchToPackedArchive
   ]);
 
   return {

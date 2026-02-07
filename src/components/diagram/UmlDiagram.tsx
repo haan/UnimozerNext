@@ -425,19 +425,19 @@ export const UmlDiagram = ({
         setDragging(null);
         const position = diagram.nodes[id];
         if (position) {
-          onNodePositionChange(id, position.x, position.y, true);
+          onNodePositionChange(id, position.x, position.y, moved);
         }
         if (!moved && onNodeSelect) {
           onNodeSelect(id);
         }
       }
       if (draggingPackage) {
-        const { nodes } = draggingPackage;
+        const { nodes, moved } = draggingPackage;
         setDraggingPackage(null);
         nodes.forEach((node) => {
           const position = diagram.nodes[node.id];
           if (position) {
-            onNodePositionChange(node.id, position.x, position.y, true);
+            onNodePositionChange(node.id, position.x, position.y, moved);
           }
         });
       }
@@ -462,6 +462,12 @@ export const UmlDiagram = ({
     onNodeSelect,
     view
   ]);
+
+  const layerTransform = useMemo(
+    () =>
+      `matrix(${view.scale} 0 0 ${view.scale} ${view.x * view.scale} ${view.y * view.scale})`,
+    [view.scale, view.x, view.y]
+  );
 
   const nodesWithLayout = useMemo(
     () =>
@@ -960,7 +966,7 @@ export const UmlDiagram = ({
         </marker>
       </defs>
 
-      <g data-uml-layer="packages" transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+      <g data-uml-layer="packages" transform={layerTransform}>
         {packages.map((pkg) => {
           const labelWidth = Math.ceil(
             measureTextWidth(pkg.name, `600 ${umlFontSize}px ${UML_FONT_FAMILY}`) +
@@ -1052,7 +1058,7 @@ export const UmlDiagram = ({
 
       <g
         data-uml-layer="edges"
-        transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}
+        transform={layerTransform}
         pointerEvents="none"
       >
         {graph.edges
@@ -1136,7 +1142,7 @@ export const UmlDiagram = ({
         })}
       </g>
 
-      <g data-uml-layer="nodes" transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+      <g data-uml-layer="nodes" transform={layerTransform}>
         {nodesWithLayout.map((node) => (
           <Class
             key={node.id}
@@ -1174,7 +1180,7 @@ export const UmlDiagram = ({
         ))}
       </g>
 
-      <g data-uml-layer="reflexive" transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
+      <g data-uml-layer="reflexive" transform={layerTransform}>
         {graph.edges
           .filter((edge) => edge.kind === "reflexive-association")
           .map((edge) => {

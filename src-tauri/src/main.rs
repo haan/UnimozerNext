@@ -979,7 +979,10 @@ fn write_packed_archive(project_root: &Path, archive_path: &Path) -> Result<(), 
         if backup_path.exists() {
             fs::remove_file(&backup_path).map_err(|error| error.to_string())?;
         }
-        fs::rename(archive_path, &backup_path).map_err(|error| error.to_string())?;
+        if let Err(error) = fs::rename(archive_path, &backup_path) {
+            let _ = fs::remove_file(&temp_path);
+            return Err(error.to_string());
+        }
     }
 
     match fs::rename(&temp_path, archive_path) {
@@ -2383,26 +2386,103 @@ fn load_startup_settings(app: &tauri::AppHandle) -> AppSettings {
     serde_json::from_str::<AppSettings>(&contents).unwrap_or_default()
 }
 
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut index = 0usize;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let hi = bytes[index + 1];
+            let lo = bytes[index + 2];
+            let hi_val = (hi as char).to_digit(16);
+            let lo_val = (lo as char).to_digit(16);
+            if let (Some(hi_val), Some(lo_val)) = (hi_val, lo_val) {
+                out.push(((hi_val << 4) as u8) | (lo_val as u8));
+                index += 3;
+                continue;
+            }
+        }
+        out.push(bytes[index]);
+        index += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+fn parse_file_uri_path(raw: &str) -> Option<PathBuf> {
+    let prefix = "file://";
+    if !raw
+        .get(..prefix.len())
+        .map(|value| value.eq_ignore_ascii_case(prefix))
+        .unwrap_or(false)
+    {
+        return None;
+    }
+
+    let mut body = &raw[prefix.len()..];
+    if body
+        .get(..10)
+        .map(|value| value.eq_ignore_ascii_case("localhost/"))
+        .unwrap_or(false)
+    {
+        body = &body[10..];
+    }
+    if body.is_empty() {
+        return None;
+    }
+
+    let decoded = percent_decode(body);
+    #[cfg(target_os = "windows")]
+    {
+        let mut normalized = decoded;
+        if normalized.starts_with('/') && normalized.chars().nth(2) == Some(':') {
+            normalized = normalized[1..].to_string();
+        } else if !normalized.starts_with('/') && !normalized.contains(':') {
+            normalized = format!(r"\\{}", normalized);
+        }
+        return Some(PathBuf::from(normalized.replace('/', "\\")));
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Some(PathBuf::from(decoded))
+    }
+}
+
+fn parse_launch_umz_arg(raw: &str) -> Option<String> {
+    let trimmed = raw.trim().trim_matches('"');
+    if trimmed.is_empty() || trimmed.starts_with('-') {
+        return None;
+    }
+    let path = parse_file_uri_path(trimmed).unwrap_or_else(|| PathBuf::from(trimmed));
+    let extension = path
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase());
+    if extension.as_deref() != Some("umz") {
+        return None;
+    }
+    Some(path.to_string_lossy().to_string())
+}
+
 fn collect_startup_umz_paths() -> Vec<String> {
     std::env::args_os()
         .skip(1)
         .filter_map(|item| {
             let text = item.to_string_lossy();
-            let trimmed = text.trim();
-            if trimmed.is_empty() || trimmed.starts_with('-') {
-                return None;
-            }
-            let path = PathBuf::from(trimmed);
-            let extension = path
-                .extension()
-                .and_then(|value| value.to_str())
-                .map(|value| value.to_ascii_lowercase());
-            if extension.as_deref() != Some("umz") {
-                return None;
-            }
-            Some(trimmed.to_string())
+            parse_launch_umz_arg(text.as_ref())
         })
         .collect()
+}
+
+fn queue_launch_open_paths(app: &tauri::AppHandle, paths: Vec<String>) {
+    if paths.is_empty() {
+        return;
+    }
+    if let Some(state) = app.try_state::<LaunchOpenState>() {
+        if let Ok(mut guard) = state.pending_paths.lock() {
+            guard.extend(paths);
+        }
+    }
+    let _ = app.emit("launch-open-paths-available", ());
 }
 
 fn resource_candidates(app: &tauri::AppHandle, relative: &str) -> Vec<PathBuf> {
@@ -2456,6 +2536,17 @@ fn log_startup_diagnostics(app: &tauri::AppHandle) {
     if let Ok(path) = settings_path(app) {
         push(format!("[startup] settings_path: {}", path.display()));
     }
+
+    let raw_args = std::env::args_os()
+        .skip(1)
+        .map(|arg| arg.to_string_lossy().to_string())
+        .collect::<Vec<String>>();
+    push(format!("[startup] launch_args: {:?}", raw_args));
+    let parsed_launch_paths = collect_startup_umz_paths();
+    push(format!(
+        "[startup] parsed_launch_umz_paths: {:?}",
+        parsed_launch_paths
+    ));
 
     let jdk_dir = jdk_relative_dir();
     let jdtls_config_dir = jdtls_config_relative_dir();
@@ -2517,17 +2608,13 @@ fn take_launch_open_paths(state: tauri::State<LaunchOpenState>) -> Vec<String> {
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(StartupLogState::default())
         .manage(LaunchOpenState::default())
         .setup(|app| {
             let settings = load_startup_settings(app.handle());
-            if let Some(state) = app.try_state::<LaunchOpenState>() {
-                let launch_paths = collect_startup_umz_paths();
-                if let Ok(mut guard) = state.pending_paths.lock() {
-                    guard.extend(launch_paths);
-                }
-            }
+            let launch_paths = collect_startup_umz_paths();
+            queue_launch_open_paths(app.handle(), launch_paths);
             if settings.advanced.debug_logging {
                 log_startup_diagnostics(app.handle());
             }
@@ -2578,6 +2665,19 @@ fn main() {
             take_startup_logs,
             take_launch_open_paths
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app, event| {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = event {
+                let paths = urls
+                    .iter()
+                    .filter_map(|url| parse_launch_umz_arg(url.as_str()))
+                    .collect::<Vec<String>>();
+                queue_launch_open_paths(app, paths);
+            }
+            #[cfg(not(any(target_os = "macos", target_os = "ios")))]
+            let _ = (app, event);
+        });
 }

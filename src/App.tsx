@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -58,6 +59,8 @@ const formatStatus = (input: unknown) =>
 
 const trimStatus = (input: string, max = STATUS_TEXT_MAX_CHARS) =>
   input.length > max ? `${input.slice(0, max)}...` : input;
+
+const PACKED_SYNC_ERROR_TOAST_ID = "packed-archive-sync-error";
 
 const hasClassFilesInTree = (node: FileNode | null): boolean => {
   if (!node) return false;
@@ -218,6 +221,16 @@ function AppContent({
   const packedSyncPendingRef = useRef(false);
   const packedSyncProjectRootRef = useRef<string | null>(null);
   const packedSyncArchivePathRef = useRef<string | null>(null);
+  const packedSyncFailedRef = useRef(false);
+  const diagramLayoutDirtyRef = useRef(false);
+  const [packedArchiveSyncPending, setPackedArchiveSyncPending] = useState(false);
+  const [packedArchiveSyncFailed, setPackedArchiveSyncFailed] = useState(false);
+  const [diagramLayoutDirty, setDiagramLayoutDirty] = useState(false);
+  const launchBootstrapStartedRef = useRef(false);
+  const setDiagramDirty = useCallback((value: boolean) => {
+    diagramLayoutDirtyRef.current = value;
+    setDiagramLayoutDirty(value);
+  }, []);
   const allowWindowCloseRef = useRef(false);
   const closeRequestedUnlistenRef = useRef<(() => void) | null>(null);
   const zoomControlsRef = useRef<{
@@ -260,8 +273,19 @@ function AppContent({
             projectRoot: root,
             archivePath
           });
-        } catch {
-          // Keep archive sync fully silent for now.
+          setDiagramDirty(false);
+          packedSyncFailedRef.current = false;
+          setPackedArchiveSyncFailed(false);
+          toast.dismiss(PACKED_SYNC_ERROR_TOAST_ID);
+        } catch (error) {
+          setDiagramDirty(true);
+          packedSyncFailedRef.current = true;
+          setPackedArchiveSyncFailed(true);
+          setStatus(`Archive sync failed: ${trimStatus(formatStatus(error))}`);
+          toast.error("Failed to sync project archive.", {
+            id: PACKED_SYNC_ERROR_TOAST_ID,
+            description: trimStatus(formatStatus(error))
+          });
         }
       }
     })().finally(() => {
@@ -269,11 +293,13 @@ function AppContent({
       packedSyncTaskRef.current = null;
       if (packedSyncPendingRef.current) {
         void flushPackedArchiveSync();
+        return;
       }
+      setPackedArchiveSyncPending(false);
     });
     packedSyncTaskRef.current = task;
     return task;
-  }, []);
+  }, [setDiagramDirty, setStatus]);
 
   const awaitPackedArchiveSync = useCallback(async () => {
     if (packedSyncPendingRef.current && !packedSyncInFlightRef.current) {
@@ -292,6 +318,7 @@ function AppContent({
     packedSyncProjectRootRef.current = projectPath;
     packedSyncArchivePathRef.current = packedArchivePath;
     packedSyncPendingRef.current = true;
+    setPackedArchiveSyncPending(true);
     if (packedSyncInFlightRef.current) {
       return;
     }
@@ -307,7 +334,12 @@ function AppContent({
     packedSyncPendingRef.current = false;
     packedSyncProjectRootRef.current = null;
     packedSyncArchivePathRef.current = null;
-  }, [packedArchivePath, projectPath, projectStorageMode]);
+    packedSyncFailedRef.current = false;
+    setPackedArchiveSyncPending(false);
+    setPackedArchiveSyncFailed(false);
+    setDiagramDirty(false);
+    toast.dismiss(PACKED_SYNC_ERROR_TOAST_ID);
+  }, [packedArchivePath, projectPath, projectStorageMode, setDiagramDirty]);
 
   const {
     fileDrafts,
@@ -330,8 +362,13 @@ function AppContent({
     setStatus
   });
   const scratchHasClasses = useMemo(() => hasClassFilesInTree(tree), [tree]);
+  const hasPackedArchiveSyncChanges =
+    projectStorageMode === "packed" && packedArchiveSyncFailed;
   const hasPendingProjectChanges =
-    hasUnsavedChanges || (projectStorageMode === "scratch" && scratchHasClasses);
+    hasUnsavedChanges ||
+    diagramLayoutDirty ||
+    (projectStorageMode === "scratch" && scratchHasClasses) ||
+    hasPackedArchiveSyncChanges;
   const [umlParseDrafts, setUmlParseDrafts] = useState(fileDrafts);
 
   useEffect(() => {
@@ -632,6 +669,10 @@ function AppContent({
     onCompileRequested: () => setObjectBench([])
   });
 
+  const clearConsole = useCallback(() => {
+    resetConsoleOutput();
+  }, [resetConsoleOutput]);
+
   const handleMenuCompileProject = useCallback(() => {
     void handleCompileProject();
   }, [handleCompileProject]);
@@ -780,7 +821,7 @@ function AppContent({
     setCompileStatus,
     setBusy,
     setStatus,
-    clearConsole: () => resetConsoleOutput(),
+    clearConsole,
     beforeProjectSwitch,
     resetLsState,
     notifyLsOpen,
@@ -791,13 +832,27 @@ function AppContent({
 
   const handleSave = useCallback(async () => {
     await awaitPackedArchiveSync();
-    await saveProject();
-  }, [awaitPackedArchiveSync, saveProject]);
+    const success = await saveProject();
+    if (success) {
+      setDiagramDirty(false);
+      packedSyncFailedRef.current = false;
+      setPackedArchiveSyncPending(false);
+      setPackedArchiveSyncFailed(false);
+      toast.dismiss(PACKED_SYNC_ERROR_TOAST_ID);
+    }
+  }, [awaitPackedArchiveSync, saveProject, setDiagramDirty]);
 
   const handleSaveAs = useCallback(async () => {
     await awaitPackedArchiveSync();
-    await saveProjectAs();
-  }, [awaitPackedArchiveSync, saveProjectAs]);
+    const success = await saveProjectAs();
+    if (success) {
+      setDiagramDirty(false);
+      packedSyncFailedRef.current = false;
+      setPackedArchiveSyncPending(false);
+      setPackedArchiveSyncFailed(false);
+      toast.dismiss(PACKED_SYNC_ERROR_TOAST_ID);
+    }
+  }, [awaitPackedArchiveSync, saveProjectAs, setDiagramDirty]);
 
   const visibleGraph = useMemo(() => {
     if (!umlGraph) return null;
@@ -928,8 +983,17 @@ function AppContent({
 
 
   const handleNodePositionChange = (id: string, x: number, y: number, commit: boolean) => {
+    let nextToPersist: DiagramState | null = null;
     setDiagramState((prev) => {
       if (!prev) return prev;
+      const current = prev.nodes[id];
+      const isSamePosition = Boolean(current && current.x === x && current.y === y);
+      if (isSamePosition) {
+        if (commit) {
+          nextToPersist = prev;
+        }
+        return prev;
+      }
       const next = {
         ...prev,
         nodes: {
@@ -937,14 +1001,22 @@ function AppContent({
           [id]: { x, y }
         }
       };
-      if (commit && diagramPath) {
-        void invoke("write_text_file", {
-          path: diagramPath,
-          contents: JSON.stringify(next, null, 2)
-        });
+      if (commit) {
+        nextToPersist = next;
       }
       return next;
     });
+    if (!commit || !diagramPath || !nextToPersist) {
+      return;
+    }
+    void invoke("write_text_file", {
+      path: diagramPath,
+      contents: JSON.stringify(nextToPersist, null, 2)
+    })
+      .then(() => {
+        requestPackedArchiveSync();
+      })
+      .catch(() => undefined);
   };
 
   const getNodeById = useCallback(
@@ -1105,14 +1177,17 @@ function AppContent({
 
   const requestProjectAction = useCallback(
     (action: "open" | "openFolder" | "new" | "exit") => {
-      if (!hasPendingProjectChanges) {
+      const hasPackedArchiveSyncChangesNow =
+        projectStorageMode === "packed" && packedSyncFailedRef.current;
+      const hasDiagramLayoutChangesNow = diagramLayoutDirtyRef.current;
+      if (!hasPendingProjectChanges && !hasPackedArchiveSyncChangesNow && !hasDiagramLayoutChangesNow) {
         runProjectAction(action);
         return;
       }
       setPendingProjectAction(action);
       setConfirmProjectActionOpen(true);
     },
-    [hasPendingProjectChanges, runProjectAction]
+    [hasPendingProjectChanges, projectStorageMode, runProjectAction]
   );
   const requestProjectActionRef = useRef(requestProjectAction);
 
@@ -1157,32 +1232,87 @@ function AppContent({
     };
   }, []);
 
+  const consumeQueuedLaunchPaths = useCallback(async (): Promise<boolean> => {
+    const startedAt = performance.now();
+    try {
+      const launchPaths = await invoke<string[]>("take_launch_open_paths");
+      appendDebugOutput(`[launch] queued paths: ${JSON.stringify(launchPaths)}`);
+      const packedPath = launchPaths.find((path) => path.toLowerCase().endsWith(".umz"));
+      if (packedPath) {
+        appendDebugOutput(`[launch] opening packed project from path: ${packedPath}`);
+        const openStartedAt = performance.now();
+        await handleOpenPackedProjectPath(packedPath);
+        appendDebugOutput(
+          `[launch] open packed project completed in ${Math.round(performance.now() - openStartedAt)}ms`
+        );
+        appendDebugOutput(`[launch] open request completed for path: ${packedPath}`);
+        appendDebugOutput(
+          `[launch] consume launch queue finished in ${Math.round(performance.now() - startedAt)}ms`
+        );
+        return true;
+      }
+      appendDebugOutput("[launch] no .umz path in launch queue");
+    } catch (error) {
+      appendDebugOutput(`[launch] failed to read launch queue: ${trimStatus(formatStatus(error))}`);
+    }
+    appendDebugOutput(
+      `[launch] consume launch queue finished in ${Math.round(performance.now() - startedAt)}ms`
+    );
+    return false;
+  }, [appendDebugOutput, handleOpenPackedProjectPath]);
+
   useEffect(() => {
-    if (projectPath) return;
+    if (projectPath || launchBootstrapStartedRef.current) return;
+    launchBootstrapStartedRef.current = true;
     let active = true;
     const loadLaunchProject = async () => {
-      try {
-        const launchPaths = await invoke<string[]>("take_launch_open_paths");
-        if (!active) {
-          return;
-        }
-        const packedPath = launchPaths.find((path) => path.toLowerCase().endsWith(".umz"));
-        if (packedPath) {
-          await handleOpenPackedProjectPath(packedPath);
-          return;
-        }
-      } catch {
-        // Ignore launch-open path lookup failures.
+      const launchStartedAt = performance.now();
+      appendDebugOutput("[launch] startup launch sequence started");
+      if (await consumeQueuedLaunchPaths()) {
+        appendDebugOutput(
+          `[launch] startup sequence done via .umz in ${Math.round(performance.now() - launchStartedAt)}ms`
+        );
+        return;
       }
       if (active) {
-        await handleNewProject();
+        appendDebugOutput("[launch] falling back to scratch project");
+        const scratchStartedAt = performance.now();
+        await handleNewProject({ clearConsole: false });
+        appendDebugOutput(
+          `[launch] scratch project created in ${Math.round(performance.now() - scratchStartedAt)}ms`
+        );
+        appendDebugOutput(
+          `[launch] startup launch sequence finished in ${Math.round(performance.now() - launchStartedAt)}ms`
+        );
       }
     };
     void loadLaunchProject();
     return () => {
       active = false;
     };
-  }, [handleNewProject, handleOpenPackedProjectPath, projectPath]);
+  }, [appendDebugOutput, consumeQueuedLaunchPaths, handleNewProject, projectPath]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | null = null;
+    const register = async () => {
+      unlisten = await listen("launch-open-paths-available", () => {
+        appendDebugOutput("[launch] received launch-open-paths-available event");
+        void consumeQueuedLaunchPaths();
+      });
+      if (disposed && unlisten) {
+        unlisten();
+        unlisten = null;
+      }
+    };
+    void register();
+    return () => {
+      disposed = true;
+      if (unlisten) {
+        unlisten();
+      }
+    };
+  }, [appendDebugOutput, consumeQueuedLaunchPaths]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

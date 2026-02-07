@@ -104,7 +104,7 @@ const ensureFailedNodes = (
 
 const hasJavaFiles = (node: FileNode): boolean => {
   if (node.kind === "file") {
-    return true;
+    return node.name.toLowerCase().endsWith(".java");
   }
   return (node.children ?? []).some((child) => hasJavaFiles(child));
 };
