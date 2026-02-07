@@ -3,7 +3,7 @@ import type { DiagramState } from "../../models/diagram";
 import type { ObjectInstance } from "../../models/objectBench";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
 import { OBJECT_BENCH_MIN_HEIGHT_PX } from "../../constants/layout";
-import { DiagramPanel } from "../diagram/DiagramPanel";
+import { DiagramPanel, type DiagramViewMode } from "../diagram/DiagramPanel";
 import type { ExportControls, ZoomControls } from "../diagram/UmlDiagram";
 import { ObjectBenchPanel } from "../objectBench/ObjectBenchPanel";
 
@@ -34,6 +34,9 @@ type ObjectBenchSectionProps = {
   onRegisterZoom?: (controls: ZoomControls | null) => void;
   onRegisterExport?: (controls: ExportControls | null) => void;
   onAddClass?: () => void;
+  viewMode: DiagramViewMode;
+  activeFilePath?: string | null;
+  caretLineNumber?: number | null;
   objectBench: ObjectInstance[];
   showPrivate: boolean;
   showInherited: boolean;
@@ -70,6 +73,9 @@ export const ObjectBenchSection = ({
   onRegisterZoom,
   onRegisterExport,
   onAddClass,
+  viewMode,
+  activeFilePath,
+  caretLineNumber,
   objectBench,
   showPrivate,
   showInherited,
@@ -78,10 +84,10 @@ export const ObjectBenchSection = ({
   onCallMethod,
   onRemoveObject
 }: ObjectBenchSectionProps) => (
-  <section className="flex h-full flex-col border-r border-border">
-    <div ref={benchContainerRef} className="relative flex h-full flex-col">
+  <section className="flex h-full min-w-0 flex-col overflow-hidden border-r border-border">
+    <div ref={benchContainerRef} className="relative flex h-full min-w-0 flex-col overflow-hidden">
       <div
-        className="min-h-0 flex-none overflow-hidden"
+        className="min-h-0 min-w-0 flex-none overflow-hidden"
         style={{ height: `${objectBenchSplitRatio * 100}%` }}
       >
         <DiagramPanel
@@ -108,6 +114,9 @@ export const ObjectBenchSection = ({
           onRegisterZoom={onRegisterZoom}
           onRegisterExport={onRegisterExport}
           onAddClass={onAddClass}
+          viewMode={viewMode}
+          activeFilePath={activeFilePath}
+          caretLineNumber={caretLineNumber}
         />
       </div>
       <div

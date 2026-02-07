@@ -58,10 +58,12 @@ export type UmlOverride = {
 export const parseUmlGraph = async (
   root: string,
   srcRoot: string,
-  overrides: UmlOverride[]
+  overrides: UmlOverride[],
+  includeStructogramIr = false
 ): Promise<{ graph: UmlGraph; raw: string }> =>
   invoke<{ graph: UmlGraph; raw: string }>("parse_uml_graph", {
     root,
     srcRoot,
-    overrides
+    overrides,
+    includeStructogramIr
   });

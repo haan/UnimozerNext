@@ -12,6 +12,7 @@ import { ConsolePanel } from "./components/console/ConsolePanel";
 import { CodePanel } from "./components/editor/CodePanel";
 import { AppMenu } from "./components/app/AppMenu";
 import { ObjectBenchSection } from "./components/app/ObjectBenchSection";
+import type { DiagramViewMode } from "./components/diagram/DiagramPanel";
 import { AppDialogs } from "./components/app/AppDialogs";
 import { SplitHandle } from "./components/ui/split-handle";
 import { Toaster } from "./components/ui/sonner";
@@ -156,6 +157,10 @@ function AppContent({
   const [methodReturnOpen, setMethodReturnOpen] = useState(false);
   const [methodReturnValue, setMethodReturnValue] = useState<string | null>(null);
   const [methodReturnLabel, setMethodReturnLabel] = useState("");
+  const [leftPanelViewMode, setLeftPanelViewMode] = useState<DiagramViewMode>("uml");
+  const [editorCaret, setEditorCaret] = useState<{ lineNumber: number; column: number } | null>(
+    null
+  );
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
@@ -227,6 +232,7 @@ function AppContent({
   const [packedArchiveSyncFailed, setPackedArchiveSyncFailed] = useState(false);
   const [diagramLayoutDirty, setDiagramLayoutDirty] = useState(false);
   const launchBootstrapStartedRef = useRef(false);
+  void packedArchiveSyncPending;
   const setDiagramDirty = useCallback((value: boolean) => {
     diagramLayoutDirtyRef.current = value;
     setDiagramLayoutDirty(value);
@@ -743,6 +749,7 @@ function AppContent({
   const { umlStatus, lastGoodGraphRef } = useUmlGraph({
     projectPath,
     projectStorageMode,
+    includeStructogramIr: leftPanelViewMode === "structogram",
     tree,
     fileDrafts: umlParseDrafts,
     setUmlGraph,
@@ -905,6 +912,10 @@ function AppContent({
     updateDraftForPath,
     notifyLsChange
   ]);
+
+  useEffect(() => {
+    setEditorCaret(null);
+  }, [openFilePath]);
 
 
   useEffect(() => {
@@ -1759,6 +1770,7 @@ function AppContent({
         showDependencies={showDependencies}
         showPackages={showPackages}
         showSwingAttributes={showSwingAttributes}
+        structogramMode={leftPanelViewMode === "structogram"}
         wordWrap={wordWrap}
         onRequestNewProject={() => requestProjectAction("new")}
         onRequestOpenProject={() => requestProjectAction("open")}
@@ -1799,6 +1811,9 @@ function AppContent({
         onToggleShowSwingAttributes={(value) =>
           updateUmlSettings({ showSwingAttributes: value })
         }
+        onToggleStructogramMode={(value) => {
+          setLeftPanelViewMode(value ? "structogram" : "uml");
+        }}
         onToggleWordWrap={(value) =>
           handleSettingsChange({
             ...settings,
@@ -1820,7 +1835,10 @@ function AppContent({
       <div className="flex flex-1 overflow-hidden">
         <main className="flex flex-1 flex-col bg-background">
           <div ref={containerRef} className="relative flex flex-1 overflow-hidden">
-            <div className="h-full" style={{ width: `${splitRatio * 100}%` }}>
+            <div
+              className="h-full min-w-0 overflow-hidden"
+              style={{ width: `${splitRatio * 100}%` }}
+            >
                 <ObjectBenchSection
                   benchContainerRef={benchContainerRef}
                   objectBenchSplitRatio={objectBenchSplitRatio}
@@ -1852,6 +1870,9 @@ function AppContent({
                     exportControlsRef.current = controls;
                   }}
                   onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
+                  viewMode={leftPanelViewMode}
+                  activeFilePath={openFilePath}
+                  caretLineNumber={editorCaret?.lineNumber ?? null}
                 objectBench={objectBench}
                 showPrivate={showPrivateObjectFields}
                 showInherited={showInheritedObjectFields}
@@ -1900,6 +1921,9 @@ function AppContent({
                       onEditorMount={(editor) => {
                         editorRef.current = editor;
                         applyPendingReveal();
+                      }}
+                      onCaretChange={(position) => {
+                        setEditorCaret(position);
                       }}
                     />
                 </div>

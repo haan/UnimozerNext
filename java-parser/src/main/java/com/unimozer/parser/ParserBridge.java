@@ -20,12 +20,24 @@ import com.github.javaparser.ast.body.TypeDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
 import com.github.javaparser.ast.expr.AnnotationExpr;
 import com.github.javaparser.ast.expr.CastExpr;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.FieldAccessExpr;
 import com.github.javaparser.ast.expr.InstanceOfExpr;
 import com.github.javaparser.ast.expr.MethodCallExpr;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithModifiers;
 import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.CatchClause;
+import com.github.javaparser.ast.stmt.DoStmt;
+import com.github.javaparser.ast.stmt.ForEachStmt;
+import com.github.javaparser.ast.stmt.ForStmt;
+import com.github.javaparser.ast.stmt.IfStmt;
+import com.github.javaparser.ast.stmt.Statement;
+import com.github.javaparser.ast.stmt.SwitchEntry;
+import com.github.javaparser.ast.stmt.SwitchStmt;
+import com.github.javaparser.ast.stmt.TryStmt;
+import com.github.javaparser.ast.stmt.WhileStmt;
 import com.github.javaparser.ast.type.ArrayType;
 import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
@@ -53,6 +65,7 @@ public class ParserBridge {
     public String root;
     public String srcRoot;
     public List<Override> overrides = new ArrayList<>();
+    public boolean includeStructogramIr;
   }
 
   static class Override {
@@ -100,6 +113,31 @@ public class ParserBridge {
     public boolean isStatic;
     public String visibility;
     public SourceRange range;
+    public ControlTreeNode controlTree;
+  }
+
+  static class ControlTreeNode {
+    public String kind;
+    public String text;
+    public String condition;
+    public String loopKind;
+    public SourceRange range;
+    public List<ControlTreeNode> children = new ArrayList<>();
+    public List<ControlTreeNode> thenBranch = new ArrayList<>();
+    public List<ControlTreeNode> elseBranch = new ArrayList<>();
+    public List<SwitchCaseInfo> switchCases = new ArrayList<>();
+    public List<CatchInfo> catches = new ArrayList<>();
+    public List<ControlTreeNode> finallyBranch = new ArrayList<>();
+  }
+
+  static class SwitchCaseInfo {
+    public String label;
+    public List<ControlTreeNode> body = new ArrayList<>();
+  }
+
+  static class CatchInfo {
+    public String exception;
+    public List<ControlTreeNode> body = new ArrayList<>();
   }
 
   static class ParamInfo {
@@ -308,7 +346,7 @@ public class ParserBridge {
 
       for (TypeDeclaration<?> typeDecl : cu.getTypes()) {
         ParsedType parsedType = new ParsedType();
-        parsedType.node = buildNode(typeDecl, ctx, file);
+        parsedType.node = buildNode(typeDecl, ctx, file, request.includeStructogramIr);
         parsedType.ctx = ctx;
         parsedType.extendsTypes = collectExtendsTypes(typeDecl);
         parsedType.implementsTypes = collectImplementsTypes(typeDecl);
@@ -900,7 +938,12 @@ public class ParserBridge {
     return ctx;
   }
 
-  static Node buildNode(TypeDeclaration<?> typeDecl, Context ctx, Path file) {
+  static Node buildNode(
+    TypeDeclaration<?> typeDecl,
+    Context ctx,
+    Path file,
+    boolean includeStructogramIr
+  ) {
     Node node = new Node();
     String name = typeDecl.getNameAsString();
     String id = ctx.pkg.isEmpty() ? name : ctx.pkg + "." + name;
@@ -911,7 +954,7 @@ public class ParserBridge {
     node.path = file.toString();
     node.isAbstract = isAbstractType(typeDecl);
     node.fields = collectFieldInfo(typeDecl);
-    node.methods = collectMethodInfo(typeDecl, name);
+    node.methods = collectMethodInfo(typeDecl, name, includeStructogramIr);
 
     return node;
   }
@@ -964,7 +1007,11 @@ public class ParserBridge {
     return fields;
   }
 
-  static List<MethodInfo> collectMethodInfo(TypeDeclaration<?> typeDecl, String className) {
+  static List<MethodInfo> collectMethodInfo(
+    TypeDeclaration<?> typeDecl,
+    String className,
+    boolean includeStructogramIr
+  ) {
     List<MethodInfo> methods = new ArrayList<>();
     for (BodyDeclaration<?> member : typeDecl.getMembers()) {
       if (member.isMethodDeclaration()) {
@@ -997,6 +1044,9 @@ public class ParserBridge {
         info.isStatic = isStatic;
         info.visibility = visibility;
         info.range = toSourceRange(method);
+        if (includeStructogramIr && method.getBody().isPresent()) {
+          info.controlTree = buildControlTree(method.getBody().orElse(null));
+        }
         methods.add(info);
       } else if (member.isConstructorDeclaration()) {
         ConstructorDeclaration ctor = member.asConstructorDeclaration();
@@ -1021,10 +1071,181 @@ public class ParserBridge {
         info.isStatic = false;
         info.visibility = visibility;
         info.range = toSourceRange(ctor);
+        if (includeStructogramIr) {
+          info.controlTree = buildControlTree(ctor.getBody());
+        }
         methods.add(info);
       }
     }
     return methods;
+  }
+
+  static ControlTreeNode buildControlTree(BlockStmt block) {
+    if (block == null) return null;
+    ControlTreeNode root = new ControlTreeNode();
+    root.kind = "sequence";
+    root.range = toSourceRange(block);
+    root.children = toControlNodes(block.getStatements());
+    return root;
+  }
+
+  static List<ControlTreeNode> toControlNodes(List<Statement> statements) {
+    List<ControlTreeNode> nodes = new ArrayList<>();
+    if (statements == null) return nodes;
+    for (Statement statement : statements) {
+      ControlTreeNode node = toControlNode(statement);
+      if (node != null) {
+        nodes.add(node);
+      }
+    }
+    return nodes;
+  }
+
+  static List<ControlTreeNode> toBranchNodes(Statement statement) {
+    if (statement == null) return new ArrayList<>();
+    if (statement.isBlockStmt()) {
+      return toControlNodes(statement.asBlockStmt().getStatements());
+    }
+    List<ControlTreeNode> single = new ArrayList<>();
+    ControlTreeNode node = toControlNode(statement);
+    if (node != null) {
+      single.add(node);
+    }
+    return single;
+  }
+
+  static ControlTreeNode toControlNode(Statement statement) {
+    if (statement == null) return null;
+
+    if (statement.isBlockStmt()) {
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "sequence";
+      node.range = toSourceRange(statement);
+      node.children = toControlNodes(statement.asBlockStmt().getStatements());
+      return node;
+    }
+
+    if (statement.isIfStmt()) {
+      IfStmt ifStmt = statement.asIfStmt();
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "if";
+      node.range = toSourceRange(ifStmt);
+      node.condition = normalizeStatementText(ifStmt.getCondition().toString());
+      node.thenBranch = toBranchNodes(ifStmt.getThenStmt());
+      ifStmt.getElseStmt().ifPresent(elseStmt -> node.elseBranch = toBranchNodes(elseStmt));
+      return node;
+    }
+
+    if (statement.isWhileStmt()) {
+      WhileStmt whileStmt = statement.asWhileStmt();
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "loop";
+      node.loopKind = "while";
+      node.range = toSourceRange(whileStmt);
+      node.condition = normalizeStatementText(whileStmt.getCondition().toString());
+      node.children = toBranchNodes(whileStmt.getBody());
+      return node;
+    }
+
+    if (statement.isForStmt()) {
+      ForStmt forStmt = statement.asForStmt();
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "loop";
+      node.loopKind = "for";
+      node.range = toSourceRange(forStmt);
+      String init = forStmt
+        .getInitialization()
+        .stream()
+        .map(Expression::toString)
+        .collect(Collectors.joining(", "));
+      String compare = forStmt.getCompare().map(Expression::toString).orElse("");
+      String update = forStmt
+        .getUpdate()
+        .stream()
+        .map(Expression::toString)
+        .collect(Collectors.joining(", "));
+      node.condition = normalizeStatementText(init + "; " + compare + "; " + update);
+      node.children = toBranchNodes(forStmt.getBody());
+      return node;
+    }
+
+    if (statement.isForEachStmt()) {
+      ForEachStmt eachStmt = statement.asForEachStmt();
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "loop";
+      node.loopKind = "foreach";
+      node.range = toSourceRange(eachStmt);
+      node.condition = normalizeStatementText(
+        eachStmt.getVariable().toString() + " : " + eachStmt.getIterable().toString()
+      );
+      node.children = toBranchNodes(eachStmt.getBody());
+      return node;
+    }
+
+    if (statement.isDoStmt()) {
+      DoStmt doStmt = statement.asDoStmt();
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "loop";
+      node.loopKind = "doWhile";
+      node.range = toSourceRange(doStmt);
+      node.condition = normalizeStatementText(doStmt.getCondition().toString());
+      node.children = toBranchNodes(doStmt.getBody());
+      return node;
+    }
+
+    if (statement.isSwitchStmt()) {
+      SwitchStmt switchStmt = statement.asSwitchStmt();
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "switch";
+      node.range = toSourceRange(switchStmt);
+      node.condition = normalizeStatementText(switchStmt.getSelector().toString());
+      for (SwitchEntry entry : switchStmt.getEntries()) {
+        SwitchCaseInfo caseInfo = new SwitchCaseInfo();
+        caseInfo.label = entry.getLabels().isEmpty()
+          ? "default"
+          : entry
+            .getLabels()
+            .stream()
+            .map(label -> normalizeStatementText(label.toString()))
+            .collect(Collectors.joining(", "));
+        caseInfo.body = toControlNodes(entry.getStatements());
+        node.switchCases.add(caseInfo);
+      }
+      return node;
+    }
+
+    if (statement.isTryStmt()) {
+      TryStmt tryStmt = statement.asTryStmt();
+      ControlTreeNode node = new ControlTreeNode();
+      node.kind = "try";
+      node.range = toSourceRange(tryStmt);
+      node.children = toControlNodes(tryStmt.getTryBlock().getStatements());
+      for (CatchClause catchClause : tryStmt.getCatchClauses()) {
+        CatchInfo catchInfo = new CatchInfo();
+        catchInfo.exception = normalizeStatementText(catchClause.getParameter().toString());
+        catchInfo.body = toControlNodes(catchClause.getBody().getStatements());
+        node.catches.add(catchInfo);
+      }
+      tryStmt
+        .getFinallyBlock()
+        .ifPresent(finallyBlock -> node.finallyBranch = toControlNodes(finallyBlock.getStatements()));
+      return node;
+    }
+
+    ControlTreeNode node = new ControlTreeNode();
+    node.kind = "statement";
+    node.range = toSourceRange(statement);
+    node.text = normalizeStatementText(statement.toString());
+    return node;
+  }
+
+  static String normalizeStatementText(String value) {
+    if (value == null || value.isBlank()) return "";
+    return value
+      .replace("\r", " ")
+      .replace("\n", " ")
+      .replaceAll("\\s+", " ")
+      .trim();
   }
 
   static boolean isInterfaceAbstract(TypeDeclaration<?> typeDecl, MethodDeclaration method) {

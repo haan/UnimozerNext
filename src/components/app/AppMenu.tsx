@@ -32,6 +32,7 @@ type AppMenuProps = {
   showDependencies: boolean;
   showPackages: boolean;
   showSwingAttributes: boolean;
+  structogramMode: boolean;
   wordWrap: boolean;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
@@ -54,6 +55,7 @@ type AppMenuProps = {
   onToggleShowDependencies: (value: boolean) => void;
   onToggleShowPackages: (value: boolean) => void;
   onToggleShowSwingAttributes: (value: boolean) => void;
+  onToggleStructogramMode: (value: boolean) => void;
   onToggleWordWrap: (value: boolean) => void;
   onAddClass: () => void;
   onAddConstructor: () => void;
@@ -83,6 +85,7 @@ export const AppMenu = ({
   showDependencies,
   showPackages,
   showSwingAttributes,
+  structogramMode,
   wordWrap,
   onRequestNewProject,
   onRequestOpenProject,
@@ -105,6 +108,7 @@ export const AppMenu = ({
   onToggleShowDependencies,
   onToggleShowPackages,
   onToggleShowSwingAttributes,
+  onToggleStructogramMode,
   onToggleWordWrap,
   onAddClass,
   onAddConstructor,
@@ -253,6 +257,19 @@ export const AppMenu = ({
                 </MenubarCheckboxItem>
               </MenubarSubContent>
             </MenubarSub>
+          </MenubarContent>
+        </MenubarMenu>
+        <MenubarMenu>
+          <MenubarTrigger>Structogram</MenubarTrigger>
+          <MenubarContent>
+            <MenubarItem onClick={() => onToggleStructogramMode(!structogramMode)}>
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-xs">
+                  {structogramMode ? "✓" : ""}
+                </span>
+                <span>Structogram mode</span>
+              </span>
+            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>

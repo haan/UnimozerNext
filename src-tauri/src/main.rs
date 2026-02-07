@@ -104,6 +104,50 @@ struct UmlMethod {
     visibility: String,
     #[serde(default)]
     range: Option<UmlSourceRange>,
+    #[serde(default)]
+    control_tree: Option<UmlControlTreeNode>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UmlControlTreeNode {
+    kind: String,
+    #[serde(default)]
+    text: Option<String>,
+    #[serde(default)]
+    condition: Option<String>,
+    #[serde(default)]
+    loop_kind: Option<String>,
+    #[serde(default)]
+    range: Option<UmlSourceRange>,
+    #[serde(default)]
+    children: Vec<UmlControlTreeNode>,
+    #[serde(default)]
+    then_branch: Vec<UmlControlTreeNode>,
+    #[serde(default)]
+    else_branch: Vec<UmlControlTreeNode>,
+    #[serde(default)]
+    switch_cases: Vec<UmlSwitchCase>,
+    #[serde(default)]
+    catches: Vec<UmlCatchClause>,
+    #[serde(default)]
+    finally_branch: Vec<UmlControlTreeNode>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UmlSwitchCase {
+    label: String,
+    #[serde(default)]
+    body: Vec<UmlControlTreeNode>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UmlCatchClause {
+    exception: String,
+    #[serde(default)]
+    body: Vec<UmlControlTreeNode>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -370,6 +414,8 @@ struct ParserRequest {
     root: String,
     src_root: String,
     overrides: Vec<SourceOverride>,
+    #[serde(default)]
+    include_structogram_ir: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -619,6 +665,18 @@ struct JshellSession {
     stderr: Arc<Mutex<Vec<String>>>,
 }
 
+impl Drop for JshellSession {
+    fn drop(&mut self) {
+        match self.child.try_wait() {
+            Ok(Some(_)) => {}
+            _ => {
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+            }
+        }
+    }
+}
+
 #[derive(Default)]
 struct JshellState {
     current: Arc<Mutex<Option<JshellSession>>>,
@@ -645,7 +703,13 @@ impl ParserBridgeSession {
 
 impl Drop for ParserBridgeSession {
     fn drop(&mut self) {
-        let _ = self.child.kill();
+        match self.child.try_wait() {
+            Ok(Some(_)) => {}
+            _ => {
+                let _ = self.child.kill();
+                let _ = self.child.wait();
+            }
+        }
     }
 }
 
@@ -1329,11 +1393,14 @@ fn parse_uml_graph(
     root: String,
     src_root: String,
     overrides: Vec<SourceOverride>,
+    include_structogram_ir: Option<bool>,
 ) -> Result<ParseUmlGraphResponse, String> {
+    let include_structogram_ir = include_structogram_ir.unwrap_or(false);
     let request = ParserRequest {
         root,
         src_root,
         overrides,
+        include_structogram_ir,
     };
     let request_value = serde_json::to_value(&request).map_err(|error| error.to_string())?;
     let raw = parser_send_raw(&app, &state, request_value)?;
@@ -2624,6 +2691,54 @@ fn take_launch_open_paths(state: tauri::State<LaunchOpenState>) -> Vec<String> {
     out
 }
 
+fn terminate_child_process(child: &mut std::process::Child) {
+    match child.try_wait() {
+        Ok(Some(_)) => {}
+        _ => {
+            let _ = child.kill();
+            let _ = child.wait();
+        }
+    }
+}
+
+fn shutdown_run_process(state: &RunState) {
+    if let Ok(mut guard) = state.current.lock() {
+        if let Some(mut handle) = guard.take() {
+            terminate_child_process(&mut handle.child);
+        }
+    }
+}
+
+fn shutdown_jshell(state: &JshellState) {
+    if let Ok(mut guard) = state.current.lock() {
+        if let Some(mut session) = guard.take() {
+            terminate_child_process(&mut session.child);
+        }
+    }
+}
+
+fn shutdown_parser_bridge(state: &ParserBridgeState) {
+    if let Ok(mut guard) = state.current.lock() {
+        if let Some(mut session) = guard.take() {
+            terminate_child_process(&mut session.child);
+        }
+    }
+}
+
+fn shutdown_background_processes(app: &tauri::AppHandle) {
+    let run_state = app.state::<RunState>();
+    shutdown_run_process(&run_state);
+
+    let jshell_state = app.state::<JshellState>();
+    shutdown_jshell(&jshell_state);
+
+    let parser_state = app.state::<ParserBridgeState>();
+    shutdown_parser_bridge(&parser_state);
+
+    let ls_state = app.state::<ls::LsState>();
+    let _ = ls::shutdown(&ls_state);
+}
+
 fn main() {
     let app = tauri::Builder::default()
         .manage(StartupLogState::default())
@@ -2685,7 +2800,17 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app, event| {
+    let mut cleaned_up = false;
+    app.run(move |app, event| {
+            if !cleaned_up {
+                if matches!(
+                    event,
+                    tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+                ) {
+                    shutdown_background_processes(app);
+                    cleaned_up = true;
+                }
+            }
             #[cfg(any(target_os = "macos", target_os = "ios"))]
             if let tauri::RunEvent::Opened { urls } = event {
                 let paths = urls

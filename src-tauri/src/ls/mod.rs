@@ -366,6 +366,18 @@ fn stop_process(mut process: LsProcess) -> Result<(), String> {
     Ok(())
 }
 
+pub fn shutdown(state: &LsState) -> Result<(), String> {
+    state.run_id.fetch_add(1, Ordering::SeqCst);
+    let mut guard = state
+        .inner
+        .lock()
+        .map_err(|_| "Failed to lock LS state".to_string())?;
+    if let Some(process) = guard.take() {
+        stop_process(process)?;
+    }
+    Ok(())
+}
+
 fn with_client<T>(
     state: &tauri::State<LsState>,
     f: impl FnOnce(&LsClient) -> Result<T, String>,
@@ -487,15 +499,7 @@ pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: Stri
 
 #[tauri::command]
 pub fn ls_stop(state: tauri::State<LsState>) -> Result<(), String> {
-    state.run_id.fetch_add(1, Ordering::SeqCst);
-    let mut guard = state
-        .inner
-        .lock()
-        .map_err(|_| "Failed to lock LS state".to_string())?;
-    if let Some(process) = guard.take() {
-        stop_process(process)?;
-    }
-    Ok(())
+    shutdown(&state)
 }
 
 #[tauri::command]

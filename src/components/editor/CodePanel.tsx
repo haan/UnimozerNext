@@ -24,6 +24,7 @@ export type CodePanelProps = {
   wordWrap: boolean;
   onChange: (value: string) => void;
   onEditorMount?: (editor: MonacoEditorType.IStandaloneCodeEditor) => void;
+  onCaretChange?: (position: { lineNumber: number; column: number }) => void;
   debugLogging?: boolean;
   onDebugLog?: (message: string) => void;
 };
@@ -45,6 +46,7 @@ export const CodePanel = memo(
     wordWrap,
     onChange,
     onEditorMount,
+    onCaretChange,
     debugLogging,
     onDebugLog
   }: CodePanelProps) => {
@@ -125,36 +127,45 @@ export const CodePanel = memo(
     const registerEditorEventListeners = useCallback(
       (editor: MonacoEditorType.IStandaloneCodeEditor) => {
         subscriptionsRef.current.forEach((subscription) => subscription.dispose());
-        if (!debugEnabled) {
-          subscriptionsRef.current = [];
-          return;
-        }
-        subscriptionsRef.current = [
+        const subscriptions: Disposable[] = [
           editor.onDidChangeCursorPosition((event) => {
-            logEvent(
-              `cursor ${event.position.lineNumber}:${event.position.column} reason=${event.reason}`
-            );
-          }),
-          editor.onDidChangeModel((event) => {
-            logEvent(
-              `model change${event.newModelUrl ? ` -> ${event.newModelUrl.toString()}` : ""}`
-            );
-          }),
-          editor.onDidChangeModelContent((event) => {
-            const model = editor.getModel();
-            logEvent(
-              `content change (changes=${event.changes.length}) version=${model?.getVersionId() ?? "?"}`
-            );
-          }),
-          editor.onDidFocusEditorText(() => {
-            logEvent("focus");
-          }),
-          editor.onDidBlurEditorText(() => {
-            logEvent("blur");
+            onCaretChange?.({
+              lineNumber: event.position.lineNumber,
+              column: event.position.column
+            });
+            if (debugEnabled) {
+              logEvent(
+                `cursor ${event.position.lineNumber}:${event.position.column} reason=${event.reason}`
+              );
+            }
           })
         ];
+
+        if (debugEnabled) {
+          subscriptions.push(
+            editor.onDidChangeModel((event) => {
+              logEvent(
+                `model change${event.newModelUrl ? ` -> ${event.newModelUrl.toString()}` : ""}`
+              );
+            }),
+            editor.onDidChangeModelContent((event) => {
+              const model = editor.getModel();
+              logEvent(
+                `content change (changes=${event.changes.length}) version=${model?.getVersionId() ?? "?"}`
+              );
+            }),
+            editor.onDidFocusEditorText(() => {
+              logEvent("focus");
+            }),
+            editor.onDidBlurEditorText(() => {
+              logEvent("blur");
+            })
+          );
+        }
+
+        subscriptionsRef.current = subscriptions;
       },
-      [debugEnabled, logEvent]
+      [debugEnabled, logEvent, onCaretChange]
     );
 
     useEffect(() => {
@@ -186,6 +197,13 @@ export const CodePanel = memo(
                 registerEditorEventListeners(editor);
                 onEditorMount?.(editor);
                 syncExternalContent(editor);
+                const position = editor.getPosition();
+                if (position) {
+                  onCaretChange?.({
+                    lineNumber: position.lineNumber,
+                    column: position.column
+                  });
+                }
               }}
               onChange={(value) => {
                 const next = value ?? "";

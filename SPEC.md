@@ -550,6 +550,42 @@ unimozer-next/
 - nested block highlighting
 - NS diagrams view
 
+#### Milestone 8.1 — Structogram (Left Panel Toggle) Implementation Checklist
+
+**UX and layout**
+- [x] Add left-panel view toggle: `UML | Structogram`
+- [x] Keep existing split layout (no extra permanent panel)
+- [x] Show structogram for method containing current editor caret
+- [x] Show clear empty-state when caret is not inside a method
+
+**Parser and data contract**
+- [x] Extend parser response with method control-tree IR schema (initial subset: sequence, statements, if/else, loops, switch, try/catch, ranges)
+- [x] Add parser request flag (for example `includeStructogramIr: boolean`)
+- [x] Compute/return control-tree IR **only when structogram view is visible**
+- [x] Skip control-tree IR generation when UML view is active (avoid unnecessary processing)
+
+**Frontend integration**
+- [x] Track active left-panel mode in app state
+- [x] Send `includeStructogramIr` based on active mode
+- [ ] Debounce caret-to-method resolution and structogram refresh
+- [ ] Reuse latest available IR while new IR is loading (avoid flicker)
+
+**Rendering**
+- [x] Implement custom SVG renderer for NS diagrams (no external library required)
+- [x] Map IR nodes to classic NS containers (sequence, decision, loop, switch, try/catch)
+- [x] Add deterministic layout rules so the same method renders consistently
+
+**Performance and resilience**
+- [ ] Regression check: a very wide structogram must show internal horizontal scrolling without pushing the main left/right split handle
+- [ ] Add timing logs for structogram parse/render under debug logging
+- [ ] Ensure structogram mode does not affect typing smoothness in UML mode
+- [ ] Fallback gracefully to UML mode if IR parse/render fails
+
+**Acceptance**
+- [ ] Switching to Structogram shows the caret method diagram within 300 ms on typical classroom projects
+- [ ] Switching back to UML disables IR generation on subsequent parser calls
+- [ ] No measurable typing lag increase when structogram mode is off
+
 ---
 
 ## 15. Non-goals (explicitly out of scope for MVP)

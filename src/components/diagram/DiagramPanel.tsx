@@ -1,7 +1,7 @@
 import { useRef } from "react";
 
 import type { DiagramState } from "../../models/diagram";
-import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
+import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -12,7 +12,10 @@ import {
   ContextMenuSubTriggerItem,
   ContextMenuTrigger
 } from "../ui/context-menu";
+import { StructogramView } from "./StructogramView";
 import { UmlDiagram, type ExportControls, type ZoomControls } from "./UmlDiagram";
+
+export type DiagramViewMode = "uml" | "structogram";
 
 export type DiagramPanelProps = {
   graph: UmlGraph | null;
@@ -38,6 +41,34 @@ export type DiagramPanelProps = {
   onFieldSelect?: (field: UmlNode["fields"][number], node: UmlNode) => void;
   onMethodSelect?: (method: UmlNode["methods"][number], node: UmlNode) => void;
   onRegisterExport?: (controls: ExportControls | null) => void;
+  viewMode: DiagramViewMode;
+  activeFilePath?: string | null;
+  caretLineNumber?: number | null;
+};
+
+const findActiveMethod = (
+  graph: UmlGraph | null,
+  filePath: string | null | undefined,
+  caretLineNumber: number | null | undefined
+): { node: UmlNode; method: UmlMethod } | null => {
+  if (!graph || !filePath || !caretLineNumber) {
+    return null;
+  }
+  const normalizedPath = filePath.toLowerCase();
+  for (const node of graph.nodes) {
+    if (node.path.toLowerCase() !== normalizedPath) {
+      continue;
+    }
+    const match = node.methods.find((method) => {
+      const range = method.range;
+      if (!range) return false;
+      return caretLineNumber >= range.startLine && caretLineNumber <= range.endLine;
+    });
+    if (match) {
+      return { node, method: match };
+    }
+  }
+  return null;
 };
 
 export const DiagramPanel = ({
@@ -63,20 +94,24 @@ export const DiagramPanel = ({
   onAddMethod,
   onFieldSelect,
   onMethodSelect,
-  onRegisterExport
+  onRegisterExport,
+  viewMode,
+  activeFilePath,
+  caretLineNumber
 }: DiagramPanelProps) => {
   const exportControlsRef = useRef<ExportControls | null>(null);
   const canExportDiagram = Boolean(graph && diagram && graph.nodes.length > 0);
+  const activeMethodContext = findActiveMethod(graph, activeFilePath, caretLineNumber);
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
-        <div className="flex h-full flex-col">
+        <div className="flex h-full min-w-0 flex-col overflow-hidden">
           <div
-            className="flex-1 bg-white"
+            className="flex-1 min-w-0 overflow-hidden bg-white"
             style={backgroundColor ? { backgroundColor } : undefined}
           >
-            {graph && diagram ? (
+            {viewMode === "uml" && graph && diagram ? (
               <UmlDiagram
                 graph={graph}
                 diagram={diagram}
@@ -103,6 +138,24 @@ export const DiagramPanel = ({
                   onRegisterExport?.(controls);
                 }}
               />
+            ) : null}
+            {viewMode === "structogram" ? (
+              <div className="relative h-full min-w-0 overflow-hidden">
+                {activeMethodContext ? (
+                  // Keep structogram in an absolute fill layer so large SVG width
+                  // never participates in parent flex sizing or moves the split handle.
+                  <div className="absolute inset-0 min-w-0 overflow-hidden">
+                    <StructogramView
+                      ownerName={activeMethodContext.node.name}
+                      method={activeMethodContext.method}
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                    Place the editor caret inside a method to show its structogram.
+                  </div>
+                )}
+              </div>
             ) : null}
           </div>
         </div>

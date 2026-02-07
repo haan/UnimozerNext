@@ -9,6 +9,7 @@ import { basename, toFqnFromPath } from "../services/paths";
 type UseUmlGraphArgs = {
   projectPath: string | null;
   projectStorageMode: "folder" | "packed" | "scratch" | null;
+  includeStructogramIr: boolean;
   tree: FileNode | null;
   fileDrafts: Record<string, FileDraft>;
   setUmlGraph: React.Dispatch<React.SetStateAction<UmlGraph | null>>;
@@ -24,6 +25,7 @@ type UseUmlGraphResult = {
 type PendingParseRequest = {
   seq: number;
   projectPath: string;
+  includeStructogramIr: boolean;
   tree: FileNode;
   overrides: Array<{
     path: string;
@@ -112,6 +114,7 @@ const hasJavaFiles = (node: FileNode): boolean => {
 export const useUmlGraph = ({
   projectPath,
   projectStorageMode,
+  includeStructogramIr,
   tree,
   fileDrafts,
   setUmlGraph,
@@ -148,7 +151,8 @@ export const useUmlGraph = ({
             const result = await parseUmlGraph(
               request.projectPath,
               "src",
-              request.overrides
+              request.overrides,
+              request.includeStructogramIr
             );
             const isLatest = request.seq === parseSeqRef.current;
             const hasPendingNewer = pendingParseRef.current !== null;
@@ -241,11 +245,20 @@ export const useUmlGraph = ({
     pendingParseRef.current = {
       seq: parseSeqRef.current,
       projectPath,
+      includeStructogramIr,
       tree,
       overrides
     };
     drainParseQueue();
-  }, [projectPath, projectStorageMode, tree, fileDrafts, setUmlGraph, drainParseQueue]);
+  }, [
+    projectPath,
+    projectStorageMode,
+    includeStructogramIr,
+    tree,
+    fileDrafts,
+    setUmlGraph,
+    drainParseQueue
+  ]);
 
   return {
     umlStatus,

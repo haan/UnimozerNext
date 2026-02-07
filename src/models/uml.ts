@@ -6,6 +6,30 @@ export type UmlEdgeKind =
   | "dependency"
   | "reflexive-association";
 
+export type UmlStructogramSwitchCase = {
+  label: string;
+  body: UmlStructogramNode[];
+};
+
+export type UmlStructogramCatchClause = {
+  exception: string;
+  body: UmlStructogramNode[];
+};
+
+export type UmlStructogramNode = {
+  kind: "sequence" | "statement" | "if" | "loop" | "switch" | "try";
+  text?: string | null;
+  condition?: string | null;
+  loopKind?: "while" | "for" | "foreach" | "doWhile" | string | null;
+  range?: UmlSourceRange | null;
+  children?: UmlStructogramNode[];
+  thenBranch?: UmlStructogramNode[];
+  elseBranch?: UmlStructogramNode[];
+  switchCases?: UmlStructogramSwitchCase[];
+  catches?: UmlStructogramCatchClause[];
+  finallyBranch?: UmlStructogramNode[];
+};
+
 export type UmlMethod = {
   signature: string;
   name?: string;
@@ -18,6 +42,7 @@ export type UmlMethod = {
   declaringClass?: string;
   isInherited?: boolean;
   range?: UmlSourceRange;
+  controlTree?: UmlStructogramNode | null;
 };
 
 export type UmlConstructor = {
