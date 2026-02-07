@@ -9,7 +9,11 @@ import type { UmlGraph } from "../models/uml";
 import type { FileDraft } from "../models/drafts";
 import type { OpenFile } from "../models/openFile";
 import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "../services/diagram";
-import { basename, joinPath } from "../services/paths";
+import { basename, joinPath, toDisplayPath } from "../services/paths";
+import {
+  DEFAULT_NEW_PROJECT_FILE_NAME,
+  PACKED_PROJECT_EXTENSION
+} from "../constants/project";
 
 type OpenPackedProjectResponse = {
   archivePath: string;
@@ -89,16 +93,8 @@ export const useProjectIO = ({
   formatStatus
 }: UseProjectIOArgs): UseProjectIOResult => {
   const ensureUmzPath = useCallback((path: string) => {
-    return path.toLowerCase().endsWith(".umz") ? path : `${path}.umz`;
-  }, []);
-  const toDisplayPath = useCallback((path: string) => {
-    if (path.startsWith("\\\\?\\UNC\\")) {
-      return `\\\\${path.slice(8)}`;
-    }
-    if (path.startsWith("\\\\?\\")) {
-      return path.slice(4);
-    }
-    return path;
+    const extension = `.${PACKED_PROJECT_EXTENSION}`;
+    return path.toLowerCase().endsWith(extension) ? path : `${path}${extension}`;
   }, []);
 
   const refreshTree = useCallback(
@@ -270,8 +266,7 @@ export const useProjectIO = ({
       setPackedArchivePath,
       setProjectPath,
       setProjectStorageMode,
-      setStatus,
-      toDisplayPath
+      setStatus
     ]
   );
 
@@ -284,7 +279,7 @@ export const useProjectIO = ({
       filters: [
         {
           name: "Unimozer Project",
-          extensions: ["umz"]
+          extensions: [PACKED_PROJECT_EXTENSION]
         }
       ]
     });
@@ -337,20 +332,21 @@ export const useProjectIO = ({
     setPackedArchivePath,
     setProjectPath,
     setProjectStorageMode,
-    setStatus,
-    toDisplayPath
+    setStatus
   ]);
 
   const handleNewProject = useCallback(async () => {
     setStatus("Creating project...");
-    const suggestedName = projectPath ? `${basename(projectPath)}.umz` : "NewProject.umz";
+    const suggestedName = projectPath
+      ? `${basename(projectPath)}.${PACKED_PROJECT_EXTENSION}`
+      : DEFAULT_NEW_PROJECT_FILE_NAME;
     const selection = await save({
       title: "Create New Unimozer Project",
       defaultPath: packedArchivePath ?? suggestedName,
       filters: [
         {
           name: "Unimozer Project",
-          extensions: ["umz"]
+          extensions: [PACKED_PROJECT_EXTENSION]
         }
       ]
     });
@@ -392,8 +388,7 @@ export const useProjectIO = ({
     setPackedArchivePath,
     setProjectPath,
     setProjectStorageMode,
-    setStatus,
-    toDisplayPath
+    setStatus
   ]);
 
   const handleSave = useCallback(async () => {
@@ -426,8 +421,7 @@ export const useProjectIO = ({
     projectPath,
     projectStorageMode,
     setBusy,
-    setStatus,
-    toDisplayPath
+    setStatus
   ]);
 
   const handleSaveAs = useCallback(async () => {
@@ -435,14 +429,14 @@ export const useProjectIO = ({
       setStatus("Open a project before saving.");
       return;
     }
-    const suggestedName = `${basename(projectPath)}.umz`;
+    const suggestedName = `${basename(projectPath)}.${PACKED_PROJECT_EXTENSION}`;
     const selection = await save({
       title: "Save Project As",
       defaultPath: packedArchivePath ?? suggestedName,
       filters: [
         {
           name: "Unimozer Project",
-          extensions: ["umz"]
+          extensions: [PACKED_PROJECT_EXTENSION]
         }
       ]
     });
@@ -477,8 +471,7 @@ export const useProjectIO = ({
     projectStorageMode,
     setBusy,
     setPackedArchivePath,
-    setStatus,
-    toDisplayPath
+    setStatus
   ]);
 
   return {

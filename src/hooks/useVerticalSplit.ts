@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import {
+  HORIZONTAL_SPLIT_SNAP_RATIO,
+  SPLIT_SNAP_DISTANCE,
+  STACKED_SPLIT_BOTTOM_MIN_HEIGHT_PX,
+  STACKED_SPLIT_TOP_MIN_HEIGHT_PX
+} from "../constants/layout";
 
 type UseVerticalSplitArgs = {
   ratio: number;
@@ -17,22 +23,13 @@ type UseVerticalSplitResult = {
   startResize: (event: ReactPointerEvent<HTMLElement>) => void;
 };
 
-const resolveMinBottom = (fallback: number) => {
-  if (typeof window === "undefined") return fallback;
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue("--bench-min-height")
-    .trim();
-  const value = Number.parseFloat(raw);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-};
-
 export const useVerticalSplit = ({
   ratio,
   onCommit,
-  minTop = 200,
-  minBottom = 120,
-  splitSnapDistance = 0.03,
-  splitSnapRatio = 0.75
+  minTop = STACKED_SPLIT_TOP_MIN_HEIGHT_PX,
+  minBottom = STACKED_SPLIT_BOTTOM_MIN_HEIGHT_PX,
+  splitSnapDistance = SPLIT_SNAP_DISTANCE,
+  splitSnapRatio = HORIZONTAL_SPLIT_SNAP_RATIO
 }: UseVerticalSplitArgs): UseVerticalSplitResult => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [splitRatio, setSplitRatio] = useState(ratio);
@@ -63,9 +60,8 @@ export const useVerticalSplit = ({
     const handleMove = (event: PointerEvent) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
-      const bottomMin = resolveMinBottom(minBottom);
       let y = event.clientY - rect.top;
-      y = Math.max(minTop, Math.min(rect.height - bottomMin, y));
+      y = Math.max(minTop, Math.min(rect.height - minBottom, y));
       const ratio = y / rect.height;
       setSplitRatio(snapRatio(ratio));
     };

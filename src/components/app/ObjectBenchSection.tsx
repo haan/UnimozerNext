@@ -2,6 +2,7 @@ import type { PointerEvent, RefObject } from "react";
 import type { DiagramState } from "../../models/diagram";
 import type { ObjectInstance } from "../../models/objectBench";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
+import { OBJECT_BENCH_MIN_HEIGHT_PX } from "../../constants/layout";
 import { DiagramPanel } from "../diagram/DiagramPanel";
 import type { ExportControls, ZoomControls } from "../diagram/UmlDiagram";
 import { ObjectBenchPanel } from "../objectBench/ObjectBenchPanel";
@@ -119,7 +120,10 @@ export const ObjectBenchSection = ({
       >
         <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
       </div>
-      <div className="min-h-[var(--bench-min-height)] flex-1 overflow-hidden">
+      <div
+        className="flex-1 overflow-hidden"
+        style={{ minHeight: `${OBJECT_BENCH_MIN_HEIGHT_PX}px` }}
+      >
         <ObjectBenchPanel
           objects={objectBench}
           fontSize={fontSize}

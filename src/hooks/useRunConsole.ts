@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { CONSOLE_FLUSH_DELAY_MS, CONSOLE_MAX_LINES } from "../constants/console";
 
 import type { UmlNode } from "../models/uml";
 import type { FileDraft } from "../models/drafts";
@@ -77,7 +78,7 @@ export const useRunConsole = ({
       const dropped = consoleDroppedRef.current;
       const text = dropped > 0 ? [...lines, `... ${dropped} lines truncated ...`].join("\n") : lines.join("\n");
       setConsoleOutput(text);
-    }, 50);
+    }, CONSOLE_FLUSH_DELAY_MS);
   }, []);
 
   const appendConsole = useCallback(
@@ -87,9 +88,8 @@ export const useRunConsole = ({
       for (const line of incoming) {
         lines.push(line);
       }
-      const maxLines = 2000;
-      if (lines.length > maxLines) {
-        const excess = lines.length - maxLines;
+      if (lines.length > CONSOLE_MAX_LINES) {
+        const excess = lines.length - CONSOLE_MAX_LINES;
         lines.splice(0, excess);
         consoleDroppedRef.current += excess;
       }

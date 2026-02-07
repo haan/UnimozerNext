@@ -3,6 +3,11 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
 import type { MutableRefObject, RefObject } from "react";
 import { useMonaco, type Monaco } from "@monaco-editor/react";
+import {
+  LS_CHANGE_DEBOUNCE_MS,
+  LS_DIAGNOSTIC_SEVERITY_ERROR,
+  LS_INITIAL_DOCUMENT_VERSION
+} from "../constants/languageServer";
 
 import type { LsDiagnosticsEvent } from "../services/lsp";
 import { toFileUri } from "../services/lsp";
@@ -36,8 +41,6 @@ type UseLanguageServerResult = {
   notifyLsChangeImmediate: (path: string, text: string) => void;
   resetLsState: () => void;
 };
-
-const LS_CHANGE_DEBOUNCE_MS = 150;
 
 export const useLanguageServer = ({
   projectPath,
@@ -77,7 +80,7 @@ export const useLanguageServer = ({
     if (!lsReadyRef.current) return;
     if (lsOpenRef.current.has(path)) return;
     lsOpenRef.current.add(path);
-    lsVersionRef.current[path] = 1;
+    lsVersionRef.current[path] = LS_INITIAL_DOCUMENT_VERSION;
     void invoke("ls_did_open", {
       uri: toFileUri(path),
       text,
@@ -109,7 +112,7 @@ export const useLanguageServer = ({
         notifyLsOpen(path, text);
         return;
       }
-      const nextVersion = (lsVersionRef.current[path] ?? 1) + 1;
+      const nextVersion = (lsVersionRef.current[path] ?? LS_INITIAL_DOCUMENT_VERSION) + 1;
       lsVersionRef.current[path] = nextVersion;
       void invoke("ls_did_change", {
         uri: toFileUri(path),
@@ -320,7 +323,7 @@ export const useLanguageServer = ({
           if (!model) return;
           const diagnostics = event.payload.diagnostics ?? [];
           const markers = diagnostics
-            .filter((diag) => diag.severity === 1)
+            .filter((diag) => diag.severity === LS_DIAGNOSTIC_SEVERITY_ERROR)
             .map((diag) => ({
             startLineNumber: diag.range.start.line + 1,
             startColumn: diag.range.start.character + 1,

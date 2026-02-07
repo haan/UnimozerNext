@@ -13,6 +13,24 @@ mod jdtls;
 mod jsonrpc;
 mod uri;
 
+// Maximum recursion depth when expanding nested `${property}` values.
+const LS_PROPERTY_RESOLUTION_MAX_DEPTH: usize = 8;
+
+// Timeout for LSP request/response roundtrips.
+const LS_REQUEST_TIMEOUT_SECONDS: u64 = 15;
+
+// Number of graceful wait checks before force-killing the LS process.
+const LS_STOP_WAIT_ATTEMPTS: usize = 30;
+
+// Delay between graceful wait checks during LS shutdown.
+const LS_STOP_WAIT_INTERVAL_MS: u64 = 100;
+
+// Poll interval for detecting unexpected LS process exits.
+const LS_CRASH_POLL_INTERVAL_MS: u64 = 500;
+
+// LSP `didOpen` version starts at 1.
+const LS_DID_OPEN_INITIAL_VERSION: i32 = 1;
+
 fn parse_properties(path: &std::path::Path) -> HashMap<String, String> {
   let mut values = HashMap::new();
     let Ok(contents) = std::fs::read_to_string(path) else {
@@ -44,7 +62,7 @@ fn resolve_property_value(
     props: &HashMap<String, String>,
     depth: usize,
 ) -> String {
-    if depth > 8 {
+    if depth > LS_PROPERTY_RESOLUTION_MAX_DEPTH {
         return props.get(key).cloned().unwrap_or_default();
     }
     let Some(value) = props.get(key) else {
@@ -182,7 +200,7 @@ impl LsClient {
         });
         self.write_message(message)?;
 
-        rx.recv_timeout(Duration::from_secs(15))
+        rx.recv_timeout(Duration::from_secs(LS_REQUEST_TIMEOUT_SECONDS))
             .map_err(|_| "Timeout waiting for LS response".to_string())
     }
 
@@ -333,10 +351,10 @@ fn stop_process(mut process: LsProcess) -> Result<(), String> {
     let _ = process.client.send_request("shutdown", json!({}));
     let _ = process.client.send_notification("exit", json!({}));
 
-    for _ in 0..30 {
+    for _ in 0..LS_STOP_WAIT_ATTEMPTS {
         match process.child.try_wait() {
             Ok(Some(_)) => return Ok(()),
-            Ok(None) => thread::sleep(Duration::from_millis(100)),
+            Ok(None) => thread::sleep(Duration::from_millis(LS_STOP_WAIT_INTERVAL_MS)),
             Err(_) => break,
         }
     }
@@ -422,7 +440,7 @@ pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: Stri
     let crash_app = app.clone();
     let crash_root = root_path.to_string_lossy().to_string();
     thread::spawn(move || loop {
-        thread::sleep(Duration::from_millis(500));
+        thread::sleep(Duration::from_millis(LS_CRASH_POLL_INTERVAL_MS));
         if run_id_ref.load(Ordering::SeqCst) != run_id {
             return;
         }
@@ -491,7 +509,7 @@ pub fn ls_did_open(
         "textDocument": {
             "uri": uri,
             "languageId": language_id,
-            "version": 1,
+            "version": LS_DID_OPEN_INITIAL_VERSION,
             "text": text
         }
     });

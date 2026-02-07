@@ -26,7 +26,18 @@ import {
   UML_CORNER_RADIUS,
   UML_PACKAGE_PADDING,
   EXPORT_PADDING,
-  EXPORT_SCALE
+  EXPORT_SCALE,
+  DEFAULT_VIEW_SCALE,
+  DEFAULT_VIEW_X,
+  DEFAULT_VIEW_Y,
+  DRAG_MOVE_THRESHOLD_PX,
+  FONT_MEASURE_FALLBACK_CHAR_WIDTH,
+  HEADER_VERTICAL_PADDING,
+  MAX_ZOOM_SCALE,
+  MIN_ZOOM_SCALE,
+  PACKAGE_LABEL_BASELINE_OFFSET,
+  ZOOM_STEP_IN,
+  ZOOM_STEP_OUT
 } from "./constants";
 
 const computeNodeHeight = (
@@ -72,7 +83,7 @@ const measureTextWidth = (text: string, font: string) => {
     measureCanvas = document.createElement("canvas");
   }
   const ctx = measureCanvas.getContext("2d");
-  if (!ctx) return text.length * 8;
+  if (!ctx) return text.length * FONT_MEASURE_FALLBACK_CHAR_WIDTH;
   ctx.font = font;
   return ctx.measureText(text).width;
 };
@@ -294,10 +305,14 @@ export const UmlDiagram = ({
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [draggingPackage, setDraggingPackage] = useState<PackageDragState | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
-  const [view, setView] = useState({ x: 0, y: 0, scale: 1 });
+  const [view, setView] = useState({
+    x: DEFAULT_VIEW_X,
+    y: DEFAULT_VIEW_Y,
+    scale: DEFAULT_VIEW_SCALE
+  });
   const [fontReady, setFontReady] = useState(false);
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
-  const headerHeight = umlFontSize + 16;
+  const headerHeight = umlFontSize + 2 * HEADER_VERTICAL_PADDING;
   const rowHeight = Math.round(umlFontSize * UML_LINE_HEIGHT);
   const zoomAt = useCallback((factor: number, clientX?: number, clientY?: number) => {
     const svg = svgRef.current;
@@ -308,7 +323,7 @@ export const UmlDiagram = ({
     const sy =
       typeof clientY === "number" ? clientY - rect.top : rect.height / 2;
     setView((current) => {
-      const nextScale = Math.min(2.5, Math.max(0.4, current.scale * factor));
+      const nextScale = Math.min(MAX_ZOOM_SCALE, Math.max(MIN_ZOOM_SCALE, current.scale * factor));
       const worldX = sx / current.scale - current.x;
       const worldY = sy / current.scale - current.y;
       const nextX = sx / nextScale - worldX;
@@ -318,7 +333,11 @@ export const UmlDiagram = ({
   }, []);
 
   const resetZoom = useCallback(() => {
-    setView({ x: 0, y: 0, scale: 1 });
+    setView({
+      x: DEFAULT_VIEW_X,
+      y: DEFAULT_VIEW_Y,
+      scale: DEFAULT_VIEW_SCALE
+    });
   }, []);
 
   useEffect(() => {
@@ -346,8 +365,8 @@ export const UmlDiagram = ({
   useEffect(() => {
     if (!onRegisterZoom) return;
     onRegisterZoom({
-      zoomIn: () => zoomAt(1.1),
-      zoomOut: () => zoomAt(0.9),
+      zoomIn: () => zoomAt(ZOOM_STEP_IN),
+      zoomOut: () => zoomAt(ZOOM_STEP_OUT),
       resetZoom
     });
     return () => {
@@ -363,8 +382,8 @@ export const UmlDiagram = ({
         const y = point.y - dragging.offsetY;
         const moved =
           dragging.moved ||
-          Math.abs(point.x - dragging.startX) > 3 ||
-          Math.abs(point.y - dragging.startY) > 3;
+          Math.abs(point.x - dragging.startX) > DRAG_MOVE_THRESHOLD_PX ||
+          Math.abs(point.y - dragging.startY) > DRAG_MOVE_THRESHOLD_PX;
         if (moved !== dragging.moved) {
           setDragging({ ...dragging, moved });
         }
@@ -378,8 +397,8 @@ export const UmlDiagram = ({
         const dy = point.y - draggingPackage.startY;
         const moved =
           draggingPackage.moved ||
-          Math.abs(point.x - draggingPackage.startX) > 3 ||
-          Math.abs(point.y - draggingPackage.startY) > 3;
+          Math.abs(point.x - draggingPackage.startX) > DRAG_MOVE_THRESHOLD_PX ||
+          Math.abs(point.y - draggingPackage.startY) > DRAG_MOVE_THRESHOLD_PX;
         if (moved !== draggingPackage.moved) {
           setDraggingPackage({ ...draggingPackage, moved });
         }
@@ -899,7 +918,7 @@ export const UmlDiagram = ({
       }}
       onWheel={(event) => {
         event.preventDefault();
-        const zoomFactor = event.deltaY > 0 ? 0.9 : 1.1;
+        const zoomFactor = event.deltaY > 0 ? ZOOM_STEP_OUT : ZOOM_STEP_IN;
         zoomAt(zoomFactor, event.clientX, event.clientY);
       }}
     >
@@ -1013,7 +1032,7 @@ export const UmlDiagram = ({
               />
               <text
                 x={pkg.x + TEXT_PADDING / 2}
-                y={pkg.y + headerHeight / 2 + 1}
+                y={pkg.y + headerHeight / 2 + PACKAGE_LABEL_BASELINE_OFFSET}
                 textAnchor="start"
                 dominantBaseline="middle"
                 style={{

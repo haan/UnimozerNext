@@ -35,32 +35,29 @@ import { toFileUri } from "./services/lsp";
 import { useDrafts } from "./hooks/useDrafts";
 import { useUmlGraph } from "./hooks/useUmlGraph";
 import { useJshellActions } from "./hooks/useJshellActions";
-import { basename, joinPath } from "./services/paths";
+import { basename, joinPath, toDisplayPath } from "./services/paths";
 import { useProjectIO, type ProjectStorageMode } from "./hooks/useProjectIO";
 import { getThemeColors } from "./services/monacoThemes";
 import { jshellStart, jshellStop } from "./services/jshell";
 import { buildClassSource } from "./services/javaCodegen";
 import { getUmlSignature } from "./services/umlGraph";
 import type { ExportControls, ExportStyle } from "./components/diagram/UmlDiagram";
-
-const UML_HIGHLIGHT_SECONDS = 2;
-const UML_PARSE_DRAFT_DEBOUNCE_MS = 300;
+import {
+  STATUS_TEXT_MAX_CHARS,
+  UML_REVEAL_REQUEST_TTL_SECONDS,
+  UML_PARSE_DRAFT_DEBOUNCE_MS
+} from "./constants/app";
+import {
+  CONSOLE_MIN_HEIGHT_PX,
+  EDITOR_MIN_HEIGHT_PX,
+  UML_DIAGRAM_MIN_HEIGHT_PX
+} from "./constants/layout";
 
 const formatStatus = (input: unknown) =>
   typeof input === "string" ? input : JSON.stringify(input);
 
-const trimStatus = (input: string, max = 200) =>
+const trimStatus = (input: string, max = STATUS_TEXT_MAX_CHARS) =>
   input.length > max ? `${input.slice(0, max)}...` : input;
-
-const toDisplayPath = (path: string) => {
-  if (path.startsWith("\\\\?\\UNC\\")) {
-    return `\\\\${path.slice(8)}`;
-  }
-  if (path.startsWith("\\\\?\\")) {
-    return path.slice(4);
-  }
-  return path;
-};
 
 type LoadedAppSettings = {
   settings: AppSettings;
@@ -193,7 +190,7 @@ function AppContent({
   } = useVerticalSplit({
     ratio: settings.layout.objectBenchSplitRatio,
     onCommit: updateObjectBenchSplitRatioSetting,
-    minTop: 240
+    minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
   const defaultTitle = "Unimozer Next";
@@ -841,7 +838,7 @@ function AppContent({
     async (
       path: string,
       range: { startLine: number; startColumn: number },
-      durationSeconds = UML_HIGHLIGHT_SECONDS
+      durationSeconds = UML_REVEAL_REQUEST_TTL_SECONDS
     ) => {
       if (!range?.startLine) return;
       pendingRevealRef.current = {
@@ -1594,8 +1591,11 @@ function AppContent({
                 className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
               >
                 <div
-                  className="min-h-50 flex-none overflow-hidden"
-                  style={{ height: `${consoleSplitRatio * 100}%` }}
+                  className="flex-none overflow-hidden"
+                  style={{
+                    height: `${consoleSplitRatio * 100}%`,
+                    minHeight: `${EDITOR_MIN_HEIGHT_PX}px`
+                  }}
                 >
                     <CodePanel
                       openFile={openFile}
@@ -1625,7 +1625,10 @@ function AppContent({
                   ariaLabel="Resize console panel"
                   onPointerDown={startConsoleResize}
                 />
-                <div className="min-h-[var(--console-min-height)] flex-1 overflow-hidden">
+                <div
+                  className="flex-1 overflow-hidden"
+                  style={{ minHeight: `${CONSOLE_MIN_HEIGHT_PX}px` }}
+                >
                   <ConsolePanel
                     output={consoleOutput}
                     fontSize={fontSize}

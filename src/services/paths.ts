@@ -9,6 +9,23 @@ export const joinPath = (root: string, file: string) => {
   return `${root.replace(/[\\/]+$/, "")}${separator}${file}`;
 };
 
+// Windows extended-length path prefix (for example `\\?\C:\...`).
+const WINDOWS_DEVICE_PREFIX = "\\\\?\\";
+
+// Windows UNC extended-length prefix (for example `\\?\UNC\server\share\...`).
+const WINDOWS_UNC_DEVICE_PREFIX = "\\\\?\\UNC\\";
+
+// Converts Windows extended-length paths to display-friendly paths.
+export const toDisplayPath = (path: string) => {
+  if (path.startsWith(WINDOWS_UNC_DEVICE_PREFIX)) {
+    return `\\\\${path.slice(WINDOWS_UNC_DEVICE_PREFIX.length)}`;
+  }
+  if (path.startsWith(WINDOWS_DEVICE_PREFIX)) {
+    return path.slice(WINDOWS_DEVICE_PREFIX.length);
+  }
+  return path;
+};
+
 export const toRelativePath = (fullPath: string, rootPath: string) => {
   const normalizedRoot = rootPath.replace(/[\\/]+$/, "").toLowerCase();
   const normalizedFull = fullPath.toLowerCase();

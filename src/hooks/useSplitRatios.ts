@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
+import {
+  CONSOLE_MIN_HEIGHT_PX,
+  DIAGRAM_EDITOR_SPLIT_MIN_PANEL_WIDTH_PX,
+  EDITOR_MIN_HEIGHT_PX,
+  HORIZONTAL_SPLIT_SNAP_RATIO,
+  MAIN_SPLIT_SNAP_RATIO,
+  SPLIT_SNAP_DISTANCE
+} from "../constants/layout";
 
 type UseSplitRatiosArgs = {
   umlSplitRatio: number;
@@ -8,6 +16,8 @@ type UseSplitRatiosArgs = {
   onCommitUmlSplitRatio: (ratio: number) => void;
   onCommitConsoleSplitRatio: (ratio: number) => void;
   minUmlPanel?: number;
+  minEditorPanel?: number;
+  minConsolePanel?: number;
   splitSnapDistance?: number;
   umlSplitSnapRatio?: number;
   consoleSplitSnapRatio?: number;
@@ -27,10 +37,12 @@ export const useSplitRatios = ({
   consoleSplitRatio,
   onCommitUmlSplitRatio,
   onCommitConsoleSplitRatio,
-  minUmlPanel = 260,
-  splitSnapDistance = 0.03,
-  umlSplitSnapRatio = 0.5,
-  consoleSplitSnapRatio = 0.75
+  minUmlPanel = DIAGRAM_EDITOR_SPLIT_MIN_PANEL_WIDTH_PX,
+  minEditorPanel = EDITOR_MIN_HEIGHT_PX,
+  minConsolePanel = CONSOLE_MIN_HEIGHT_PX,
+  splitSnapDistance = SPLIT_SNAP_DISTANCE,
+  umlSplitSnapRatio = MAIN_SPLIT_SNAP_RATIO,
+  consoleSplitSnapRatio = HORIZONTAL_SPLIT_SNAP_RATIO
 }: UseSplitRatiosArgs): UseSplitRatiosResult => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const consoleContainerRef = useRef<HTMLDivElement | null>(null);
@@ -50,15 +62,6 @@ export const useSplitRatios = ({
     },
     [splitSnapDistance]
   );
-
-  const getConsoleMinHeight = useCallback(() => {
-    if (typeof window === "undefined") return 100;
-    const raw = getComputedStyle(document.documentElement)
-      .getPropertyValue("--console-min-height")
-      .trim();
-    const value = Number.parseFloat(raw);
-    return Number.isFinite(value) && value > 0 ? value : 100;
-  }, []);
 
   useEffect(() => {
     setSplitRatio(umlSplitRatio);
@@ -111,9 +114,8 @@ export const useSplitRatios = ({
     const handleMove = (event: PointerEvent) => {
       if (!consoleContainerRef.current) return;
       const rect = consoleContainerRef.current.getBoundingClientRect();
-      const minPanel = getConsoleMinHeight();
       let y = event.clientY - rect.top;
-      y = Math.max(minPanel, Math.min(rect.height - minPanel, y));
+      y = Math.max(minEditorPanel, Math.min(rect.height - minConsolePanel, y));
       const ratio = y / rect.height;
       setConsoleSplit(snapRatio(ratio, consoleSplitSnapRatio));
     };
@@ -135,8 +137,9 @@ export const useSplitRatios = ({
     };
   }, [
     consoleSplitSnapRatio,
-    getConsoleMinHeight,
     isConsoleResizing,
+    minConsolePanel,
+    minEditorPanel,
     onCommitConsoleSplitRatio,
     snapRatio
   ]);

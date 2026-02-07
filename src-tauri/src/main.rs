@@ -24,6 +24,24 @@ mod ls;
 #[cfg(target_os = "windows")]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
+// Maximum number of stderr lines we keep per long-lived Java bridge process.
+const BRIDGE_STDERR_BUFFER_MAX_LINES: usize = 50;
+
+// Retry count for parser bridge requests when the process needs a restart.
+const PARSER_SEND_MAX_ATTEMPTS: usize = 2;
+
+// Polling interval while waiting for a launched Java process to complete.
+const RUN_POLL_INTERVAL_MS: u64 = 200;
+
+// Stream chunk size when forwarding process output lines to the frontend.
+const RUN_OUTPUT_CHUNK_SIZE_BYTES: usize = 8 * 1024;
+
+// Safety cap to avoid unbounded frontend event traffic from runaway output.
+const RUN_OUTPUT_MAX_EMIT_BYTES: usize = 200 * 1024;
+
+// Maximum recursion depth when expanding property placeholders like `${key}`.
+const PROPERTY_RESOLUTION_MAX_DEPTH: usize = 8;
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct FileNode {
@@ -1055,7 +1073,7 @@ fn spawn_parser_bridge(app: &tauri::AppHandle) -> Result<ParserBridgeSession, St
                 }
                 let trimmed = line.trim_end().to_string();
                 if let Ok(mut buffer) = stderr_buffer.lock() {
-                    if buffer.len() >= 50 {
+                    if buffer.len() >= BRIDGE_STDERR_BUFFER_MAX_LINES {
                         buffer.remove(0);
                     }
                     buffer.push(trimmed);
@@ -1109,7 +1127,7 @@ fn parser_send_raw(
     let payload = serde_json::to_string(&request).map_err(|error| error.to_string())?;
     let mut last_error = String::new();
 
-    for attempt in 0..2 {
+    for attempt in 0..PARSER_SEND_MAX_ATTEMPTS {
         let mut guard = state
             .current
             .lock()
@@ -1429,7 +1447,7 @@ fn run_main(
             return;
         }
 
-        std::thread::sleep(Duration::from_millis(200));
+        std::thread::sleep(Duration::from_millis(RUN_POLL_INTERVAL_MS));
     });
 
     Ok(run_id)
@@ -1547,7 +1565,7 @@ fn jshell_start(
                 }
                 let trimmed = line.trim_end().to_string();
                 if let Ok(mut buffer) = stderr_buffer.lock() {
-                    if buffer.len() >= 50 {
+                    if buffer.len() >= BRIDGE_STDERR_BUFFER_MAX_LINES {
                         buffer.remove(0);
                     }
                     buffer.push(trimmed);
@@ -1643,14 +1661,12 @@ fn spawn_output_reader<R: std::io::Read + Send + 'static>(
         let mut buffer = String::new();
         let mut emitted_bytes: usize = 0;
         let mut truncated = false;
-        const CHUNK_SIZE: usize = 8 * 1024;
-        const MAX_EMIT_BYTES: usize = 200 * 1024;
         loop {
             line.clear();
             match buf.read_line(&mut line) {
                 Ok(0) => break,
                 Ok(_) => {
-                    if emitted_bytes >= MAX_EMIT_BYTES {
+                    if emitted_bytes >= RUN_OUTPUT_MAX_EMIT_BYTES {
                         if !truncated {
                             let payload = RunOutputEvent {
                                 run_id,
@@ -1668,7 +1684,7 @@ fn spawn_output_reader<R: std::io::Read + Send + 'static>(
                         buffer.push('\n');
                     }
                     buffer.push_str(trimmed);
-                    if buffer.len() >= CHUNK_SIZE {
+                    if buffer.len() >= RUN_OUTPUT_CHUNK_SIZE_BYTES {
                         emitted_bytes += buffer.len();
                         let payload = RunOutputEvent {
                             run_id,
@@ -1682,7 +1698,7 @@ fn spawn_output_reader<R: std::io::Read + Send + 'static>(
                 Err(_) => break,
             }
         }
-        if !buffer.is_empty() && emitted_bytes < MAX_EMIT_BYTES {
+        if !buffer.is_empty() && emitted_bytes < RUN_OUTPUT_MAX_EMIT_BYTES {
             let payload = RunOutputEvent {
                 run_id,
                 stream: stream_name,
@@ -2019,7 +2035,7 @@ fn parse_properties_with_continuations(path: &Path) -> HashMap<String, String> {
 }
 
 fn resolve_property_value(key: &str, props: &HashMap<String, String>, depth: usize) -> String {
-    if depth > 8 {
+    if depth > PROPERTY_RESOLUTION_MAX_DEPTH {
         return props.get(key).cloned().unwrap_or_default();
     }
     let Some(value) = props.get(key) else {
