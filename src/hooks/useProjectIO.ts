@@ -9,14 +9,26 @@ import type { UmlGraph } from "../models/uml";
 import type { FileDraft } from "../models/drafts";
 import type { OpenFile } from "../models/openFile";
 import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "../services/diagram";
-import { basename, joinPath, toRelativePath } from "../services/paths";
+import { basename, joinPath } from "../services/paths";
+
+type OpenPackedProjectResponse = {
+  archivePath: string;
+  workspaceDir: string;
+  projectRoot: string;
+  projectName: string;
+};
+
+export type ProjectStorageMode = "folder" | "packed";
 
 type UseProjectIOArgs = {
   projectPath: string | null;
+  projectStorageMode: ProjectStorageMode | null;
+  packedArchivePath: string | null;
   fileDrafts: Record<string, FileDraft>;
-  openFilePath: string | null;
   lastGoodGraphRef: MutableRefObject<UmlGraph | null>;
   setProjectPath: Dispatch<SetStateAction<string | null>>;
+  setProjectStorageMode: Dispatch<SetStateAction<ProjectStorageMode | null>>;
+  setPackedArchivePath: Dispatch<SetStateAction<string | null>>;
   setTree: Dispatch<SetStateAction<FileNode | null>>;
   setUmlGraph: Dispatch<SetStateAction<UmlGraph | null>>;
   setDiagramState: Dispatch<SetStateAction<DiagramState | null>>;
@@ -28,6 +40,8 @@ type UseProjectIOArgs = {
   setCompileStatus: Dispatch<SetStateAction<"success" | "failed" | null>>;
   setBusy: (busy: boolean) => void;
   setStatus: (status: string) => void;
+  clearConsole: () => void;
+  beforeProjectSwitch?: () => Promise<void>;
   resetLsState: () => void;
   notifyLsOpen: (path: string, text: string) => void;
   updateDraftForPath: (path: string, content: string, savedOverride?: string) => void;
@@ -37,19 +51,24 @@ type UseProjectIOArgs = {
 
 type UseProjectIOResult = {
   handleOpenProject: () => Promise<void>;
+  handleOpenFolderProject: () => Promise<void>;
+  handleOpenPackedProjectPath: (archivePath: string) => Promise<void>;
   handleNewProject: () => Promise<void>;
   openFileByPath: (path: string) => Promise<void>;
   handleSave: () => Promise<void>;
-  handleExportProject: () => Promise<void>;
+  handleSaveAs: () => Promise<void>;
   loadDiagramState: (root: string, graph: UmlGraph) => Promise<void>;
 };
 
 export const useProjectIO = ({
   projectPath,
+  projectStorageMode,
+  packedArchivePath,
   fileDrafts,
-  openFilePath,
   lastGoodGraphRef,
   setProjectPath,
+  setProjectStorageMode,
+  setPackedArchivePath,
   setTree,
   setUmlGraph,
   setDiagramState,
@@ -61,12 +80,27 @@ export const useProjectIO = ({
   setCompileStatus,
   setBusy,
   setStatus,
+  clearConsole,
+  beforeProjectSwitch,
   resetLsState,
   notifyLsOpen,
   updateDraftForPath,
   formatAndSaveUmlFiles,
   formatStatus
 }: UseProjectIOArgs): UseProjectIOResult => {
+  const ensureUmzPath = useCallback((path: string) => {
+    return path.toLowerCase().endsWith(".umz") ? path : `${path}.umz`;
+  }, []);
+  const toDisplayPath = useCallback((path: string) => {
+    if (path.startsWith("\\\\?\\UNC\\")) {
+      return `\\\\${path.slice(8)}`;
+    }
+    if (path.startsWith("\\\\?\\")) {
+      return path.slice(4);
+    }
+    return path;
+  }, []);
+
   const refreshTree = useCallback(
     async (root: string) => {
       const result = await invoke<FileNode>("list_project_tree", { root });
@@ -74,6 +108,41 @@ export const useProjectIO = ({
     },
     [setTree]
   );
+
+  const resetProjectSession = useCallback(() => {
+    setUmlGraph(null);
+    lastGoodGraphRef.current = null;
+    setDiagramState(null);
+    setDiagramPath(null);
+    setOpenFile(null);
+    setFileDrafts({});
+    setContent("");
+    setLastSavedContent("");
+    setCompileStatus(null);
+    resetLsState();
+  }, [
+    lastGoodGraphRef,
+    resetLsState,
+    setCompileStatus,
+    setContent,
+    setDiagramPath,
+    setDiagramState,
+    setFileDrafts,
+    setLastSavedContent,
+    setOpenFile,
+    setUmlGraph
+  ]);
+
+  const prepareProjectSwitch = useCallback(async () => {
+    if (!beforeProjectSwitch) {
+      return;
+    }
+    try {
+      await beforeProjectSwitch();
+    } catch {
+      // Ignore pre-switch cleanup failures and proceed with open/create flow.
+    }
+  }, [beforeProjectSwitch]);
 
   const loadDiagramState = useCallback(
     async (root: string, graph: UmlGraph) => {
@@ -129,6 +198,7 @@ export const useProjectIO = ({
 
   const openFileByPath = useCallback(
     async (path: string) => {
+      clearConsole();
       setBusy(true);
       try {
         const existingDraft = fileDrafts[path];
@@ -155,6 +225,7 @@ export const useProjectIO = ({
       }
     },
     [
+      clearConsole,
       fileDrafts,
       formatStatus,
       notifyLsOpen,
@@ -167,63 +238,121 @@ export const useProjectIO = ({
     ]
   );
 
+  const handleOpenPackedProjectPath = useCallback(
+    async (archivePath: string) => {
+      setStatus("Opening project...");
+      clearConsole();
+      await prepareProjectSwitch();
+      setBusy(true);
+      try {
+        const response = await invoke<OpenPackedProjectResponse>("open_packed_project", {
+          archivePath
+        });
+        await refreshTree(response.projectRoot);
+        setProjectPath(response.projectRoot);
+        setProjectStorageMode("packed");
+        setPackedArchivePath(response.archivePath);
+        resetProjectSession();
+        setStatus(`Project loaded: ${toDisplayPath(response.archivePath)}`);
+      } catch (error) {
+        setStatus(`Failed to open project: ${formatStatus(error)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      clearConsole,
+      formatStatus,
+      prepareProjectSwitch,
+      refreshTree,
+      resetProjectSession,
+      setBusy,
+      setPackedArchivePath,
+      setProjectPath,
+      setProjectStorageMode,
+      setStatus,
+      toDisplayPath
+    ]
+  );
+
   const handleOpenProject = useCallback(async () => {
     setStatus("Opening project...");
     const selection = await open({
-      directory: true,
+      directory: false,
       multiple: false,
-      title: "Open Java Project"
+      title: "Open Unimozer Project",
+      filters: [
+        {
+          name: "Unimozer Project",
+          extensions: ["umz"]
+        }
+      ]
     });
 
-    const dir = Array.isArray(selection) ? selection[0] : selection;
-    if (!dir || typeof dir !== "string") {
+    const filePath = Array.isArray(selection) ? selection[0] : selection;
+    if (!filePath || typeof filePath !== "string") {
       setStatus("Open project cancelled.");
       return;
     }
 
+    await handleOpenPackedProjectPath(filePath);
+  }, [handleOpenPackedProjectPath, setStatus]);
+
+  const handleOpenFolderProject = useCallback(async () => {
+    setStatus("Opening folder project...");
+    const selection = await open({
+      directory: true,
+      multiple: false,
+      title: "Open Folder Project"
+    });
+
+    const dir = Array.isArray(selection) ? selection[0] : selection;
+    if (!dir || typeof dir !== "string") {
+      setStatus("Open folder project cancelled.");
+      return;
+    }
+
     setBusy(true);
+    clearConsole();
+    await prepareProjectSwitch();
     try {
       await refreshTree(dir);
       setProjectPath(dir);
-      setUmlGraph(null);
-      lastGoodGraphRef.current = null;
-      setDiagramState(null);
-      setDiagramPath(null);
-      setOpenFile(null);
-      setFileDrafts({});
-      setContent("");
-      setLastSavedContent("");
-      setCompileStatus(null);
-      resetLsState();
-      setStatus(`Project loaded: ${dir}`);
+      setProjectStorageMode("folder");
+      setPackedArchivePath(null);
+      resetProjectSession();
+      setStatus(`Project loaded: ${toDisplayPath(dir)}`);
     } catch (error) {
-      setStatus(`Failed to open project: ${formatStatus(error)}`);
+      setStatus(`Failed to open folder project: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
   }, [
+    clearConsole,
     formatStatus,
-    lastGoodGraphRef,
+    prepareProjectSwitch,
     refreshTree,
-    resetLsState,
+    resetProjectSession,
     setBusy,
-    setCompileStatus,
-    setContent,
-    setDiagramPath,
-    setDiagramState,
-    setFileDrafts,
-    setLastSavedContent,
-    setOpenFile,
+    setPackedArchivePath,
     setProjectPath,
+    setProjectStorageMode,
     setStatus,
-    setUmlGraph
+    toDisplayPath
   ]);
 
   const handleNewProject = useCallback(async () => {
     setStatus("Creating project...");
+    const suggestedName = projectPath ? `${basename(projectPath)}.umz` : "NewProject.umz";
     const selection = await save({
-      title: "Create new project",
-      defaultPath: projectPath ?? undefined
+      title: "Create New Unimozer Project",
+      defaultPath: packedArchivePath ?? suggestedName,
+      filters: [
+        {
+          name: "Unimozer Project",
+          extensions: ["umz"]
+        }
+      ]
     });
 
     if (!selection || typeof selection !== "string") {
@@ -231,155 +360,135 @@ export const useProjectIO = ({
       return;
     }
 
+    const archivePath = ensureUmzPath(selection);
     setBusy(true);
+    clearConsole();
+    await prepareProjectSwitch();
     try {
-      await invoke("create_netbeans_project", { target: selection });
-      await refreshTree(selection);
-      setProjectPath(selection);
-      setUmlGraph(null);
-      lastGoodGraphRef.current = null;
-      setDiagramState(null);
-      setDiagramPath(null);
-      setOpenFile(null);
-      setFileDrafts({});
-      setContent("");
-      setLastSavedContent("");
-      setCompileStatus(null);
-      resetLsState();
-      setStatus(`Project created: ${selection}`);
+      const response = await invoke<OpenPackedProjectResponse>("create_packed_project", {
+        archivePath
+      });
+      await refreshTree(response.projectRoot);
+      setProjectPath(response.projectRoot);
+      setProjectStorageMode("packed");
+      setPackedArchivePath(response.archivePath);
+      resetProjectSession();
+      setStatus(`Project created: ${toDisplayPath(response.archivePath)}`);
     } catch (error) {
       setStatus(`Failed to create project: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
   }, [
+    clearConsole,
     formatStatus,
-    lastGoodGraphRef,
+    ensureUmzPath,
+    packedArchivePath,
+    prepareProjectSwitch,
     projectPath,
     refreshTree,
-    resetLsState,
+    resetProjectSession,
     setBusy,
-    setCompileStatus,
-    setContent,
-    setDiagramPath,
-    setDiagramState,
-    setFileDrafts,
-    setLastSavedContent,
-    setOpenFile,
+    setPackedArchivePath,
     setProjectPath,
+    setProjectStorageMode,
     setStatus,
-    setUmlGraph
+    toDisplayPath
   ]);
 
   const handleSave = useCallback(async () => {
+    if (!projectPath) {
+      setStatus("Open a project before saving.");
+      return;
+    }
     setBusy(true);
     try {
       await formatAndSaveUmlFiles(true);
+      if (projectStorageMode === "packed") {
+        if (!packedArchivePath) {
+          throw new Error("Packed project archive path is missing.");
+        }
+        await invoke("save_packed_project", {
+          projectRoot: projectPath,
+          archivePath: packedArchivePath
+        });
+        setStatus(`Project saved: ${toDisplayPath(packedArchivePath)}`);
+      }
     } catch (error) {
       setStatus(`Failed to save file: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
-  }, [formatAndSaveUmlFiles, formatStatus, setBusy, setStatus]);
+  }, [
+    formatAndSaveUmlFiles,
+    formatStatus,
+    packedArchivePath,
+    projectPath,
+    projectStorageMode,
+    setBusy,
+    setStatus,
+    toDisplayPath
+  ]);
 
-  const handleExportProject = useCallback(async () => {
+  const handleSaveAs = useCallback(async () => {
     if (!projectPath) {
-      setStatus("Open a project before exporting.");
+      setStatus("Open a project before saving.");
       return;
     }
+    const suggestedName = `${basename(projectPath)}.umz`;
     const selection = await save({
-      title: "Save project as",
-      defaultPath: projectPath
+      title: "Save Project As",
+      defaultPath: packedArchivePath ?? suggestedName,
+      filters: [
+        {
+          name: "Unimozer Project",
+          extensions: ["umz"]
+        }
+      ]
     });
     if (!selection || typeof selection !== "string") {
-      setStatus("Export cancelled.");
+      setStatus("Save As cancelled.");
       return;
     }
 
-    const overrides = Object.entries(fileDrafts)
-      .filter(([, draft]) => draft.content !== draft.lastSavedContent)
-      .map(([path, draft]) => ({
-        path,
-        content: draft.content
-      }));
-
+    const archivePath = ensureUmzPath(selection);
     setBusy(true);
     try {
-      await invoke("export_netbeans_project", {
-        root: projectPath,
-        srcRoot: "src",
-        target: selection,
-        overrides
+      await formatAndSaveUmlFiles(true);
+      await invoke("save_packed_project", {
+        projectRoot: projectPath,
+        archivePath
       });
-
-      await refreshTree(selection);
-
-      const remappedDrafts: Record<string, FileDraft> = {};
-      for (const [path, draft] of Object.entries(fileDrafts)) {
-        const relative = toRelativePath(path, projectPath);
-        const nextPath = joinPath(selection, relative);
-        remappedDrafts[nextPath] = {
-          content: draft.content,
-          lastSavedContent: draft.content
-        };
+      if (projectStorageMode === "packed") {
+        setPackedArchivePath(archivePath);
       }
-
-      let nextOpenFile: OpenFile | null = null;
-      let nextContent = "";
-      let nextLastSaved = "";
-      if (openFilePath) {
-        const relative = toRelativePath(openFilePath, projectPath);
-        const nextPath = joinPath(selection, relative);
-        nextOpenFile = { name: basename(nextPath), path: nextPath };
-        const draft = remappedDrafts[nextPath];
-        if (draft) {
-          nextContent = draft.content;
-          nextLastSaved = draft.lastSavedContent;
-        }
-      }
-
-      setProjectPath(selection);
-      setUmlGraph(null);
-      lastGoodGraphRef.current = null;
-      setDiagramState(null);
-      setDiagramPath(null);
-      setFileDrafts(remappedDrafts);
-      setOpenFile(nextOpenFile);
-      setContent(nextContent);
-      setLastSavedContent(nextLastSaved);
-      setCompileStatus(null);
-      setStatus(`Project saved to ${selection}`);
+      setStatus(`Project saved to ${toDisplayPath(archivePath)}`);
     } catch (error) {
-      setStatus(`Export failed: ${formatStatus(error)}`);
+      setStatus(`Save As failed: ${formatStatus(error)}`);
     } finally {
       setBusy(false);
     }
   }, [
-    fileDrafts,
+    ensureUmzPath,
+    formatAndSaveUmlFiles,
     formatStatus,
-    lastGoodGraphRef,
-    openFilePath,
+    packedArchivePath,
     projectPath,
-    refreshTree,
+    projectStorageMode,
     setBusy,
-    setCompileStatus,
-    setContent,
-    setDiagramPath,
-    setDiagramState,
-    setFileDrafts,
-    setLastSavedContent,
-    setOpenFile,
-    setProjectPath,
+    setPackedArchivePath,
     setStatus,
-    setUmlGraph
+    toDisplayPath
   ]);
 
   return {
     handleOpenProject,
+    handleOpenFolderProject,
+    handleOpenPackedProjectPath,
     handleNewProject,
     openFileByPath,
     handleSave,
-    handleExportProject,
+    handleSaveAs,
     loadDiagramState
   };
 };

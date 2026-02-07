@@ -33,6 +33,14 @@
       "icons/256x256.png",
       "icons/icon.ico",
       "icons/icon.icns"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["umz"],
+        "name": "Unimozer Next Project",
+        "description": "Unimozer Next Project File",
+        "mimeType": "application/x-unimozer-project"
+      }
     ]
   }
 }

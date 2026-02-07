@@ -17,6 +17,7 @@ use std::sync::{
 };
 use std::time::Duration;
 use tauri::{Emitter, Manager};
+use zip::{write::SimpleFileOptions, CompressionMethod, ZipArchive, ZipWriter};
 
 mod ls;
 
@@ -320,7 +321,7 @@ fn default_split_ratio() -> f32 {
 }
 
 fn default_console_split_ratio() -> f32 {
-    0.7
+    0.75
 }
 
 fn default_object_bench_split_ratio() -> f32 {
@@ -549,6 +550,15 @@ struct ParseUmlGraphResponse {
     raw: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OpenPackedProjectResponse {
+    archive_path: String,
+    workspace_dir: String,
+    project_root: String,
+    project_name: String,
+}
+
 struct RunHandle {
     id: u64,
     child: std::process::Child,
@@ -612,6 +622,11 @@ struct StartupLogState {
     lines: Arc<Mutex<Vec<String>>>,
 }
 
+#[derive(Default)]
+struct LaunchOpenState {
+    pending_paths: Arc<Mutex<Vec<String>>>,
+}
+
 const SKIP_DIRS: [&str; 8] = [
     "node_modules",
     "target",
@@ -621,6 +636,19 @@ const SKIP_DIRS: [&str; 8] = [
     ".idea",
     "bin",
     ".unimozer-next",
+];
+
+const PACKED_SKIP_DIRS: [&str; 10] = [
+    "build",
+    "dist",
+    "target",
+    "node_modules",
+    ".git",
+    ".idea",
+    ".vscode",
+    "out",
+    ".DS_Store",
+    "Thumbs.db",
 ];
 
 #[tauri::command]
@@ -668,6 +696,298 @@ fn write_binary_file(path: String, contents_base64: String) -> Result<(), String
 #[tauri::command]
 fn remove_text_file(path: String) -> Result<(), String> {
     fs::remove_file(path).map_err(|error| error.to_string())
+}
+
+fn stable_hash(input: &str) -> u64 {
+    const OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const PRIME: u64 = 0x00000100000001B3;
+    let mut hash = OFFSET_BASIS;
+    for byte in input.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(PRIME);
+    }
+    hash
+}
+
+fn sanitize_project_name(name: &str) -> String {
+    let sanitized: String = name
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let trimmed = sanitized.trim_matches('_');
+    if trimmed.is_empty() {
+        "project".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+fn packed_workspace_dir(app: &tauri::AppHandle, archive_path: &Path) -> Result<PathBuf, String> {
+    let local_data = app
+        .path()
+        .app_local_data_dir()
+        .map_err(|error| error.to_string())?;
+    let workspace_root = local_data.join("packed-workspaces");
+    fs::create_dir_all(&workspace_root).map_err(|error| error.to_string())?;
+
+    let stem = archive_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("project");
+    let safe_stem = sanitize_project_name(stem);
+    let hash = stable_hash(&archive_path.to_string_lossy());
+    Ok(workspace_root.join(format!("{}-{:016x}", safe_stem, hash)))
+}
+
+fn should_skip_packed_component(component: &str) -> bool {
+    PACKED_SKIP_DIRS
+        .iter()
+        .any(|item| item.eq_ignore_ascii_case(component))
+}
+
+fn should_skip_packed_relative(relative: &Path) -> bool {
+    for (index, component) in relative.components().enumerate() {
+        if index == 0 {
+            continue;
+        }
+        if let std::path::Component::Normal(value) = component {
+            if should_skip_packed_component(&value.to_string_lossy()) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn collect_pack_paths(base_parent: &Path, current: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
+    let relative = current.strip_prefix(base_parent).unwrap_or(current);
+    if should_skip_packed_relative(relative) {
+        return Ok(());
+    }
+
+    out.push(current.to_path_buf());
+    if current.is_dir() {
+        let mut children = Vec::new();
+        for entry in fs::read_dir(current)? {
+            children.push(entry?.path());
+        }
+        children.sort_by(|left, right| {
+            normalize_for_compare(left.clone()).cmp(&normalize_for_compare(right.clone()))
+        });
+        for child in children {
+            collect_pack_paths(base_parent, &child, out)?;
+        }
+    }
+    Ok(())
+}
+
+fn build_archive_temp_path(archive_path: &Path) -> PathBuf {
+    PathBuf::from(format!("{}.tmp", archive_path.to_string_lossy()))
+}
+
+fn write_packed_archive(project_root: &Path, archive_path: &Path) -> Result<(), String> {
+    if !project_root.is_dir() {
+        return Err("Project root directory not found".to_string());
+    }
+    let base_parent = project_root
+        .parent()
+        .ok_or_else(|| "Project root has no parent directory".to_string())?;
+
+    let mut paths = Vec::new();
+    collect_pack_paths(base_parent, project_root, &mut paths).map_err(|error| error.to_string())?;
+    if paths.is_empty() {
+        return Err("Project root is empty".to_string());
+    }
+
+    if let Some(parent) = archive_path.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let temp_path = build_archive_temp_path(archive_path);
+    if temp_path.exists() {
+        let _ = fs::remove_file(&temp_path);
+    }
+
+    let result = (|| -> Result<(), String> {
+        let temp_file = fs::File::create(&temp_path).map_err(|error| error.to_string())?;
+        let mut zip = ZipWriter::new(temp_file);
+        let file_options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .unix_permissions(0o644);
+        let dir_options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Stored)
+            .unix_permissions(0o755);
+
+        for path in paths {
+            let relative = path.strip_prefix(base_parent).unwrap_or(&path);
+            let mut entry_name = relative.to_string_lossy().replace('\\', "/");
+            if path.is_dir() {
+                if !entry_name.ends_with('/') {
+                    entry_name.push('/');
+                }
+                zip.add_directory(entry_name, dir_options)
+                    .map_err(|error| error.to_string())?;
+            } else {
+                zip.start_file(entry_name, file_options)
+                    .map_err(|error| error.to_string())?;
+                let mut source = fs::File::open(&path).map_err(|error| error.to_string())?;
+                io::copy(&mut source, &mut zip).map_err(|error| error.to_string())?;
+            }
+        }
+
+        zip.finish().map_err(|error| error.to_string())?;
+        Ok(())
+    })();
+
+    if let Err(error) = result {
+        let _ = fs::remove_file(&temp_path);
+        return Err(error);
+    }
+
+    if archive_path.exists() {
+        fs::remove_file(archive_path).map_err(|error| error.to_string())?;
+    }
+    fs::rename(&temp_path, archive_path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn open_packed_project(
+    app: tauri::AppHandle,
+    archive_path: String,
+) -> Result<OpenPackedProjectResponse, String> {
+    let archive_input = PathBuf::from(&archive_path);
+    if !archive_input.exists() {
+        return Err("Project file not found".to_string());
+    }
+    if !archive_input.is_file() {
+        return Err("Project file path is not a file".to_string());
+    }
+
+    let canonical_archive = fs::canonicalize(&archive_input).unwrap_or(archive_input);
+    let archive_file = fs::File::open(&canonical_archive).map_err(|error| error.to_string())?;
+    let mut archive = ZipArchive::new(archive_file).map_err(|error| error.to_string())?;
+    if archive.len() == 0 {
+        return Err("Project archive is empty".to_string());
+    }
+
+    let mut top_level: Option<String> = None;
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let Some(enclosed) = entry.enclosed_name() else {
+            return Err("Archive contains unsafe path entries".to_string());
+        };
+        let mut components = enclosed.components();
+        let Some(std::path::Component::Normal(first)) = components.next() else {
+            continue;
+        };
+        let first_name = first.to_string_lossy().to_string();
+        if let Some(existing) = &top_level {
+            if existing != &first_name {
+                return Err("Packed project must contain exactly one top-level folder".to_string());
+            }
+        } else {
+            top_level = Some(first_name);
+        }
+    }
+
+    let project_name = top_level.ok_or_else(|| "Archive has no project folder".to_string())?;
+    let workspace_dir = packed_workspace_dir(&app, &canonical_archive)?;
+    if workspace_dir.exists() {
+        fs::remove_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
+    }
+    fs::create_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
+
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let Some(enclosed) = entry.enclosed_name() else {
+            return Err("Archive contains unsafe path entries".to_string());
+        };
+        let output_path = workspace_dir.join(enclosed);
+        if entry.is_dir() || entry.name().ends_with('/') {
+            fs::create_dir_all(&output_path).map_err(|error| error.to_string())?;
+            continue;
+        }
+        if let Some(parent) = output_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let mut output_file = fs::File::create(&output_path).map_err(|error| error.to_string())?;
+        io::copy(&mut entry, &mut output_file).map_err(|error| error.to_string())?;
+    }
+
+    let project_root = workspace_dir.join(&project_name);
+    if !project_root.is_dir() {
+        return Err("Archive top-level project folder could not be extracted".to_string());
+    }
+
+    Ok(OpenPackedProjectResponse {
+        archive_path: canonical_archive.to_string_lossy().to_string(),
+        workspace_dir: workspace_dir.to_string_lossy().to_string(),
+        project_root: project_root.to_string_lossy().to_string(),
+        project_name,
+    })
+}
+
+#[tauri::command]
+fn create_packed_project(
+    app: tauri::AppHandle,
+    archive_path: String,
+) -> Result<OpenPackedProjectResponse, String> {
+    let mut archive_target = PathBuf::from(&archive_path);
+    if !archive_target.is_absolute() {
+        let cwd = std::env::current_dir().map_err(|error| error.to_string())?;
+        archive_target = cwd.join(archive_target);
+    }
+    if archive_target
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.eq_ignore_ascii_case("umz"))
+        != Some(true)
+    {
+        archive_target.set_extension("umz");
+    }
+    if archive_target.exists() && archive_target.is_dir() {
+        return Err("Project file path points to a directory".to_string());
+    }
+    if let Some(parent) = archive_target.parent() {
+        fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+
+    let archive_identity = fs::canonicalize(&archive_target).unwrap_or(archive_target.clone());
+    let workspace_dir = packed_workspace_dir(&app, &archive_identity)?;
+    if workspace_dir.exists() {
+        fs::remove_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
+    }
+    fs::create_dir_all(&workspace_dir).map_err(|error| error.to_string())?;
+
+    let stem = archive_target
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("project");
+    let project_name = sanitize_project_name(stem);
+    let project_root = workspace_dir.join(&project_name);
+    create_netbeans_project(project_root.to_string_lossy().to_string())?;
+    write_packed_archive(&project_root, &archive_target)?;
+
+    let archive_output = fs::canonicalize(&archive_target).unwrap_or(archive_target);
+    Ok(OpenPackedProjectResponse {
+        archive_path: archive_output.to_string_lossy().to_string(),
+        workspace_dir: workspace_dir.to_string_lossy().to_string(),
+        project_root: project_root.to_string_lossy().to_string(),
+        project_name,
+    })
+}
+
+#[tauri::command]
+fn save_packed_project(project_root: String, archive_path: String) -> Result<(), String> {
+    let root_path = PathBuf::from(project_root);
+    let archive_path = PathBuf::from(archive_path);
+    write_packed_archive(&root_path, &archive_path)
 }
 
 #[tauri::command]
@@ -1123,6 +1443,7 @@ fn cancel_run(state: tauri::State<RunState>) -> Result<(), String> {
         .map_err(|_| "Failed to lock run state".to_string())?;
     if let Some(handle) = guard.as_mut() {
         handle.child.kill().map_err(|error| error.to_string())?;
+        let _ = handle.child.wait();
     }
     Ok(())
 }
@@ -1252,6 +1573,7 @@ fn jshell_stop(state: tauri::State<JshellState>) -> Result<(), String> {
     if let Ok(mut guard) = state.current.lock() {
         if let Some(mut session) = guard.take() {
             let _ = session.child.kill();
+            let _ = session.child.wait();
         }
     }
     Ok(())
@@ -1913,6 +2235,28 @@ fn load_startup_settings(app: &tauri::AppHandle) -> AppSettings {
     serde_json::from_str::<AppSettings>(&contents).unwrap_or_default()
 }
 
+fn collect_startup_umz_paths() -> Vec<String> {
+    std::env::args_os()
+        .skip(1)
+        .filter_map(|item| {
+            let text = item.to_string_lossy();
+            let trimmed = text.trim();
+            if trimmed.is_empty() || trimmed.starts_with('-') {
+                return None;
+            }
+            let path = PathBuf::from(trimmed);
+            let extension = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .map(|value| value.to_ascii_lowercase());
+            if extension.as_deref() != Some("umz") {
+                return None;
+            }
+            Some(trimmed.to_string())
+        })
+        .collect()
+}
+
 fn resource_candidates(app: &tauri::AppHandle, relative: &str) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Ok(dir) = app.path().resource_dir() {
@@ -2013,11 +2357,29 @@ fn take_startup_logs(state: tauri::State<StartupLogState>) -> Vec<String> {
     out
 }
 
+#[tauri::command]
+fn take_launch_open_paths(state: tauri::State<LaunchOpenState>) -> Vec<String> {
+    let mut guard = match state.pending_paths.lock() {
+        Ok(guard) => guard,
+        Err(error) => error.into_inner(),
+    };
+    let mut out = Vec::new();
+    std::mem::swap(&mut *guard, &mut out);
+    out
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(StartupLogState::default())
+        .manage(LaunchOpenState::default())
         .setup(|app| {
             let settings = load_startup_settings(app.handle());
+            if let Some(state) = app.try_state::<LaunchOpenState>() {
+                let launch_paths = collect_startup_umz_paths();
+                if let Ok(mut guard) = state.pending_paths.lock() {
+                    guard.extend(launch_paths);
+                }
+            }
             if settings.advanced.debug_logging {
                 log_startup_diagnostics(app.handle());
             }
@@ -2039,6 +2401,9 @@ fn main() {
             write_text_file,
             write_binary_file,
             remove_text_file,
+            open_packed_project,
+            create_packed_project,
+            save_packed_project,
             export_netbeans_project,
             compile_project,
             run_main,
@@ -2061,7 +2426,8 @@ fn main() {
             ls::ls_did_change,
             ls::ls_did_close,
             ls::ls_format_document,
-            take_startup_logs
+            take_startup_logs,
+            take_launch_open_paths
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

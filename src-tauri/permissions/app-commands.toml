@@ -8,6 +8,9 @@ commands.allow = [
   "write_text_file",
   "write_binary_file",
   "remove_text_file",
+  "open_packed_project",
+  "create_packed_project",
+  "save_packed_project",
   "export_netbeans_project",
   "add_field_to_class",
   "add_constructor_to_class",
@@ -29,5 +32,6 @@ commands.allow = [
   "ls_did_change",
   "ls_did_close",
   "ls_format_document",
-  "take_startup_logs"
+  "take_startup_logs",
+  "take_launch_open_paths"
 ]

@@ -127,11 +127,14 @@ Unimozer Next must recognize and open projects like the original Unimozer:
 #### C) Plain Java Folder
 - Fallback mode if it contains `.java` files under something like `src/` (optional in MVP)
 
-#### D) Packed Unimozer Next Project File (future)
-- Single-file project container with a custom extension (for example `.umz`)
-- Technically a ZIP archive with a defined internal layout (project metadata + `src/` + diagram/layout data)
-- Goal: student-friendly sharing and submission as one file instead of a folder tree
-- Not part of MVP; keep folder-based projects as the primary runtime format
+#### D) Packed Unimozer Next Project File (`.umz`)
+- Single-file project container with custom extension `.umz`
+- Physically a ZIP archive
+- Archive layout must be NetBeans-compatible:
+  - exactly one top-level folder named after the project
+  - all project files live under that folder (same pattern as NetBeans Export Project to ZIP)
+- Goal: student-friendly sharing/submission as one file instead of a folder tree
+- Folder projects remain supported for advanced/manual workflows
 
 ### 4.2 Open Project UX
 The Open Project UI should show a directory listing with icons:
@@ -141,9 +144,52 @@ The Open Project UI should show a directory listing with icons:
 - 🗜️ Project-file icon: packed Unimozer Next project file (future)
 
 Implementation:
-- Either a custom in-app picker UI (preferred)
-- Or use system folder picker + detection after selection (MVP)
-- Future: add `Open Project File...` and `Save As Project File...` for packed project workflow
+- `File > Open...` should open `.umz` project files (default student path)
+- `File > Open Folder Project...` should keep the current folder-based workflow
+- `File > New Project...` should create a new project and bind it to a `.umz` target path
+- `File > Save` behavior depends on project mode:
+  - packed project: always recreate full `.umz` archive
+  - folder project: save directly into folder
+- `File > Save As...` should always create a `.umz` file (not a folder destination)
+
+### 4.3 Packed Project Implementation Checklist
+
+#### Phase 1 - Foundation and OS integration
+- [ ] Register `.umz` file association in installers (`msi`, `nsis`) so double-click opens Unimozer Next
+- [ ] Capture launch/open arguments (`.umz` path) at startup
+- [ ] Add backend command to expose pending startup project-file open requests to frontend
+- [ ] Add project session mode model: `packed` vs `folder` (frontend state shape + backend metadata)
+
+#### Phase 2 - Backend pack/unpack pipeline
+- [ ] Add backend command `open_packed_project(path)`:
+  - validate ZIP
+  - enforce one top-level folder
+  - extract to managed workspace folder
+  - return extracted root path + project metadata
+- [ ] Add backend command `save_packed_project(workspace_root, archive_path)`:
+  - recreate archive from workspace
+  - enforce one top-level folder in output ZIP
+  - atomic write (`.tmp` then replace)
+- [ ] Exclude transient folders from archive (`build/`, `dist/`, `target/`, `.git/`, etc.)
+- [ ] Ensure `unimozer.json` is always included before archive write
+
+#### Phase 3 - Frontend file menu behavior
+- [x] Replace current `Open Project` action with `.umz` open flow (`File > Open...`)
+- [x] Add `File > Open Folder Project...` for existing folder flow
+- [x] Update `New Project` to create/select `.umz` target and initialize project workspace
+- [x] Update `Save` to branch by session mode (`packed` repack vs `folder` write)
+- [x] Update `Save As` to always prompt for `.umz` output
+
+#### Phase 4 - Compile and consistency guarantees
+- [ ] For packed projects, compile action must save/repack first
+- [ ] If save/repack fails, compile must abort with clear status message
+- [ ] Ensure UML/layout state is flushed before compile-triggered repack
+
+#### Phase 5 - Interoperability and hardening
+- [ ] Preserve NetBeans metadata (`nbproject/`, `build.xml`) in `.umz`
+- [ ] Validate import/export compatibility with NetBeans ZIP structure expectations
+- [ ] Add ZIP-slip protections for extraction
+- [ ] Add recovery path for interrupted save (keep last known good archive)
 
 ---
 

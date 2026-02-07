@@ -43,39 +43,3 @@ export type AppSettings = {
     objectBenchSplitRatio: number;
   };
 };
-
-export const createDefaultSettings = (): AppSettings => ({
-  general: {
-    fontSize: 14
-  },
-  uml: {
-    showDependencies: true,
-    panelBackground: null,
-    codeHighlight: true,
-    showPackages: true,
-    showSwingAttributes: true
-  },
-  objectBench: {
-    showPrivateObjectFields: true,
-    showInheritedObjectFields: true,
-    showStaticObjectFields: true
-  },
-  editor: {
-    theme: "default",
-    tabSize: 4,
-    insertSpaces: true,
-    autoCloseBrackets: false,
-    autoCloseQuotes: false,
-    autoCloseComments: false,
-    wordWrap: true,
-    autoFormatOnSave: true
-  },
-  advanced: {
-    debugLogging: false
-  },
-  layout: {
-    umlSplitRatio: 0.5,
-    consoleSplitRatio: 0.7,
-    objectBenchSplitRatio: 0.75
-  }
-});

@@ -35,6 +35,7 @@ type AppMenuProps = {
   wordWrap: boolean;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
+  onRequestOpenFolderProject: () => void;
   onSave: () => void;
   onSaveAs: () => void;
   onOpenSettings: () => void;
@@ -85,6 +86,7 @@ export const AppMenu = ({
   wordWrap,
   onRequestNewProject,
   onRequestOpenProject,
+  onRequestOpenFolderProject,
   onSave,
   onSaveAs,
   onOpenSettings,
@@ -125,6 +127,10 @@ export const AppMenu = ({
             <MenubarItem onClick={onRequestOpenProject} disabled={busy}>
               Open
               <MenubarShortcut>{isMac ? "⌘O" : "Ctrl+O"}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarItem onClick={onRequestOpenFolderProject} disabled={busy}>
+              Open Folder Project...
+              <MenubarShortcut>{isMac ? "⇧⌘O" : "Ctrl+Shift+O"}</MenubarShortcut>
             </MenubarItem>
             <MenubarItem onClick={onSave} disabled={busy || !projectName}>
               Save

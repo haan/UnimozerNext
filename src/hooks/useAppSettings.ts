@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
 import type { AppSettings } from "../models/settings";
-import { createDefaultSettings } from "../models/settings";
 import { readSettings, writeSettings } from "../services/settings";
 
 type AppSettingsHook = {
-  settings: AppSettings;
-  setSettings: Dispatch<SetStateAction<AppSettings>>;
+  settings: AppSettings | null;
+  setSettings: Dispatch<SetStateAction<AppSettings | null>>;
+  settingsLoading: boolean;
+  settingsError: string | null;
   settingsOpen: boolean;
   setSettingsOpen: Dispatch<SetStateAction<boolean>>;
   handleSettingsChange: (next: AppSettings) => void;
@@ -17,7 +18,9 @@ type AppSettingsHook = {
 };
 
 export const useAppSettings = (): AppSettingsHook => {
-  const [settings, setSettings] = useState<AppSettings>(createDefaultSettings());
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -25,44 +28,16 @@ export const useAppSettings = (): AppSettingsHook => {
     const loadSettings = async () => {
       try {
         const stored = await readSettings();
-        const defaults = createDefaultSettings();
-        const storedSettings = stored as AppSettings;
-        const storedFontSize = storedSettings.general?.fontSize;
-        const merged: AppSettings = {
-          ...defaults,
-          ...stored,
-          general: {
-            ...defaults.general,
-            ...(stored as AppSettings).general,
-            fontSize: storedFontSize ?? defaults.general.fontSize
-          },
-          uml: {
-            ...defaults.uml,
-            ...(stored as AppSettings).uml
-          },
-          objectBench: {
-            ...defaults.objectBench,
-            ...(stored as AppSettings).objectBench
-          },
-          editor: {
-            ...defaults.editor,
-            ...(stored as AppSettings).editor
-          },
-          advanced: {
-            ...defaults.advanced,
-            ...(stored as AppSettings).advanced
-          },
-          layout: {
-            ...defaults.layout,
-            ...(stored as AppSettings).layout
-          }
-        };
         if (!cancelled) {
-          setSettings(merged);
+          setSettings(stored as AppSettings);
+          setSettingsError(null);
+          setSettingsLoading(false);
         }
       } catch {
         if (!cancelled) {
-          setSettings(createDefaultSettings());
+          setSettings(null);
+          setSettingsError("Failed to load settings.");
+          setSettingsLoading(false);
         }
       }
     };
@@ -79,6 +54,9 @@ export const useAppSettings = (): AppSettingsHook => {
 
   const updateUmlSplitRatioSetting = useCallback((ratio: number) => {
     setSettings((prev) => {
+      if (!prev) {
+        return prev;
+      }
       const next = {
         ...prev,
         layout: {
@@ -93,6 +71,9 @@ export const useAppSettings = (): AppSettingsHook => {
 
   const updateConsoleSplitRatioSetting = useCallback((ratio: number) => {
     setSettings((prev) => {
+      if (!prev) {
+        return prev;
+      }
       const next = {
         ...prev,
         layout: {
@@ -107,6 +88,9 @@ export const useAppSettings = (): AppSettingsHook => {
 
   const updateObjectBenchSplitRatioSetting = useCallback((ratio: number) => {
     setSettings((prev) => {
+      if (!prev) {
+        return prev;
+      }
       const next = {
         ...prev,
         layout: {
@@ -122,6 +106,8 @@ export const useAppSettings = (): AppSettingsHook => {
   return {
     settings,
     setSettings,
+    settingsLoading,
+    settingsError,
     settingsOpen,
     setSettingsOpen,
     handleSettingsChange,

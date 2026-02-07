@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Dispatch, SetStateAction } from "react";
 import type { editor as MonacoEditorType } from "monaco-editor";
 
 import { toast } from "sonner";
@@ -24,6 +25,7 @@ import type { FileNode } from "./models/files";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "./models/uml";
 import type { ObjectInstance } from "./models/objectBench";
 import type { OpenFile } from "./models/openFile";
+import type { AppSettings } from "./models/settings";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useSplitRatios } from "./hooks/useSplitRatios";
 import { useVerticalSplit } from "./hooks/useVerticalSplit";
@@ -34,7 +36,7 @@ import { useDrafts } from "./hooks/useDrafts";
 import { useUmlGraph } from "./hooks/useUmlGraph";
 import { useJshellActions } from "./hooks/useJshellActions";
 import { basename, joinPath } from "./services/paths";
-import { useProjectIO } from "./hooks/useProjectIO";
+import { useProjectIO, type ProjectStorageMode } from "./hooks/useProjectIO";
 import { getThemeColors } from "./services/monacoThemes";
 import { jshellStart, jshellStop } from "./services/jshell";
 import { buildClassSource } from "./services/javaCodegen";
@@ -50,8 +52,78 @@ const formatStatus = (input: unknown) =>
 const trimStatus = (input: string, max = 200) =>
   input.length > max ? `${input.slice(0, max)}...` : input;
 
+const toDisplayPath = (path: string) => {
+  if (path.startsWith("\\\\?\\UNC\\")) {
+    return `\\\\${path.slice(8)}`;
+  }
+  if (path.startsWith("\\\\?\\")) {
+    return path.slice(4);
+  }
+  return path;
+};
+
+type LoadedAppSettings = {
+  settings: AppSettings;
+  settingsOpen: boolean;
+  setSettingsOpen: Dispatch<SetStateAction<boolean>>;
+  handleSettingsChange: (next: AppSettings) => void;
+  updateUmlSplitRatioSetting: (ratio: number) => void;
+  updateConsoleSplitRatioSetting: (ratio: number) => void;
+  updateObjectBenchSplitRatioSetting: (ratio: number) => void;
+};
+
 export default function App() {
+  const appSettings = useAppSettings();
+  if (appSettings.settingsLoading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        Loading settings...
+      </div>
+    );
+  }
+  if (!appSettings.settings) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-destructive">
+        {appSettings.settingsError ?? "Failed to load settings."}
+      </div>
+    );
+  }
+
+  const {
+    settings,
+    settingsOpen,
+    setSettingsOpen,
+    handleSettingsChange,
+    updateUmlSplitRatioSetting,
+    updateConsoleSplitRatioSetting,
+    updateObjectBenchSplitRatioSetting
+  } = appSettings as LoadedAppSettings;
+
+  return (
+    <AppContent
+      settings={settings}
+      settingsOpen={settingsOpen}
+      setSettingsOpen={setSettingsOpen}
+      handleSettingsChange={handleSettingsChange}
+      updateUmlSplitRatioSetting={updateUmlSplitRatioSetting}
+      updateConsoleSplitRatioSetting={updateConsoleSplitRatioSetting}
+      updateObjectBenchSplitRatioSetting={updateObjectBenchSplitRatioSetting}
+    />
+  );
+}
+
+function AppContent({
+  settings,
+  settingsOpen,
+  setSettingsOpen,
+  handleSettingsChange,
+  updateUmlSplitRatioSetting,
+  updateConsoleSplitRatioSetting,
+  updateObjectBenchSplitRatioSetting
+}: LoadedAppSettings) {
   const [projectPath, setProjectPath] = useState<string | null>(null);
+  const [projectStorageMode, setProjectStorageMode] = useState<ProjectStorageMode | null>(null);
+  const [packedArchivePath, setPackedArchivePath] = useState<string | null>(null);
   const [tree, setTree] = useState<FileNode | null>(null);
   const [umlGraph, setUmlGraph] = useState<UmlGraph | null>(null);
   const [diagramState, setDiagramState] = useState<DiagramState | null>(null);
@@ -81,33 +153,26 @@ export default function App() {
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
   const [confirmProjectActionOpen, setConfirmProjectActionOpen] = useState(false);
-  const [pendingProjectAction, setPendingProjectAction] = useState<"open" | "new" | null>(null);
+  const [pendingProjectAction, setPendingProjectAction] = useState<
+    "open" | "openFolder" | "new" | null
+  >(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [fieldTarget, setFieldTarget] = useState<UmlNode | null>(null);
   const [constructorTarget, setConstructorTarget] = useState<UmlNode | null>(null);
   const [methodTarget, setMethodTarget] = useState<UmlNode | null>(null);
-  const {
-    settings,
-    settingsOpen,
-    setSettingsOpen,
-    handleSettingsChange,
-    updateUmlSplitRatioSetting,
-    updateConsoleSplitRatioSetting,
-    updateObjectBenchSplitRatioSetting
-  } = useAppSettings();
-  const debugLogging = settings.advanced?.debugLogging ?? false;
-  const codeHighlightEnabled = settings.uml.codeHighlight ?? true;
-  const showDependencies = settings.uml.showDependencies ?? true;
-  const showPackages = settings.uml.showPackages ?? true;
-  const fontSize = settings.general.fontSize ?? 14;
+  const debugLogging = settings.advanced.debugLogging;
+  const codeHighlightEnabled = settings.uml.codeHighlight;
+  const showDependencies = settings.uml.showDependencies;
+  const showPackages = settings.uml.showPackages;
+  const fontSize = settings.general.fontSize;
   const showPrivateObjectFields =
-    settings.objectBench.showPrivateObjectFields ?? true;
+    settings.objectBench.showPrivateObjectFields;
   const showInheritedObjectFields =
-    settings.objectBench.showInheritedObjectFields ?? true;
+    settings.objectBench.showInheritedObjectFields;
   const showStaticObjectFields =
-    settings.objectBench.showStaticObjectFields ?? true;
-  const showSwingAttributes = settings.uml.showSwingAttributes ?? true;
-  const wordWrap = settings.editor.wordWrap ?? true;
+    settings.objectBench.showStaticObjectFields;
+  const showSwingAttributes = settings.uml.showSwingAttributes;
+  const wordWrap = settings.editor.wordWrap;
   const {
     containerRef,
     consoleContainerRef,
@@ -565,19 +630,44 @@ export default function App() {
     trimStatus
   });
 
+  const beforeProjectSwitch = useCallback(async () => {
+    try {
+      await invoke("cancel_run");
+    } catch {
+      // Ignore if no run is active.
+    }
+    try {
+      await jshellStop();
+    } catch {
+      // Ignore if JShell is not running.
+    }
+    try {
+      await invoke("ls_stop");
+    } catch {
+      // Ignore if LS is not running.
+    }
+    setJshellReady(false);
+    setObjectBench([]);
+  }, []);
+
   const {
     handleOpenProject,
+    handleOpenFolderProject,
+    handleOpenPackedProjectPath,
     handleNewProject,
     openFileByPath,
     handleSave,
-    handleExportProject,
+    handleSaveAs,
     loadDiagramState
   } = useProjectIO({
     projectPath,
+    projectStorageMode,
+    packedArchivePath,
     fileDrafts,
-    openFilePath,
     lastGoodGraphRef,
     setProjectPath,
+    setProjectStorageMode,
+    setPackedArchivePath,
     setTree,
     setUmlGraph,
     setDiagramState,
@@ -589,6 +679,8 @@ export default function App() {
     setCompileStatus,
     setBusy,
     setStatus,
+    clearConsole: () => resetConsoleOutput(),
+    beforeProjectSwitch,
     resetLsState,
     notifyLsOpen,
     updateDraftForPath,
@@ -651,9 +743,13 @@ export default function App() {
 
   useEffect(() => {
     const window = getCurrentWindow();
-    const nextTitle = projectPath ? `${defaultTitle} - ${projectPath}` : defaultTitle;
+    const titlePath =
+      projectStorageMode === "packed" ? packedArchivePath ?? projectPath : projectPath;
+    const nextTitle = titlePath
+      ? `${defaultTitle} - ${toDisplayPath(titlePath)}`
+      : defaultTitle;
     window.setTitle(nextTitle).catch(() => undefined);
-  }, [projectPath]);
+  }, [packedArchivePath, projectPath, projectStorageMode]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -877,32 +973,61 @@ export default function App() {
     setRemoveTarget(null);
   }, [handleRemoveClass, removeTarget]);
 
+  const runProjectAction = useCallback(
+    (action: "open" | "openFolder" | "new") => {
+      if (action === "open") {
+        void handleOpenProject();
+      } else if (action === "openFolder") {
+        void handleOpenFolderProject();
+      } else {
+        void handleNewProject();
+      }
+    },
+    [handleNewProject, handleOpenFolderProject, handleOpenProject]
+  );
+
   const requestProjectAction = useCallback(
-    (action: "open" | "new") => {
+    (action: "open" | "openFolder" | "new") => {
       if (!hasUnsavedChanges) {
-        if (action === "open") {
-          void handleOpenProject();
-        } else {
-          void handleNewProject();
-        }
+        runProjectAction(action);
         return;
       }
       setPendingProjectAction(action);
       setConfirmProjectActionOpen(true);
     },
-    [hasUnsavedChanges, handleOpenProject, handleNewProject]
+    [hasUnsavedChanges, runProjectAction]
   );
 
   const confirmProjectAction = useCallback(() => {
     const action = pendingProjectAction;
     setConfirmProjectActionOpen(false);
     setPendingProjectAction(null);
-    if (action === "open") {
-      void handleOpenProject();
-    } else if (action === "new") {
-      void handleNewProject();
+    if (action) {
+      runProjectAction(action);
     }
-  }, [pendingProjectAction, handleOpenProject, handleNewProject]);
+  }, [pendingProjectAction, runProjectAction]);
+
+  useEffect(() => {
+    let active = true;
+    const loadLaunchProject = async () => {
+      try {
+        const launchPaths = await invoke<string[]>("take_launch_open_paths");
+        if (!active || launchPaths.length === 0) {
+          return;
+        }
+        const packedPath = launchPaths.find((path) => path.toLowerCase().endsWith(".umz"));
+        if (packedPath) {
+          await handleOpenPackedProjectPath(packedPath);
+        }
+      } catch {
+        // Ignore launch-open path lookup failures.
+      }
+    };
+    void loadLaunchProject();
+    return () => {
+      active = false;
+    };
+  }, [handleOpenPackedProjectPath]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -911,7 +1036,11 @@ export default function App() {
       if (key === "o") {
         event.preventDefault();
         if (!busy) {
-          requestProjectAction("open");
+          if (event.shiftKey) {
+            requestProjectAction("openFolder");
+          } else {
+            requestProjectAction("open");
+          }
         }
         return;
       }
@@ -1352,11 +1481,12 @@ export default function App() {
         wordWrap={wordWrap}
         onRequestNewProject={() => requestProjectAction("new")}
         onRequestOpenProject={() => requestProjectAction("open")}
+        onRequestOpenFolderProject={() => requestProjectAction("openFolder")}
         onSave={() => {
           void handleSave();
         }}
         onSaveAs={() => {
-          void handleExportProject();
+          void handleSaveAs();
         }}
         onOpenSettings={() => setSettingsOpen(true)}
         onExit={handleExit}

@@ -8,6 +8,9 @@ type UseSplitRatiosArgs = {
   onCommitUmlSplitRatio: (ratio: number) => void;
   onCommitConsoleSplitRatio: (ratio: number) => void;
   minUmlPanel?: number;
+  splitSnapDistance?: number;
+  umlSplitSnapRatio?: number;
+  consoleSplitSnapRatio?: number;
 };
 
 type UseSplitRatiosResult = {
@@ -24,7 +27,10 @@ export const useSplitRatios = ({
   consoleSplitRatio,
   onCommitUmlSplitRatio,
   onCommitConsoleSplitRatio,
-  minUmlPanel = 260
+  minUmlPanel = 260,
+  splitSnapDistance = 0.03,
+  umlSplitSnapRatio = 0.5,
+  consoleSplitSnapRatio = 0.75
 }: UseSplitRatiosArgs): UseSplitRatiosResult => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const consoleContainerRef = useRef<HTMLDivElement | null>(null);
@@ -34,6 +40,16 @@ export const useSplitRatios = ({
   const consoleSplitRatioRef = useRef(consoleSplit);
   const [isResizing, setIsResizing] = useState(false);
   const [isConsoleResizing, setIsConsoleResizing] = useState(false);
+
+  const snapRatio = useCallback(
+    (ratio: number, target: number) => {
+      if (Math.abs(ratio - target) <= splitSnapDistance) {
+        return target;
+      }
+      return ratio;
+    },
+    [splitSnapDistance]
+  );
 
   const getConsoleMinHeight = useCallback(() => {
     if (typeof window === "undefined") return 100;
@@ -68,7 +84,8 @@ export const useSplitRatios = ({
       const rect = containerRef.current.getBoundingClientRect();
       let x = event.clientX - rect.left;
       x = Math.max(minUmlPanel, Math.min(rect.width - minUmlPanel, x));
-      setSplitRatio(x / rect.width);
+      const ratio = x / rect.width;
+      setSplitRatio(snapRatio(ratio, umlSplitSnapRatio));
     };
 
     const handleUp = () => {
@@ -86,7 +103,7 @@ export const useSplitRatios = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [isResizing, minUmlPanel, onCommitUmlSplitRatio]);
+  }, [isResizing, minUmlPanel, onCommitUmlSplitRatio, snapRatio, umlSplitSnapRatio]);
 
   useEffect(() => {
     if (!isConsoleResizing) return;
@@ -97,7 +114,8 @@ export const useSplitRatios = ({
       const minPanel = getConsoleMinHeight();
       let y = event.clientY - rect.top;
       y = Math.max(minPanel, Math.min(rect.height - minPanel, y));
-      setConsoleSplit(y / rect.height);
+      const ratio = y / rect.height;
+      setConsoleSplit(snapRatio(ratio, consoleSplitSnapRatio));
     };
 
     const handleUp = () => {
@@ -115,7 +133,13 @@ export const useSplitRatios = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [getConsoleMinHeight, isConsoleResizing, onCommitConsoleSplitRatio]);
+  }, [
+    consoleSplitSnapRatio,
+    getConsoleMinHeight,
+    isConsoleResizing,
+    onCommitConsoleSplitRatio,
+    snapRatio
+  ]);
 
   const startUmlResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();

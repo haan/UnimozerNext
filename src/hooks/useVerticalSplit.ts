@@ -7,6 +7,8 @@ type UseVerticalSplitArgs = {
   onCommit: (ratio: number) => void;
   minTop?: number;
   minBottom?: number;
+  splitSnapDistance?: number;
+  splitSnapRatio?: number;
 };
 
 type UseVerticalSplitResult = {
@@ -28,12 +30,24 @@ export const useVerticalSplit = ({
   ratio,
   onCommit,
   minTop = 200,
-  minBottom = 120
+  minBottom = 120,
+  splitSnapDistance = 0.03,
+  splitSnapRatio = 0.75
 }: UseVerticalSplitArgs): UseVerticalSplitResult => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [splitRatio, setSplitRatio] = useState(ratio);
   const splitRatioRef = useRef(splitRatio);
   const [isResizing, setIsResizing] = useState(false);
+
+  const snapRatio = useCallback(
+    (nextRatio: number) => {
+      if (Math.abs(nextRatio - splitSnapRatio) <= splitSnapDistance) {
+        return splitSnapRatio;
+      }
+      return nextRatio;
+    },
+    [splitSnapDistance, splitSnapRatio]
+  );
 
   useEffect(() => {
     setSplitRatio(ratio);
@@ -52,7 +66,8 @@ export const useVerticalSplit = ({
       const bottomMin = resolveMinBottom(minBottom);
       let y = event.clientY - rect.top;
       y = Math.max(minTop, Math.min(rect.height - bottomMin, y));
-      setSplitRatio(y / rect.height);
+      const ratio = y / rect.height;
+      setSplitRatio(snapRatio(ratio));
     };
 
     const handleUp = () => {
@@ -70,7 +85,7 @@ export const useVerticalSplit = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [isResizing, minBottom, minTop, onCommit]);
+  }, [isResizing, minBottom, minTop, onCommit, snapRatio]);
 
   const startResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();
