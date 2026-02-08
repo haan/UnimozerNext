@@ -1,5 +1,6 @@
-import { useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
+import { STRUCTOGRAM_METHOD_SWITCH_DEBOUNCE_MS } from "../../constants/app";
 import type { DiagramState } from "../../models/diagram";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
 import {
@@ -44,13 +45,16 @@ export type DiagramPanelProps = {
   viewMode: DiagramViewMode;
   activeFilePath?: string | null;
   caretLineNumber?: number | null;
+  onDebugLog?: (message: string) => void;
 };
+
+type ActiveMethodContext = { node: UmlNode; method: UmlMethod };
 
 const findActiveMethod = (
   graph: UmlGraph | null,
   filePath: string | null | undefined,
   caretLineNumber: number | null | undefined
-): { node: UmlNode; method: UmlMethod } | null => {
+): ActiveMethodContext | null => {
   if (!graph || !filePath || !caretLineNumber) {
     return null;
   }
@@ -97,11 +101,83 @@ export const DiagramPanel = ({
   onRegisterExport,
   viewMode,
   activeFilePath,
-  caretLineNumber
+  caretLineNumber,
+  onDebugLog
 }: DiagramPanelProps) => {
   const exportControlsRef = useRef<ExportControls | null>(null);
+  const previousViewModeRef = useRef(viewMode);
+  const structogramSwitchRequestedAtRef = useRef<number | null>(null);
+  const [debouncedStructogramInput, setDebouncedStructogramInput] = useState(() => ({
+    filePath: activeFilePath ?? null,
+    caretLineNumber: caretLineNumber ?? null
+  }));
   const canExportDiagram = Boolean(graph && diagram && graph.nodes.length > 0);
-  const activeMethodContext = findActiveMethod(graph, activeFilePath, caretLineNumber);
+  const resolvedMethodContext = useMemo(
+    () =>
+      findActiveMethod(
+        graph,
+        debouncedStructogramInput.filePath,
+        debouncedStructogramInput.caretLineNumber
+      ),
+    [graph, debouncedStructogramInput]
+  );
+
+  useEffect(() => {
+    const nextInput = {
+      filePath: activeFilePath ?? null,
+      caretLineNumber: caretLineNumber ?? null
+    };
+    const enteringStructogram =
+      previousViewModeRef.current !== "structogram" && viewMode === "structogram";
+    previousViewModeRef.current = viewMode;
+    const timeoutDelayMs =
+      viewMode !== "structogram" || enteringStructogram
+        ? 0
+        : STRUCTOGRAM_METHOD_SWITCH_DEBOUNCE_MS;
+    const timeoutId = window.setTimeout(() => {
+      setDebouncedStructogramInput(nextInput);
+    }, timeoutDelayMs);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeFilePath, caretLineNumber, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "structogram") {
+      return;
+    }
+    structogramSwitchRequestedAtRef.current = performance.now();
+  }, [activeFilePath, caretLineNumber, viewMode]);
+
+  useEffect(() => {
+    if (viewMode !== "structogram") {
+      return;
+    }
+    if (!onDebugLog) {
+      return;
+    }
+    const lookupStart = performance.now();
+    const lookupResult = findActiveMethod(
+      graph,
+      debouncedStructogramInput.filePath,
+      debouncedStructogramInput.caretLineNumber
+    );
+    const resolveMs = performance.now() - lookupStart;
+    const requestedAt = structogramSwitchRequestedAtRef.current;
+    const switchMs = requestedAt === null ? null : performance.now() - requestedAt;
+    const methodName = lookupResult
+      ? `${lookupResult.node.name}.${lookupResult.method.name}`
+      : "<none>";
+    const sourcePath = debouncedStructogramInput.filePath ?? "<none>";
+    const sourceLine =
+      debouncedStructogramInput.caretLineNumber === null
+        ? "-"
+        : String(debouncedStructogramInput.caretLineNumber);
+    const switchDetail = switchMs === null ? "" : `, switch ${switchMs.toFixed(1)} ms`;
+    onDebugLog(
+      `[structogram] resolved ${methodName} at ${sourcePath}:${sourceLine} (lookup ${resolveMs.toFixed(1)} ms${switchDetail})`
+    );
+  }, [debouncedStructogramInput, graph, onDebugLog, viewMode]);
 
   return (
     <ContextMenu>
@@ -141,13 +217,12 @@ export const DiagramPanel = ({
             ) : null}
             {viewMode === "structogram" ? (
               <div className="relative h-full min-w-0 overflow-hidden">
-                {activeMethodContext ? (
+                {resolvedMethodContext ? (
                   // Keep structogram in an absolute fill layer so large SVG width
                   // never participates in parent flex sizing or moves the split handle.
                   <div className="absolute inset-0 min-w-0 overflow-hidden">
                     <StructogramView
-                      ownerName={activeMethodContext.node.name}
-                      method={activeMethodContext.method}
+                      method={resolvedMethodContext.method}
                     />
                   </div>
                 ) : (

@@ -37,6 +37,7 @@ type ObjectBenchSectionProps = {
   viewMode: DiagramViewMode;
   activeFilePath?: string | null;
   caretLineNumber?: number | null;
+  onDebugLog?: (message: string) => void;
   objectBench: ObjectInstance[];
   showPrivate: boolean;
   showInherited: boolean;
@@ -76,6 +77,7 @@ export const ObjectBenchSection = ({
   viewMode,
   activeFilePath,
   caretLineNumber,
+  onDebugLog,
   objectBench,
   showPrivate,
   showInherited,
@@ -117,6 +119,7 @@ export const ObjectBenchSection = ({
           viewMode={viewMode}
           activeFilePath={activeFilePath}
           caretLineNumber={caretLineNumber}
+          onDebugLog={onDebugLog}
         />
       </div>
       <div

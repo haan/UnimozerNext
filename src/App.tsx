@@ -1873,6 +1873,7 @@ function AppContent({
                   viewMode={leftPanelViewMode}
                   activeFilePath={openFilePath}
                   caretLineNumber={editorCaret?.lineNumber ?? null}
+                  onDebugLog={debugLogging ? appendDebugOutput : undefined}
                 objectBench={objectBench}
                 showPrivate={showPrivateObjectFields}
                 showInherited={showInheritedObjectFields}
