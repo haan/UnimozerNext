@@ -13,7 +13,7 @@ import {
   ContextMenuSubTriggerItem,
   ContextMenuTrigger
 } from "../ui/context-menu";
-import { StructogramView } from "./StructogramView";
+import { StructogramView } from "../structogram/StructogramView";
 import { UmlDiagram, type ExportControls, type ZoomControls } from "./UmlDiagram";
 
 export type DiagramViewMode = "uml" | "structogram";
