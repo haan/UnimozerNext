@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import type { UmlMethod } from "../../models/uml";
 import {
   STRUCTOGRAM_CANVAS_PADDING,
+  STRUCTOGRAM_FONT_SIZE,
   STRUCTOGRAM_HEADER_BOTTOM_PADDING_PX,
   STRUCTOGRAM_HEADER_TOP_PADDING_PX,
   STRUCTOGRAM_SVG_STROKE_WIDTH,
@@ -13,11 +14,17 @@ import { renderStructogramNode } from "./renderTree";
 
 type StructogramViewProps = {
   method: UmlMethod;
+  fontSize?: number;
 };
 
-export const StructogramView = ({ method }: StructogramViewProps) => {
+export const StructogramView = ({ method, fontSize }: StructogramViewProps) => {
   const layout = useMemo(() => buildStructogramLayout(method.controlTree), [method.controlTree]);
   const declaration = useMemo(() => toMethodDeclaration(method), [method]);
+  const resolvedFontSize =
+    typeof fontSize === "number" && Number.isFinite(fontSize) && fontSize > 0
+      ? fontSize
+      : STRUCTOGRAM_FONT_SIZE;
+  const fontScale = resolvedFontSize / STRUCTOGRAM_FONT_SIZE;
 
   if (!layout) {
     return (
@@ -29,6 +36,8 @@ export const StructogramView = ({ method }: StructogramViewProps) => {
 
   const width = layout.width + STRUCTOGRAM_CANVAS_PADDING * 2;
   const height = layout.height + STRUCTOGRAM_CANVAS_PADDING * 2;
+  const scaledWidth = Math.round(width * fontScale);
+  const scaledHeight = Math.round(height * fontScale);
   const signatureLeftPaddingPx = STRUCTOGRAM_VIEWPORT_PADDING_PX + STRUCTOGRAM_CANVAS_PADDING;
 
   return (
@@ -44,7 +53,11 @@ export const StructogramView = ({ method }: StructogramViewProps) => {
           paddingRight: `${STRUCTOGRAM_VIEWPORT_PADDING_PX}px`
         }}
       >
-        <div className="truncate text-sm font-semibold text-foreground" title={declaration}>
+        <div
+          className="truncate text-sm font-semibold text-foreground"
+          style={{ fontSize: `${resolvedFontSize}px` }}
+          title={declaration}
+        >
           {declaration}
         </div>
       </div>
@@ -54,8 +67,9 @@ export const StructogramView = ({ method }: StructogramViewProps) => {
       >
         <svg
           className="block"
-          width={width}
-          height={height}
+          width={scaledWidth}
+          height={scaledHeight}
+          viewBox={`0 0 ${width} ${height}`}
           strokeWidth={STRUCTOGRAM_SVG_STROKE_WIDTH}
           style={{ fontFamily: "var(--uml-font)" }}
           role="img"

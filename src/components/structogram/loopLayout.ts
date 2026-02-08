@@ -1,7 +1,6 @@
 import {
   STRUCTOGRAM_HEADER_HEIGHT,
-  STRUCTOGRAM_LOOP_BODY_INSET_WIDTH,
-  STRUCTOGRAM_ROW_HEIGHT
+  STRUCTOGRAM_LOOP_BODY_INSET_WIDTH
 } from "./constants";
 
 export type LoopLayoutNode<TBody> = {
@@ -62,7 +61,7 @@ export const buildLoopLayout = <TBody extends { width: number; height: number }>
     estimatedTextWidth(labels.header),
     body.width + STRUCTOGRAM_LOOP_BODY_INSET_WIDTH
   );
-  const height = Math.max(STRUCTOGRAM_ROW_HEIGHT * 2, body.height);
+  const height = STRUCTOGRAM_HEADER_HEIGHT + body.height;
   return {
     kind: "loop",
     header: labels.header,

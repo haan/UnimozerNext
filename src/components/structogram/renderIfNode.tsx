@@ -72,7 +72,7 @@ export const renderIfNode = <TNode extends { height: number },>({
         fontSize={STRUCTOGRAM_FONT_SIZE}
         fill={colors.text}
       >
-        {`if (${node.condition})`}
+        {node.condition}
       </text>
 
       <text

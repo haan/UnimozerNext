@@ -33,7 +33,7 @@ const fitIfGeometry = (
   preferredRightWidth: number,
   estimatedInlineTextWidth: (value: string) => number
 ) => {
-  const conditionLabel = `if (${condition})`;
+  const conditionLabel = condition;
   const conditionWidth = estimatedInlineTextWidth(conditionLabel);
   const conditionHalfWidth = conditionWidth / 2;
   const conditionBottomY =

@@ -181,15 +181,18 @@ export const toMethodDeclaration = (method: UmlMethod): string => {
   return `${prefix} ${methodName}(${params})`.trim();
 };
 
-const toSequence = (nodes: UmlStructogramNode[] | undefined): SequenceLayoutNode => {
+const toSequence = (
+  nodes: UmlStructogramNode[] | undefined,
+  emptyLabel: string = STRUCTOGRAM_EMPTY_BODY_LABEL
+): SequenceLayoutNode => {
   const children = (nodes ?? [])
     .map((entry) => toLayoutNode(entry))
     .filter((item): item is LayoutNode => Boolean(item));
   if (children.length === 0) {
     return {
       kind: "sequence",
-      children: [createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL)],
-      width: estimatedTextWidth(STRUCTOGRAM_EMPTY_BODY_LABEL),
+      children: [createStatement(emptyLabel)],
+      width: estimatedTextWidth(emptyLabel),
       height: STRUCTOGRAM_ROW_HEIGHT
     };
   }
@@ -198,13 +201,32 @@ const toSequence = (nodes: UmlStructogramNode[] | undefined): SequenceLayoutNode
   return { kind: "sequence", children, width, height };
 };
 
+const stripTrailingSwitchBreak = (
+  nodes: UmlStructogramNode[] | undefined
+): UmlStructogramNode[] | undefined => {
+  if (!nodes || nodes.length === 0) {
+    return nodes;
+  }
+  let endIndex = nodes.length;
+  while (endIndex > 0) {
+    const lastNode = nodes[endIndex - 1];
+    const normalizedText =
+      lastNode.kind === "statement" ? normalizeStatementText(lastNode.text) : null;
+    if (normalizedText !== "break") {
+      break;
+    }
+    endIndex -= 1;
+  }
+  return endIndex === nodes.length ? nodes : nodes.slice(0, endIndex);
+};
+
 const toSwitchCases = (
   cases: UmlStructogramSwitchCase[] | undefined
 ): Array<{ label: string; body: LayoutNode }> => {
   const mapped =
     cases?.map((entry) => ({
       label: normalizeLabel(entry.label, "default"),
-      body: toSequence(entry.body)
+      body: toSequence(stripTrailingSwitchBreak(entry.body))
     })) ?? [];
   if (mapped.length === 0) {
     return [{ label: "default", body: createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL) }];
@@ -236,10 +258,12 @@ const toLayoutNode = (node: UmlStructogramNode | null | undefined): LayoutNode |
 
   if (node.kind === "if") {
     const condition = normalizeLabel(node.condition, "condition");
-    const thenBranch = toSequence(node.thenBranch);
+    const thenBranch = toSequence(node.thenBranch, STRUCTOGRAM_NO_ELSE_LABEL);
     const hasElseBranch = (node.elseBranch ?? []).length > 0;
     const elseBranch =
-      hasElseBranch ? toSequence(node.elseBranch) : createStatement(STRUCTOGRAM_NO_ELSE_LABEL);
+      hasElseBranch
+        ? toSequence(node.elseBranch, STRUCTOGRAM_NO_ELSE_LABEL)
+        : createStatement(STRUCTOGRAM_NO_ELSE_LABEL);
     return buildIfLayout({
       condition,
       thenBranch,

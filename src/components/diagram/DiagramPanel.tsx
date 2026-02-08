@@ -223,6 +223,7 @@ export const DiagramPanel = ({
                   <div className="absolute inset-0 min-w-0 overflow-hidden">
                     <StructogramView
                       method={resolvedMethodContext.method}
+                      fontSize={fontSize}
                     />
                   </div>
                 ) : (
