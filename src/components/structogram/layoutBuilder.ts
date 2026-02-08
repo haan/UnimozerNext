@@ -83,11 +83,8 @@ export type LayoutNode =
   | SwitchLayoutNode
   | TryLayoutNode;
 
-const stripComments = (value: string): string =>
-  value.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/.*$/gm, " ");
-
 const normalizeLabel = (value: string | null | undefined, fallback: string) => {
-  const normalized = stripComments(value ?? "").replace(/\s+/g, " ").trim();
+  const normalized = (value ?? "").replace(/\s+/g, " ").trim();
   return normalized && normalized.length > 0 ? normalized : fallback;
 };
 
@@ -108,7 +105,7 @@ const createStatement = (text: string): StatementLayoutNode => ({
 });
 
 const normalizeStatementText = (value: string | null | undefined): string | null => {
-  const normalized = stripComments(value ?? "").replace(/\s+/g, " ").trim();
+  const normalized = (value ?? "").replace(/\s+/g, " ").trim();
   const withoutSemicolon = normalized.replace(/;+$/g, "").trim();
   if (withoutSemicolon.length === 0) return null;
 
@@ -162,7 +159,8 @@ const fallbackParamsFromSignature = (signature: string): string => {
 export const toMethodDeclaration = (method: UmlMethod): string => {
   const visibility = normalizeVisibility(method.visibility);
   const staticToken = method.isStatic ? "static" : "";
-  const returnType = method.returnType?.trim() || "void";
+  const resolvedReturnType = method.returnType?.trim() ?? "";
+  const returnType = resolvedReturnType.length > 0 ? resolvedReturnType : "";
   const methodName = method.name?.trim() || fallbackMethodNameFromSignature(method.signature);
   const params =
     method.params && method.params.length > 0
@@ -249,12 +247,8 @@ const lastRenderableNode = (
   return null;
 };
 
-const caseHasExplicitTerminator = (nodes: UmlStructogramNode[] | undefined): boolean => {
-  const lastNode = lastRenderableNode(nodes);
-  if (!lastNode || lastNode.kind !== "statement") {
-    return false;
-  }
-  const normalized = normalizeStatementText(lastNode.text);
+const isTerminatingStatement = (text: string | null | undefined): boolean => {
+  const normalized = normalizeStatementText(text);
   if (!normalized) {
     return false;
   }
@@ -266,6 +260,51 @@ const caseHasExplicitTerminator = (nodes: UmlStructogramNode[] | undefined): boo
     keyword === "continue" ||
     keyword === "yield"
   );
+};
+
+const sequenceDefinitelyTerminates = (nodes: UmlStructogramNode[] | undefined): boolean => {
+  const lastNode = lastRenderableNode(nodes);
+  if (!lastNode) {
+    return false;
+  }
+  return nodeDefinitelyTerminates(lastNode);
+};
+
+const nodeDefinitelyTerminates = (node: UmlStructogramNode | null | undefined): boolean => {
+  if (!node) {
+    return false;
+  }
+  switch (node.kind) {
+    case "statement":
+      return isTerminatingStatement(node.text);
+    case "sequence":
+      return sequenceDefinitelyTerminates(node.children);
+    case "if": {
+      const thenTerminates = sequenceDefinitelyTerminates(node.thenBranch);
+      const elseTerminates = sequenceDefinitelyTerminates(node.elseBranch);
+      return thenTerminates && elseTerminates;
+    }
+    case "try": {
+      if (sequenceDefinitelyTerminates(node.finallyBranch)) {
+        return true;
+      }
+      if (!sequenceDefinitelyTerminates(node.children)) {
+        return false;
+      }
+      if (!node.catches || node.catches.length === 0) {
+        return true;
+      }
+      return node.catches.every((entry) => sequenceDefinitelyTerminates(entry.body));
+    }
+    case "loop":
+    case "switch":
+    default:
+      return false;
+  }
+};
+
+const caseHasExplicitTerminator = (nodes: UmlStructogramNode[] | undefined): boolean => {
+  return sequenceDefinitelyTerminates(nodes);
 };
 
 const toSwitchCases = (

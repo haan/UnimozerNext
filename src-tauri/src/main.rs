@@ -273,6 +273,27 @@ impl Default for AdvancedSettings {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct StructogramSettings {
+    #[serde(default = "default_structogram_loop_header_color")]
+    loop_header_color: String,
+    #[serde(default = "default_structogram_if_header_color")]
+    if_header_color: String,
+    #[serde(default = "default_structogram_switch_header_color")]
+    switch_header_color: String,
+}
+
+impl Default for StructogramSettings {
+    fn default() -> Self {
+        Self {
+            loop_header_color: default_structogram_loop_header_color(),
+            if_header_color: default_structogram_if_header_color(),
+            switch_header_color: default_structogram_switch_header_color(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct ObjectBenchSettings {
     #[serde(default = "default_true")]
     show_private_object_fields: bool,
@@ -326,6 +347,8 @@ struct AppSettings {
     #[serde(default)]
     advanced: AdvancedSettings,
     #[serde(default)]
+    structogram: StructogramSettings,
+    #[serde(default)]
     layout: LayoutSettings,
 }
 
@@ -360,6 +383,11 @@ impl Default for AppSettings {
             advanced: AdvancedSettings {
                 debug_logging: default_false(),
                 structogram_colors: default_true(),
+            },
+            structogram: StructogramSettings {
+                loop_header_color: default_structogram_loop_header_color(),
+                if_header_color: default_structogram_if_header_color(),
+                switch_header_color: default_structogram_switch_header_color(),
             },
             layout: LayoutSettings {
                 uml_split_ratio: default_split_ratio(),
@@ -404,6 +432,18 @@ fn default_console_split_ratio() -> f32 {
 
 fn default_object_bench_split_ratio() -> f32 {
     0.75
+}
+
+fn default_structogram_loop_header_color() -> String {
+    "#dcc7e8".to_string()
+}
+
+fn default_structogram_if_header_color() -> String {
+    "#cec1eb".to_string()
+}
+
+fn default_structogram_switch_header_color() -> String {
+    "#d6e1ee".to_string()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1237,6 +1277,11 @@ fn read_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
     let contents = fs::read_to_string(&path).map_err(|error| error.to_string())?;
     let parsed = serde_json::from_str::<AppSettings>(&contents).unwrap_or_default();
     Ok(parsed)
+}
+
+#[tauri::command]
+fn read_default_settings() -> Result<AppSettings, String> {
+    Ok(AppSettings::default())
 }
 
 #[tauri::command]
@@ -2786,6 +2831,7 @@ fn main() {
             jshell_inspect,
             jshell_vars,
             read_settings,
+            read_default_settings,
             write_settings,
             parse_uml_graph,
             add_field_to_class,

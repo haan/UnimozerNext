@@ -5,6 +5,7 @@ import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/
 import { OBJECT_BENCH_MIN_HEIGHT_PX } from "../../constants/layout";
 import { DiagramPanel, type DiagramViewMode } from "../diagram/DiagramPanel";
 import type { ExportControls, ZoomControls } from "../diagram/UmlDiagram";
+import type { StructogramExportControls } from "../structogram/StructogramView";
 import { ObjectBenchPanel } from "../objectBench/ObjectBenchPanel";
 
 type ObjectBenchSectionProps = {
@@ -34,6 +35,7 @@ type ObjectBenchSectionProps = {
   onMethodSelect?: (method: UmlNode["methods"][number], node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
   onRegisterExport?: (controls: ExportControls | null) => void;
+  onRegisterStructogramExport?: (controls: StructogramExportControls | null) => void;
   onAddClass?: () => void;
   viewMode: DiagramViewMode;
   activeFilePath?: string | null;
@@ -75,6 +77,7 @@ export const ObjectBenchSection = ({
   onMethodSelect,
   onRegisterZoom,
   onRegisterExport,
+  onRegisterStructogramExport,
   onAddClass,
   viewMode,
   activeFilePath,
@@ -118,6 +121,7 @@ export const ObjectBenchSection = ({
           onMethodSelect={onMethodSelect}
           onRegisterZoom={onRegisterZoom}
           onRegisterExport={onRegisterExport}
+          onRegisterStructogramExport={onRegisterStructogramExport}
           onAddClass={onAddClass}
           viewMode={viewMode}
           activeFilePath={activeFilePath}

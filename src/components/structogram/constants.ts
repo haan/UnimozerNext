@@ -11,8 +11,10 @@ export const STRUCTOGRAM_MIN_BRANCH_WIDTH = 140; // Minimum width for decision b
 export const STRUCTOGRAM_CANVAS_PADDING = 12; // Outer padding around structogram SVG content.
 export const STRUCTOGRAM_VIEWPORT_PADDING = 8; // Outer viewport padding around the SVG.
 export const STRUCTOGRAM_HEADER_TOP_PADDING = 10; // Space above the method signature.
-export const STRUCTOGRAM_HEADER_BOTTOM_PADDING = 0; // Space between signature and structogram.
-export const STRUCTOGRAM_SVG_STROKE_WIDTH = 1.1; // Global stroke width for SVG block borders.
+export const STRUCTOGRAM_HEADER_BOTTOM_PADDING = 10; // Space between signature and structogram.
+export const STRUCTOGRAM_SVG_STROKE_WIDTH = 1; // Global stroke width for SVG block borders.
+export const STRUCTOGRAM_EXPORT_SCALE = 2; // Rasterization scale factor for PNG export/copy.
+export const STRUCTOGRAM_EXPORT_PADDING = 8; // Extra SVG padding around exported/captured structograms.
 export const STRUCTOGRAM_LABEL_TEXT_OFFSET_Y = 6; // Vertical offset used for T/F corner labels.
 export const STRUCTOGRAM_EMPTY_BODY_LABEL = "(empty)"; // Label for empty sequences.
 export const STRUCTOGRAM_EMPTY_ELSE_LABEL = "∅"; // Label for implicit else branch in single-if blocks.
@@ -51,9 +53,9 @@ export const STRUCTOGRAM_COLORS: StructogramColors = {
   text: "hsl(var(--foreground))",
   mutedText: "hsl(var(--muted-foreground))",
   body: "hsl(var(--background))",
-  loopHeader: "hsl(var(--structogram-loop-header))",
-  ifHeader: "hsl(var(--structogram-if-header))",
-  switchHeader: "hsl(var(--structogram-switch-header))",
+  loopHeader: "var(--structogram-loop-header)",
+  ifHeader: "var(--structogram-if-header)",
+  switchHeader: "var(--structogram-switch-header)",
   condition: "hsl(var(--accent) / 0.55)",
   branch: "hsl(var(--muted) / 0.30)",
   section: "hsl(var(--muted) / 0.50)"

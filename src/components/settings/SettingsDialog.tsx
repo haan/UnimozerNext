@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AppSettings } from "../../models/settings";
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
@@ -14,6 +14,7 @@ import { Switch } from "../ui/switch";
 import { cn } from "../../lib/utils";
 import { ChromePicker, type ColorResult } from "react-color";
 import { loadEditorThemeOptions, type ThemeOption } from "../../services/monacoThemes";
+import { readDefaultSettings } from "../../services/settings";
 
 type SettingsDialogProps = {
   open: boolean;
@@ -22,7 +23,14 @@ type SettingsDialogProps = {
   onChange: (next: AppSettings) => void;
 };
 
-const groups = ["General", "UML", "Object Bench", "Editor", "Advanced"] as const;
+const groups = [
+  "General",
+  "UML",
+  "Object Bench",
+  "Editor",
+  "Structogram",
+  "Advanced"
+] as const;
 type SettingsGroup = (typeof groups)[number];
 
 export const SettingsDialog = ({
@@ -35,6 +43,9 @@ export const SettingsDialog = ({
   const [themeOptions, setThemeOptions] = useState<ThemeOption[]>([
     { value: "default", label: "Default" }
   ]);
+  const [defaultStructogramSettings, setDefaultStructogramSettings] = useState<
+    AppSettings["structogram"] | null
+  >(null);
 
   const options = useMemo(
     () =>
@@ -56,6 +67,60 @@ export const SettingsDialog = ({
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadDefaultSettings = async () => {
+      try {
+        const defaults = await readDefaultSettings();
+        if (!active) return;
+        setDefaultStructogramSettings(defaults.structogram);
+      } catch {
+        if (!active) return;
+        setDefaultStructogramSettings(null);
+      }
+    };
+    void loadDefaultSettings();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const updateStructogramSettings = useCallback(
+    (partial: Partial<AppSettings["structogram"]>) => {
+      onChange({
+        ...settings,
+        structogram: {
+          ...settings.structogram,
+          ...partial
+        }
+      });
+    },
+    [onChange, settings]
+  );
+
+  const resetStructogramColors = useCallback(() => {
+    if (!defaultStructogramSettings) {
+      return;
+    }
+    onChange({
+      ...settings,
+      structogram: {
+        ...defaultStructogramSettings
+      }
+    });
+  }, [defaultStructogramSettings, onChange, settings]);
+
+  const canResetStructogramColors = useMemo(() => {
+    if (!defaultStructogramSettings) {
+      return false;
+    }
+    return (
+      settings.structogram.loopHeaderColor !== defaultStructogramSettings.loopHeaderColor ||
+      settings.structogram.ifHeaderColor !== defaultStructogramSettings.ifHeaderColor ||
+      settings.structogram.switchHeaderColor !== defaultStructogramSettings.switchHeaderColor
+    );
+  }, [defaultStructogramSettings, settings.structogram]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -487,6 +552,124 @@ export const SettingsDialog = ({
                       })
                     }
                   />
+                </div>
+              </div>
+            ) : activeGroup === "Structogram" ? (
+              <div className="mt-4 grid gap-2">
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Use colors</p>
+                    <p className="text-xs text-muted-foreground">
+                      Enable colorized headers for structogram blocks.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.advanced.structogramColors}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        advanced: {
+                          ...settings.advanced,
+                          structogramColors: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Loop header color</p>
+                    <p className="text-xs text-muted-foreground">
+                      Color used for for/while/do-while loop wrappers.
+                    </p>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-8 w-8 rounded-full border border-border transition hover:border-foreground/40"
+                        style={{ backgroundColor: settings.structogram.loopHeaderColor }}
+                        aria-label="Pick structogram loop header color"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3">
+                      <ChromePicker
+                        color={settings.structogram.loopHeaderColor}
+                        onChange={(color: ColorResult) =>
+                          updateStructogramSettings({ loopHeaderColor: color.hex })
+                        }
+                        disableAlpha
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">If header color</p>
+                    <p className="text-xs text-muted-foreground">
+                      Color used for if/else decision headers.
+                    </p>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-8 w-8 rounded-full border border-border transition hover:border-foreground/40"
+                        style={{ backgroundColor: settings.structogram.ifHeaderColor }}
+                        aria-label="Pick structogram if header color"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3">
+                      <ChromePicker
+                        color={settings.structogram.ifHeaderColor}
+                        onChange={(color: ColorResult) =>
+                          updateStructogramSettings({ ifHeaderColor: color.hex })
+                        }
+                        disableAlpha
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Switch header color</p>
+                    <p className="text-xs text-muted-foreground">
+                      Color used for switch selector headers.
+                    </p>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-8 w-8 rounded-full border border-border transition hover:border-foreground/40"
+                        style={{ backgroundColor: settings.structogram.switchHeaderColor }}
+                        aria-label="Pick structogram switch header color"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3">
+                      <ChromePicker
+                        color={settings.structogram.switchHeaderColor}
+                        onChange={(color: ColorResult) =>
+                          updateStructogramSettings({ switchHeaderColor: color.hex })
+                        }
+                        disableAlpha
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex justify-end rounded-lg bg-background px-4 py-3">
+                  <button
+                    type="button"
+                    className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={!canResetStructogramColors}
+                    onClick={resetStructogramColors}
+                  >
+                    Reset colors
+                  </button>
                 </div>
               </div>
             ) : activeGroup === "Advanced" ? (

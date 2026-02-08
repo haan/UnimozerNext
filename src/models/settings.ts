@@ -22,6 +22,12 @@ export type AdvancedSettings = {
   structogramColors: boolean;
 };
 
+export type StructogramSettings = {
+  loopHeaderColor: string;
+  ifHeaderColor: string;
+  switchHeaderColor: string;
+};
+
 export type GeneralSettings = {
   fontSize: number;
 };
@@ -38,6 +44,7 @@ export type AppSettings = {
   objectBench: ObjectBenchSettings;
   editor: EditorSettings;
   advanced: AdvancedSettings;
+  structogram: StructogramSettings;
   layout: {
     umlSplitRatio: number;
     consoleSplitRatio: number;

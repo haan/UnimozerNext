@@ -100,6 +100,17 @@ export const renderLoopNode = <TNode extends { height: number },>({
             stroke="none"
           />
           {topHeaderHeight > 0 ? (
+            <line
+              x1={x}
+              y1={bodyY}
+              x2={loopContentX}
+              y2={bodyY}
+              stroke={colors.loopHeader}
+              strokeWidth={2}
+              strokeLinecap="butt"
+            />
+          ) : null}
+          {topHeaderHeight > 0 ? (
             <line x1={loopContentX} y1={bodyY} x2={x + width} y2={bodyY} stroke={colors.border} />
           ) : null}
           <line

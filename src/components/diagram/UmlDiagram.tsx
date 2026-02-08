@@ -60,6 +60,19 @@ const computeNodeHeight = (
   return height;
 };
 
+const resolveExportDirectory = (path: string) => {
+  const normalized = path.replace(/[\\/]+$/, "");
+  if (!normalized.toLowerCase().endsWith(".umz")) {
+    return normalized;
+  }
+  const separatorIndex = Math.max(normalized.lastIndexOf("\\"), normalized.lastIndexOf("/"));
+  if (separatorIndex < 0) {
+    return normalized;
+  }
+  const parent = normalized.slice(0, separatorIndex);
+  return parent.length > 0 ? parent : normalized;
+};
+
 const UML_FONT_FAMILY =
   "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
 let measureCanvas: HTMLCanvasElement | null = null;
@@ -694,7 +707,7 @@ export const UmlDiagram = ({
   const buildDefaultPath = useCallback(
     (fileName: string) => {
       if (!exportDefaultPath) return undefined;
-      return joinPath(exportDefaultPath, fileName);
+      return joinPath(resolveExportDirectory(exportDefaultPath), fileName);
     },
     [exportDefaultPath]
   );
@@ -808,7 +821,9 @@ export const UmlDiagram = ({
         reportExportStatus("No UML diagram to export.");
         return;
       }
-      const projectName = exportDefaultPath ? basename(exportDefaultPath) : "uml-diagram";
+      const projectName = exportDefaultPath
+        ? basename(exportDefaultPath).replace(/\.umz$/i, "")
+        : "uml-diagram";
       await exportPng({
         title: "Export UML diagram as PNG",
         fileName: `${projectName}-uml.png`,

@@ -44,6 +44,7 @@ import { jshellStart, jshellStop } from "./services/jshell";
 import { buildClassSource } from "./services/javaCodegen";
 import { getUmlSignature } from "./services/umlGraph";
 import type { ExportControls, ExportStyle } from "./components/diagram/UmlDiagram";
+import type { StructogramExportControls } from "./components/structogram/StructogramView";
 import {
   STATUS_TEXT_MAX_CHARS,
   UML_REVEAL_REQUEST_TTL_SECONDS,
@@ -175,6 +176,9 @@ function AppContent({
   const [methodTarget, setMethodTarget] = useState<UmlNode | null>(null);
   const debugLogging = settings.advanced.debugLogging;
   const structogramColorsEnabled = settings.advanced.structogramColors;
+  const structogramLoopHeaderColor = settings.structogram.loopHeaderColor;
+  const structogramIfHeaderColor = settings.structogram.ifHeaderColor;
+  const structogramSwitchHeaderColor = settings.structogram.switchHeaderColor;
   const codeHighlightEnabled = settings.uml.codeHighlight;
   const showDependencies = settings.uml.showDependencies;
   const showPackages = settings.uml.showPackages;
@@ -210,6 +214,9 @@ function AppContent({
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
+  const canUseStructogramMode = Boolean(
+    openFilePath && openFilePath.toLowerCase().endsWith(".java")
+  );
   const defaultTitle = "Unimozer Next";
   const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
   const pendingRevealRef = useRef<{
@@ -246,6 +253,9 @@ function AppContent({
     resetZoom: () => void;
   } | null>(null);
   const exportControlsRef = useRef<ExportControls | null>(null);
+  const structogramExportControlsRef = useRef<StructogramExportControls | null>(null);
+  const [hasDiagramExportControls, setHasDiagramExportControls] = useState(false);
+  const [hasStructogramExportControls, setHasStructogramExportControls] = useState(false);
   const consoleThemeDefaults = useRef<{ bg: string; fg: string } | null>(null);
   const {
     monacoRef,
@@ -551,6 +561,12 @@ function AppContent({
   }, [openFile]);
 
   useEffect(() => {
+    if (!canUseStructogramMode && leftPanelViewMode === "structogram") {
+      setLeftPanelViewMode("uml");
+    }
+  }, [canUseStructogramMode, leftPanelViewMode]);
+
+  useEffect(() => {
     if (!addFieldOpen) {
       setFieldTarget(null);
     }
@@ -603,6 +619,16 @@ function AppContent({
       return basename(packedArchivePath).replace(/\.umz$/i, "");
     }
     return projectPath ? basename(projectPath) : "";
+  }, [packedArchivePath, projectPath, projectStorageMode]);
+
+  const exportDefaultPath = useMemo(() => {
+    if (projectStorageMode === "packed") {
+      return packedArchivePath;
+    }
+    if (projectStorageMode === "folder") {
+      return projectPath;
+    }
+    return null;
   }, [packedArchivePath, projectPath, projectStorageMode]);
 
   useEffect(() => {
@@ -728,6 +754,14 @@ function AppContent({
     },
     []
   );
+
+  const handleCopyStructogramPng = useCallback(() => {
+    structogramExportControlsRef.current?.copyStructogramPng();
+  }, []);
+
+  const handleExportStructogramPng = useCallback(() => {
+    structogramExportControlsRef.current?.exportStructogramPng();
+  }, []);
 
   useEffect(() => {
     if (!debugLogging) return;
@@ -888,7 +922,9 @@ function AppContent({
     }
     return nextGraph;
   }, [umlGraph, showDependencies, showSwingAttributes]);
-  const canExportDiagram = Boolean(visibleGraph && diagramState) && hasUmlClasses;
+  const canExportDiagram =
+    Boolean(visibleGraph && diagramState) && hasUmlClasses && hasDiagramExportControls;
+  const canExportStructogram = hasStructogramExportControls;
 
 
   const handleContentChange = useCallback((value: string) => {
@@ -987,6 +1023,17 @@ function AppContent({
       cancelled = true;
     };
   }, [settings.editor.theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty("--structogram-loop-header", structogramLoopHeaderColor);
+    root.style.setProperty("--structogram-if-header", structogramIfHeaderColor);
+    root.style.setProperty("--structogram-switch-header", structogramSwitchHeaderColor);
+  }, [
+    structogramIfHeaderColor,
+    structogramLoopHeaderColor,
+    structogramSwitchHeaderColor
+  ]);
 
   useEffect(() => {
     if (!projectPath || !umlGraph) return;
@@ -1765,12 +1812,14 @@ function AppContent({
         canAddMethod={canAddMethod}
         canCompileClass={canCompileClass}
         canExportDiagram={canExportDiagram}
+        canExportStructogram={canExportStructogram}
         showPrivateObjectFields={showPrivateObjectFields}
         showInheritedObjectFields={showInheritedObjectFields}
         showStaticObjectFields={showStaticObjectFields}
         showDependencies={showDependencies}
         showPackages={showPackages}
         showSwingAttributes={showSwingAttributes}
+        canUseStructogramMode={canUseStructogramMode}
         structogramMode={leftPanelViewMode === "structogram"}
         structogramColorsEnabled={structogramColorsEnabled}
         wordWrap={wordWrap}
@@ -1841,6 +1890,8 @@ function AppContent({
         onCompileClass={handleMenuCompileProject}
         onCopyDiagramPng={handleCopyDiagramPng}
         onExportDiagramPng={handleExportDiagramPng}
+        onCopyStructogramPng={handleCopyStructogramPng}
+        onExportStructogramPng={handleExportStructogramPng}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -1861,7 +1912,7 @@ function AppContent({
                   showPackages={showPackages}
                   fontSize={fontSize}
                   structogramColorsEnabled={structogramColorsEnabled}
-                  exportDefaultPath={projectPath}
+                  exportDefaultPath={exportDefaultPath}
                   onExportStatus={handleExportStatus}
                   onNodePositionChange={handleNodePositionChange}
                   onNodeSelect={handleNodeSelect}
@@ -1880,6 +1931,11 @@ function AppContent({
                   }}
                   onRegisterExport={(controls) => {
                     exportControlsRef.current = controls;
+                    setHasDiagramExportControls(Boolean(controls));
+                  }}
+                  onRegisterStructogramExport={(controls) => {
+                    structogramExportControlsRef.current = controls;
+                    setHasStructogramExportControls(Boolean(controls));
                   }}
                   onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
                   viewMode={leftPanelViewMode}

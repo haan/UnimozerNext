@@ -1239,9 +1239,95 @@ public class ParserBridge {
     return node;
   }
 
+  static String stripCommentsPreservingLiterals(String value) {
+    if (value == null || value.isEmpty()) return value;
+    StringBuilder builder = new StringBuilder(value.length());
+    boolean inLineComment = false;
+    boolean inBlockComment = false;
+    boolean inSingleQuote = false;
+    boolean inDoubleQuote = false;
+    boolean escaped = false;
+
+    for (int i = 0; i < value.length(); i++) {
+      char current = value.charAt(i);
+      char next = i + 1 < value.length() ? value.charAt(i + 1) : '\0';
+
+      if (inLineComment) {
+        if (current == '\n' || current == '\r') {
+          inLineComment = false;
+          builder.append(' ');
+        }
+        continue;
+      }
+
+      if (inBlockComment) {
+        if (current == '*' && next == '/') {
+          inBlockComment = false;
+          i += 1;
+          builder.append(' ');
+        }
+        continue;
+      }
+
+      if (inSingleQuote) {
+        builder.append(current);
+        if (escaped) {
+          escaped = false;
+        } else if (current == '\\') {
+          escaped = true;
+        } else if (current == '\'') {
+          inSingleQuote = false;
+        }
+        continue;
+      }
+
+      if (inDoubleQuote) {
+        builder.append(current);
+        if (escaped) {
+          escaped = false;
+        } else if (current == '\\') {
+          escaped = true;
+        } else if (current == '"') {
+          inDoubleQuote = false;
+        }
+        continue;
+      }
+
+      if (current == '/' && next == '/') {
+        inLineComment = true;
+        i += 1;
+        builder.append(' ');
+        continue;
+      }
+
+      if (current == '/' && next == '*') {
+        inBlockComment = true;
+        i += 1;
+        builder.append(' ');
+        continue;
+      }
+
+      if (current == '\'') {
+        inSingleQuote = true;
+        builder.append(current);
+        continue;
+      }
+
+      if (current == '"') {
+        inDoubleQuote = true;
+        builder.append(current);
+        continue;
+      }
+
+      builder.append(current);
+    }
+
+    return builder.toString();
+  }
+
   static String normalizeStatementText(String value) {
     if (value == null || value.isBlank()) return "";
-    return value
+    return stripCommentsPreservingLiterals(value)
       .replace("\r", " ")
       .replace("\n", " ")
       .replaceAll("\\s+", " ")
