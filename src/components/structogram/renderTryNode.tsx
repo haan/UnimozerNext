@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 import {
-  STRUCTOGRAM_COLORS,
   STRUCTOGRAM_HEADER_HEIGHT,
-  STRUCTOGRAM_SECTION_HEADER_HEIGHT
+  STRUCTOGRAM_SECTION_HEADER_HEIGHT,
+  type StructogramColors
 } from "./constants";
 import type { TryLayoutNode } from "./tryLayout";
 
@@ -13,7 +13,7 @@ type RenderTryNodeArgs<TNode extends { height: number }> = {
   y: number;
   width: number;
   keyPrefix: string;
-  colors: typeof STRUCTOGRAM_COLORS;
+  colors: StructogramColors;
   renderLeftAlignedText: (
     value: string,
     x: number,

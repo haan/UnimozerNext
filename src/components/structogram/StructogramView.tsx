@@ -3,11 +3,13 @@ import { useMemo } from "react";
 import type { UmlMethod } from "../../models/uml";
 import {
   STRUCTOGRAM_CANVAS_PADDING,
+  STRUCTOGRAM_COLORS,
   STRUCTOGRAM_FONT_SIZE,
-  STRUCTOGRAM_HEADER_BOTTOM_PADDING_PX,
-  STRUCTOGRAM_HEADER_TOP_PADDING_PX,
+  STRUCTOGRAM_HEADER_BOTTOM_PADDING,
+  STRUCTOGRAM_HEADER_TOP_PADDING,
+  STRUCTOGRAM_MONOCHROME_COLORS,
   STRUCTOGRAM_SVG_STROKE_WIDTH,
-  STRUCTOGRAM_VIEWPORT_PADDING_PX
+  STRUCTOGRAM_VIEWPORT_PADDING
 } from "./constants";
 import { buildStructogramLayout, toMethodDeclaration } from "./layoutBuilder";
 import { renderStructogramNode } from "./renderTree";
@@ -15,11 +17,13 @@ import { renderStructogramNode } from "./renderTree";
 type StructogramViewProps = {
   method: UmlMethod;
   fontSize?: number;
+  colorsEnabled?: boolean;
 };
 
-export const StructogramView = ({ method, fontSize }: StructogramViewProps) => {
+export const StructogramView = ({ method, fontSize, colorsEnabled = true }: StructogramViewProps) => {
   const layout = useMemo(() => buildStructogramLayout(method.controlTree), [method.controlTree]);
   const declaration = useMemo(() => toMethodDeclaration(method), [method]);
+  const palette = colorsEnabled ? STRUCTOGRAM_COLORS : STRUCTOGRAM_MONOCHROME_COLORS;
   const resolvedFontSize =
     typeof fontSize === "number" && Number.isFinite(fontSize) && fontSize > 0
       ? fontSize
@@ -38,7 +42,7 @@ export const StructogramView = ({ method, fontSize }: StructogramViewProps) => {
   const height = layout.height + STRUCTOGRAM_CANVAS_PADDING * 2;
   const scaledWidth = Math.round(width * fontScale);
   const scaledHeight = Math.round(height * fontScale);
-  const signatureLeftPaddingPx = STRUCTOGRAM_VIEWPORT_PADDING_PX + STRUCTOGRAM_CANVAS_PADDING;
+  const signatureLeftPaddingPx = STRUCTOGRAM_VIEWPORT_PADDING + STRUCTOGRAM_CANVAS_PADDING;
 
   return (
     <div
@@ -47,10 +51,10 @@ export const StructogramView = ({ method, fontSize }: StructogramViewProps) => {
     >
       <div
         style={{
-          paddingTop: `${STRUCTOGRAM_HEADER_TOP_PADDING_PX}px`,
-          paddingBottom: `${STRUCTOGRAM_HEADER_BOTTOM_PADDING_PX}px`,
+          paddingTop: `${STRUCTOGRAM_HEADER_TOP_PADDING}px`,
+          paddingBottom: `${STRUCTOGRAM_HEADER_BOTTOM_PADDING}px`,
           paddingLeft: `${signatureLeftPaddingPx}px`,
-          paddingRight: `${STRUCTOGRAM_VIEWPORT_PADDING_PX}px`
+          paddingRight: `${STRUCTOGRAM_VIEWPORT_PADDING}px`
         }}
       >
         <div
@@ -63,7 +67,7 @@ export const StructogramView = ({ method, fontSize }: StructogramViewProps) => {
       </div>
       <div
         className="min-h-0 min-w-0 flex-1 overflow-auto bg-background"
-        style={{ padding: `${STRUCTOGRAM_VIEWPORT_PADDING_PX}px` }}
+        style={{ padding: `${STRUCTOGRAM_VIEWPORT_PADDING}px` }}
       >
         <svg
           className="block"
@@ -75,7 +79,14 @@ export const StructogramView = ({ method, fontSize }: StructogramViewProps) => {
           role="img"
           aria-label="Nassi-Shneiderman structogram"
         >
-          {renderStructogramNode(layout, STRUCTOGRAM_CANVAS_PADDING, STRUCTOGRAM_CANVAS_PADDING, layout.width)}
+          {renderStructogramNode(
+            layout,
+            STRUCTOGRAM_CANVAS_PADDING,
+            STRUCTOGRAM_CANVAS_PADDING,
+            layout.width,
+            "node",
+            palette
+          )}
         </svg>
       </div>
     </div>

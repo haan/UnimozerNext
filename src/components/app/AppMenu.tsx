@@ -33,6 +33,7 @@ type AppMenuProps = {
   showPackages: boolean;
   showSwingAttributes: boolean;
   structogramMode: boolean;
+  structogramColorsEnabled: boolean;
   wordWrap: boolean;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
@@ -56,6 +57,7 @@ type AppMenuProps = {
   onToggleShowPackages: (value: boolean) => void;
   onToggleShowSwingAttributes: (value: boolean) => void;
   onToggleStructogramMode: (value: boolean) => void;
+  onToggleStructogramColors: (value: boolean) => void;
   onToggleWordWrap: (value: boolean) => void;
   onAddClass: () => void;
   onAddConstructor: () => void;
@@ -86,6 +88,7 @@ export const AppMenu = ({
   showPackages,
   showSwingAttributes,
   structogramMode,
+  structogramColorsEnabled,
   wordWrap,
   onRequestNewProject,
   onRequestOpenProject,
@@ -109,6 +112,7 @@ export const AppMenu = ({
   onToggleShowPackages,
   onToggleShowSwingAttributes,
   onToggleStructogramMode,
+  onToggleStructogramColors,
   onToggleWordWrap,
   onAddClass,
   onAddConstructor,
@@ -257,19 +261,6 @@ export const AppMenu = ({
                 </MenubarCheckboxItem>
               </MenubarSubContent>
             </MenubarSub>
-          </MenubarContent>
-        </MenubarMenu>
-        <MenubarMenu>
-          <MenubarTrigger>Structogram</MenubarTrigger>
-          <MenubarContent>
-            <MenubarItem onClick={() => onToggleStructogramMode(!structogramMode)}>
-              <span className="inline-flex items-center gap-2">
-                <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-xs">
-                  {structogramMode ? "✓" : ""}
-                </span>
-                <span>Structogram mode</span>
-              </span>
-            </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
         <MenubarMenu>
@@ -423,6 +414,26 @@ export const AppMenu = ({
                 </MenubarItem>
               </MenubarSubContent>
             </MenubarSub>
+          </MenubarContent>
+        </MenubarMenu>
+        <MenubarMenu>
+          <MenubarTrigger>Structogram</MenubarTrigger>
+          <MenubarContent>
+            <MenubarItem onClick={() => onToggleStructogramMode(!structogramMode)}>
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-flex h-3.5 w-3.5 items-center justify-center text-xs">
+                  {structogramMode ? "✓" : ""}
+                </span>
+                <span>Structogram mode</span>
+              </span>
+            </MenubarItem>
+            <MenubarSeparator />
+            <MenubarCheckboxItem
+              checked={structogramColorsEnabled}
+              onCheckedChange={(checked) => onToggleStructogramColors(Boolean(checked))}
+            >
+              Use colors
+            </MenubarCheckboxItem>
           </MenubarContent>
         </MenubarMenu>
       </Menubar>

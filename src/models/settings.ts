@@ -19,6 +19,7 @@ export type EditorSettings = {
 
 export type AdvancedSettings = {
   debugLogging: boolean;
+  structogramColors: boolean;
 };
 
 export type GeneralSettings = {

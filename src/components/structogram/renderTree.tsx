@@ -2,9 +2,10 @@ import type { ReactNode } from "react";
 
 import {
   STRUCTOGRAM_COLORS as COLORS,
+  STRUCTOGRAM_EMPTY_ELSE_LABEL,
   STRUCTOGRAM_HEADER_HEIGHT,
-  STRUCTOGRAM_LEGACY_NO_ELSE_LABEL,
-  STRUCTOGRAM_NO_ELSE_LABEL
+  STRUCTOGRAM_LEGACY_EMPTY_ELSE_LABEL,
+  type StructogramColors
 } from "./constants";
 import { renderIfNode } from "./renderIfNode";
 import { renderLoopNode } from "./renderLoopNode";
@@ -21,8 +22,8 @@ import type { LayoutNode } from "./layoutBuilder";
 const isNoElsePlaceholder = (value: string): boolean => {
   const normalized = value.trim();
   return (
-    normalized === STRUCTOGRAM_NO_ELSE_LABEL ||
-    normalized.toLowerCase() === STRUCTOGRAM_LEGACY_NO_ELSE_LABEL
+    normalized === STRUCTOGRAM_EMPTY_ELSE_LABEL ||
+    normalized.toLowerCase() === STRUCTOGRAM_LEGACY_EMPTY_ELSE_LABEL
   );
 };
 
@@ -93,22 +94,28 @@ const stretchLastStatementToHeight = (body: LayoutNode, targetHeight: number): L
   };
 };
 
+const stretchSwitchCaseBodyToHeight = (body: LayoutNode, targetHeight: number): LayoutNode => {
+  const loopStretched = stretchLoopBodyToHeight(body, targetHeight);
+  return stretchLastStatementToHeight(loopStretched, targetHeight);
+};
+
 export const renderStructogramNode = (
   node: LayoutNode,
   x: number,
   y: number,
   forcedWidth?: number,
-  keyPrefix = "node"
+  keyPrefix = "node",
+  colors: StructogramColors = COLORS
 ): ReactNode => {
   const width = forcedWidth ?? node.width;
 
   if (node.kind === "statement") {
     return (
       <g key={keyPrefix}>
-        <rect x={x} y={y} width={width} height={node.height} fill={COLORS.body} stroke={COLORS.border} />
+        <rect x={x} y={y} width={width} height={node.height} fill={colors.body} stroke={colors.border} />
         {isNoElsePlaceholder(node.text)
           ? renderCenteredText(node.text, x, y, width, node.height, `${keyPrefix}-text`)
-          : renderLeftAlignedText(node.text, x, y, node.height, COLORS.text, `${keyPrefix}-text`)}
+          : renderLeftAlignedText(node.text, x, y, node.height, colors.text, `${keyPrefix}-text`)}
       </g>
     );
   }
@@ -118,7 +125,14 @@ export const renderStructogramNode = (
     return (
       <g key={keyPrefix}>
         {node.children.map((child, index) => {
-          const rendered = renderStructogramNode(child, x, offsetY, width, `${keyPrefix}-${index}`);
+          const rendered = renderStructogramNode(
+            child,
+            x,
+            offsetY,
+            width,
+            `${keyPrefix}-${index}`,
+            colors
+          );
           offsetY += child.height;
           return rendered;
         })}
@@ -127,8 +141,9 @@ export const renderStructogramNode = (
   }
 
   if (node.kind === "loop") {
+    const topHeaderHeight = node.footer ? 0 : STRUCTOGRAM_HEADER_HEIGHT;
     const footerHeight = node.footer ? STRUCTOGRAM_HEADER_HEIGHT : 0;
-    const availableBodyHeight = node.height - STRUCTOGRAM_HEADER_HEIGHT - footerHeight;
+    const availableBodyHeight = node.height - topHeaderHeight - footerHeight;
     const stretchedBody = stretchLastStatementToHeight(node.body, availableBodyHeight);
     const renderableLoop =
       stretchedBody === node.body
@@ -143,10 +158,18 @@ export const renderStructogramNode = (
       y,
       width,
       keyPrefix,
-      colors: COLORS,
+      colors,
       renderLeftAlignedText,
       renderPaddedRemainder,
-      renderNode: renderStructogramNode
+      renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
+        renderStructogramNode(
+          childNode,
+          childX,
+          childY,
+          childForcedWidth,
+          childKeyPrefix,
+          colors
+        )
     });
   }
 
@@ -167,10 +190,18 @@ export const renderStructogramNode = (
       y,
       width,
       keyPrefix,
-      colors: COLORS,
+      colors,
       fitColumnWidths,
       renderPaddedRemainder,
-      renderNode: renderStructogramNode
+      renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
+        renderStructogramNode(
+          childNode,
+          childX,
+          childY,
+          childForcedWidth,
+          childKeyPrefix,
+          colors
+        )
     });
   }
 
@@ -179,7 +210,7 @@ export const renderStructogramNode = (
       ...node,
       cases: node.cases.map((entry) => ({
         ...entry,
-        body: stretchLoopBodyToHeight(entry.body, node.branchHeight)
+        body: stretchSwitchCaseBodyToHeight(entry.body, node.branchHeight)
       }))
     };
     return renderSwitchNode({
@@ -188,11 +219,19 @@ export const renderStructogramNode = (
       y,
       width,
       keyPrefix,
-      colors: COLORS,
+      colors,
       fitColumnWidths,
       renderCenteredText,
       renderPaddedRemainder,
-      renderNode: renderStructogramNode
+      renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
+        renderStructogramNode(
+          childNode,
+          childX,
+          childY,
+          childForcedWidth,
+          childKeyPrefix,
+          colors
+        )
     });
   }
 
@@ -203,9 +242,17 @@ export const renderStructogramNode = (
       y,
       width,
       keyPrefix,
-      colors: COLORS,
+      colors,
       renderLeftAlignedText,
-      renderNode: renderStructogramNode
+      renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
+        renderStructogramNode(
+          childNode,
+          childX,
+          childY,
+          childForcedWidth,
+          childKeyPrefix,
+          colors
+        )
     });
   }
 

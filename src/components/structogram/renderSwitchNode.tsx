@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 import {
-  STRUCTOGRAM_COLORS,
   STRUCTOGRAM_FONT_SIZE,
-  STRUCTOGRAM_SWITCH_CONDITION_TOP_PADDING
+  STRUCTOGRAM_SWITCH_CONDITION_TOP_PADDING,
+  type StructogramColors
 } from "./constants";
 import type { SwitchLayoutNode } from "./switchLayout";
 
@@ -13,7 +13,7 @@ type RenderSwitchNodeArgs<TNode extends { height: number }> = {
   y: number;
   width: number;
   keyPrefix: string;
-  colors: typeof STRUCTOGRAM_COLORS;
+  colors: StructogramColors;
   fitColumnWidths: (baseWidths: number[], targetWidth: number) => number[];
   renderCenteredText: (
     value: string,

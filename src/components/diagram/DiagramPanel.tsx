@@ -25,6 +25,7 @@ export type DiagramPanelProps = {
   backgroundColor?: string | null;
   showPackages?: boolean;
   fontSize?: number;
+  structogramColorsEnabled?: boolean;
   exportDefaultPath?: string | null;
   onExportStatus?: (message: string) => void;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
@@ -82,6 +83,7 @@ export const DiagramPanel = ({
   backgroundColor,
   showPackages,
   fontSize,
+  structogramColorsEnabled,
   exportDefaultPath,
   onExportStatus,
   onNodePositionChange,
@@ -224,6 +226,7 @@ export const DiagramPanel = ({
                     <StructogramView
                       method={resolvedMethodContext.method}
                       fontSize={fontSize}
+                      colorsEnabled={structogramColorsEnabled}
                     />
                   </div>
                 ) : (

@@ -4,10 +4,10 @@ import {
   STRUCTOGRAM_FONT_SIZE,
   STRUCTOGRAM_IF_CONDITION_TOP_PADDING,
   STRUCTOGRAM_LABEL_TEXT_OFFSET_Y,
-  STRUCTOGRAM_TEXT_PADDING_X
+  STRUCTOGRAM_TEXT_PADDING_X,
+  type StructogramColors
 } from "./constants";
 import type { IfLayoutNode } from "./ifLayout";
-import type { STRUCTOGRAM_COLORS } from "./constants";
 
 type RenderIfNodeArgs<TNode extends { height: number }> = {
   node: IfLayoutNode<TNode>;
@@ -15,7 +15,7 @@ type RenderIfNodeArgs<TNode extends { height: number }> = {
   y: number;
   width: number;
   keyPrefix: string;
-  colors: typeof STRUCTOGRAM_COLORS;
+  colors: StructogramColors;
   fitColumnWidths: (baseWidths: number[], targetWidth: number) => number[];
   renderPaddedRemainder: (
     x: number,

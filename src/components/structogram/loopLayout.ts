@@ -38,19 +38,21 @@ export const buildLoopLayout = <TBody extends { width: number; height: number }>
   estimatedTextWidth
 }: BuildLoopLayoutArgs<TBody>): LoopLayoutNode<TBody> => {
   const labels = loopHeader(loopKind, condition);
+  const usesWrappedBody = labels.footer !== null;
+  const bodyInsetWidth = usesWrappedBody ? STRUCTOGRAM_LOOP_BODY_INSET_WIDTH : 0;
+  const wrappedBodyWidth = body.width + bodyInsetWidth;
 
   if (labels.footer) {
     const width = Math.max(
-      estimatedTextWidth(labels.header),
       estimatedTextWidth(labels.footer),
-      body.width
+      wrappedBodyWidth
     );
-    const height = STRUCTOGRAM_HEADER_HEIGHT + body.height + STRUCTOGRAM_HEADER_HEIGHT;
+    const height = body.height + STRUCTOGRAM_HEADER_HEIGHT;
     return {
       kind: "loop",
       header: labels.header,
       footer: labels.footer,
-      bodyInsetWidth: 0,
+      bodyInsetWidth,
       body,
       width,
       height

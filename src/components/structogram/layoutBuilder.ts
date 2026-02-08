@@ -8,8 +8,8 @@ import {
   STRUCTOGRAM_ASSIGNMENT_SYMBOL,
   STRUCTOGRAM_CHAR_WIDTH,
   STRUCTOGRAM_EMPTY_BODY_LABEL,
+  STRUCTOGRAM_EMPTY_ELSE_LABEL,
   STRUCTOGRAM_MIN_CONTENT_WIDTH,
-  STRUCTOGRAM_NO_ELSE_LABEL,
   STRUCTOGRAM_ROW_HEIGHT,
   STRUCTOGRAM_TEXT_PADDING_X
 } from "./constants";
@@ -220,18 +220,125 @@ const stripTrailingSwitchBreak = (
   return endIndex === nodes.length ? nodes : nodes.slice(0, endIndex);
 };
 
+const hasRenderableNode = (node: UmlStructogramNode | null | undefined): boolean => {
+  if (!node) {
+    return false;
+  }
+  if (node.kind === "statement") {
+    return normalizeStatementText(node.text) !== null;
+  }
+  if (node.kind === "sequence") {
+    return (node.children ?? []).some((entry) => hasRenderableNode(entry));
+  }
+  return true;
+};
+
+const hasRenderableSwitchBody = (nodes: UmlStructogramNode[] | undefined): boolean =>
+  (nodes ?? []).some((entry) => hasRenderableNode(entry));
+
+const lastRenderableNode = (
+  nodes: UmlStructogramNode[] | undefined
+): UmlStructogramNode | null => {
+  const entries = nodes ?? [];
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const candidate = entries[index];
+    if (hasRenderableNode(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+};
+
+const caseHasExplicitTerminator = (nodes: UmlStructogramNode[] | undefined): boolean => {
+  const lastNode = lastRenderableNode(nodes);
+  if (!lastNode || lastNode.kind !== "statement") {
+    return false;
+  }
+  const normalized = normalizeStatementText(lastNode.text);
+  if (!normalized) {
+    return false;
+  }
+  const keyword = normalized.split(/\s+/, 1)[0]?.toLowerCase();
+  return (
+    keyword === "break" ||
+    keyword === "return" ||
+    keyword === "throw" ||
+    keyword === "continue" ||
+    keyword === "yield"
+  );
+};
+
 const toSwitchCases = (
   cases: UmlStructogramSwitchCase[] | undefined
 ): Array<{ label: string; body: LayoutNode }> => {
-  const mapped =
-    cases?.map((entry) => ({
-      label: normalizeLabel(entry.label, "default"),
-      body: toSequence(stripTrailingSwitchBreak(entry.body))
-    })) ?? [];
-  if (mapped.length === 0) {
+  type MergedCaseGroup = {
+    labels: string[];
+    ownBodyNodes: UmlStructogramNode[] | undefined;
+    terminates: boolean;
+  };
+
+  const groups: MergedCaseGroup[] = [];
+  let pendingLabels: string[] = [];
+
+  for (const entry of cases ?? []) {
+    const label = normalizeLabel(entry.label, "default");
+    const ownBodyNodes = stripTrailingSwitchBreak(entry.body);
+    const hasBody = hasRenderableSwitchBody(ownBodyNodes);
+    const terminates = caseHasExplicitTerminator(entry.body);
+
+    if (!hasBody) {
+      if (terminates) {
+        groups.push({
+          labels: [...pendingLabels, label],
+          ownBodyNodes,
+          terminates: true
+        });
+        pendingLabels = [];
+      } else {
+        pendingLabels.push(label);
+      }
+      continue;
+    }
+
+    groups.push({
+      labels: [...pendingLabels, label],
+      ownBodyNodes,
+      terminates
+    });
+    pendingLabels = [];
+  }
+
+  if (pendingLabels.length > 0) {
+    groups.push({
+      labels: pendingLabels,
+      ownBodyNodes: undefined,
+      terminates: false
+    });
+  }
+
+  if (groups.length === 0) {
     return [{ label: "default", body: createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL) }];
   }
-  return mapped;
+
+  const propagatedBodies: Array<UmlStructogramNode[] | undefined> = new Array(groups.length);
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    const currentNodes = groups[index].ownBodyNodes ?? [];
+    const nextNodes =
+      !groups[index].terminates && index + 1 < groups.length
+        ? propagatedBodies[index + 1] ?? []
+        : [];
+    propagatedBodies[index] = [...currentNodes, ...nextNodes];
+  }
+
+  return groups.map((group, index) => {
+    const nodes = propagatedBodies[index];
+    return {
+      label: group.labels.join(", "),
+      body: hasRenderableSwitchBody(nodes)
+        ? toSequence(nodes)
+        : createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL)
+    };
+  });
 };
 
 const toCatchLayouts = (
@@ -258,12 +365,12 @@ const toLayoutNode = (node: UmlStructogramNode | null | undefined): LayoutNode |
 
   if (node.kind === "if") {
     const condition = normalizeLabel(node.condition, "condition");
-    const thenBranch = toSequence(node.thenBranch, STRUCTOGRAM_NO_ELSE_LABEL);
+    const thenBranch = toSequence(node.thenBranch, STRUCTOGRAM_EMPTY_ELSE_LABEL);
     const hasElseBranch = (node.elseBranch ?? []).length > 0;
     const elseBranch =
       hasElseBranch
-        ? toSequence(node.elseBranch, STRUCTOGRAM_NO_ELSE_LABEL)
-        : createStatement(STRUCTOGRAM_NO_ELSE_LABEL);
+        ? toSequence(node.elseBranch, STRUCTOGRAM_EMPTY_ELSE_LABEL)
+        : createStatement(STRUCTOGRAM_EMPTY_ELSE_LABEL);
     return buildIfLayout({
       condition,
       thenBranch,

@@ -17,6 +17,7 @@ type ObjectBenchSectionProps = {
   backgroundColor?: string | null;
   showPackages?: boolean;
   fontSize: number;
+  structogramColorsEnabled?: boolean;
   exportDefaultPath?: string | null;
   onExportStatus?: (message: string) => void;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
@@ -57,6 +58,7 @@ export const ObjectBenchSection = ({
   backgroundColor,
   showPackages,
   fontSize,
+  structogramColorsEnabled,
   exportDefaultPath,
   onExportStatus,
   onNodePositionChange,
@@ -99,6 +101,7 @@ export const ObjectBenchSection = ({
           backgroundColor={backgroundColor}
           showPackages={showPackages}
           fontSize={fontSize}
+          structogramColorsEnabled={structogramColorsEnabled}
           exportDefaultPath={exportDefaultPath}
           onExportStatus={onExportStatus}
           onNodePositionChange={onNodePositionChange}

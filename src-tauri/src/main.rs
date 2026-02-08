@@ -258,12 +258,15 @@ impl Default for EditorSettings {
 struct AdvancedSettings {
     #[serde(default = "default_false")]
     debug_logging: bool,
+    #[serde(default = "default_true")]
+    structogram_colors: bool,
 }
 
 impl Default for AdvancedSettings {
     fn default() -> Self {
         Self {
             debug_logging: default_false(),
+            structogram_colors: default_true(),
         }
     }
 }
@@ -356,6 +359,7 @@ impl Default for AppSettings {
             },
             advanced: AdvancedSettings {
                 debug_logging: default_false(),
+                structogram_colors: default_true(),
             },
             layout: LayoutSettings {
                 uml_split_ratio: default_split_ratio(),

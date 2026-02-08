@@ -174,6 +174,7 @@ function AppContent({
   const [constructorTarget, setConstructorTarget] = useState<UmlNode | null>(null);
   const [methodTarget, setMethodTarget] = useState<UmlNode | null>(null);
   const debugLogging = settings.advanced.debugLogging;
+  const structogramColorsEnabled = settings.advanced.structogramColors;
   const codeHighlightEnabled = settings.uml.codeHighlight;
   const showDependencies = settings.uml.showDependencies;
   const showPackages = settings.uml.showPackages;
@@ -1771,6 +1772,7 @@ function AppContent({
         showPackages={showPackages}
         showSwingAttributes={showSwingAttributes}
         structogramMode={leftPanelViewMode === "structogram"}
+        structogramColorsEnabled={structogramColorsEnabled}
         wordWrap={wordWrap}
         onRequestNewProject={() => requestProjectAction("new")}
         onRequestOpenProject={() => requestProjectAction("open")}
@@ -1814,6 +1816,15 @@ function AppContent({
         onToggleStructogramMode={(value) => {
           setLeftPanelViewMode(value ? "structogram" : "uml");
         }}
+        onToggleStructogramColors={(value) =>
+          handleSettingsChange({
+            ...settings,
+            advanced: {
+              ...settings.advanced,
+              structogramColors: value
+            }
+          })
+        }
         onToggleWordWrap={(value) =>
           handleSettingsChange({
             ...settings,
@@ -1849,6 +1860,7 @@ function AppContent({
                   backgroundColor={settings.uml.panelBackground}
                   showPackages={showPackages}
                   fontSize={fontSize}
+                  structogramColorsEnabled={structogramColorsEnabled}
                   exportDefaultPath={projectPath}
                   onExportStatus={handleExportStatus}
                   onNodePositionChange={handleNodePositionChange}
