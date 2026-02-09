@@ -435,7 +435,7 @@ fn default_object_bench_split_ratio() -> f32 {
 }
 
 fn default_structogram_loop_header_color() -> String {
-    "#dcc7e8".to_string()
+    "#d2ebd3".to_string()
 }
 
 fn default_structogram_if_header_color() -> String {

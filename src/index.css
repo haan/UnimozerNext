@@ -83,9 +83,6 @@ body,
     --objectbench-card-border: 0 55% 70%;
     --editor-separator-color: hsl(var(--border) / 0.6);
     --editor-separator-hover: hsl(var(--border) / 0.4);
-    --structogram-loop-header: #dcc7e8;
-    --structogram-if-header: #cec1eb;
-    --structogram-switch-header: #d6e1ee;
   }
 
   body {

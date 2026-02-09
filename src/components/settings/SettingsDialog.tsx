@@ -265,42 +265,6 @@ export const SettingsDialog = ({
                     }
                   />
                 </div>
-
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">UML panel background</p>
-                    <p className="text-xs text-muted-foreground">
-                      Pick a background color for the UML diagram area.
-                    </p>
-                  </div>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        className="h-8 w-8 rounded-full border border-border transition hover:border-foreground/40"
-                        style={{
-                          backgroundColor: settings.uml.panelBackground ?? "transparent"
-                        }}
-                        aria-label="Pick UML panel background color"
-                      />
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-3">
-                      <ChromePicker
-                        color={settings.uml.panelBackground ?? "#f3f4f6"}
-                        onChange={(color: ColorResult) =>
-                          onChange({
-                            ...settings,
-                            uml: {
-                              ...settings.uml,
-                              panelBackground: color.hex
-                            }
-                          })
-                        }
-                        disableAlpha
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
               </div>
             ) : activeGroup === "Object Bench" ? (
               <div className="mt-4 grid gap-2">
