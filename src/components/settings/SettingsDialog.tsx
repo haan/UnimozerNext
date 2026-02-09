@@ -118,7 +118,8 @@ export const SettingsDialog = ({
     return (
       settings.structogram.loopHeaderColor !== defaultStructogramSettings.loopHeaderColor ||
       settings.structogram.ifHeaderColor !== defaultStructogramSettings.ifHeaderColor ||
-      settings.structogram.switchHeaderColor !== defaultStructogramSettings.switchHeaderColor
+      settings.structogram.switchHeaderColor !== defaultStructogramSettings.switchHeaderColor ||
+      settings.structogram.tryWrapperColor !== defaultStructogramSettings.tryWrapperColor
     );
   }, [defaultStructogramSettings, settings.structogram]);
 
@@ -618,6 +619,34 @@ export const SettingsDialog = ({
                         color={settings.structogram.switchHeaderColor}
                         onChange={(color: ColorResult) =>
                           updateStructogramSettings({ switchHeaderColor: color.hex })
+                        }
+                        disableAlpha
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Try wrapper color</p>
+                    <p className="text-xs text-muted-foreground">
+                      Color used for try/catch/finally wrapper bands.
+                    </p>
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        className="h-8 w-8 rounded-full border border-border transition hover:border-foreground/40"
+                        style={{ backgroundColor: settings.structogram.tryWrapperColor }}
+                        aria-label="Pick structogram try wrapper color"
+                      />
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-3">
+                      <ChromePicker
+                        color={settings.structogram.tryWrapperColor}
+                        onChange={(color: ColorResult) =>
+                          updateStructogramSettings({ tryWrapperColor: color.hex })
                         }
                         disableAlpha
                       />

@@ -26,6 +26,7 @@ export type StructogramSettings = {
   loopHeaderColor: string;
   ifHeaderColor: string;
   switchHeaderColor: string;
+  tryWrapperColor: string;
 };
 
 export type GeneralSettings = {

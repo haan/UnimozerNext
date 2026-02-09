@@ -179,6 +179,7 @@ function AppContent({
   const structogramLoopHeaderColor = settings.structogram.loopHeaderColor;
   const structogramIfHeaderColor = settings.structogram.ifHeaderColor;
   const structogramSwitchHeaderColor = settings.structogram.switchHeaderColor;
+  const structogramTryWrapperColor = settings.structogram.tryWrapperColor;
   const codeHighlightEnabled = settings.uml.codeHighlight;
   const showDependencies = settings.uml.showDependencies;
   const showPackages = settings.uml.showPackages;
@@ -1029,10 +1030,12 @@ function AppContent({
     root.style.setProperty("--structogram-loop-header", structogramLoopHeaderColor);
     root.style.setProperty("--structogram-if-header", structogramIfHeaderColor);
     root.style.setProperty("--structogram-switch-header", structogramSwitchHeaderColor);
+    root.style.setProperty("--structogram-try-wrapper", structogramTryWrapperColor);
   }, [
     structogramIfHeaderColor,
     structogramLoopHeaderColor,
-    structogramSwitchHeaderColor
+    structogramSwitchHeaderColor,
+    structogramTryWrapperColor
   ]);
 
   useEffect(() => {

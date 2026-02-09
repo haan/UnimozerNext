@@ -21,6 +21,10 @@ export const STRUCTOGRAM_EMPTY_ELSE_LABEL = "∅"; // Label for implicit else br
 export const STRUCTOGRAM_LEGACY_EMPTY_ELSE_LABEL = "(no else)"; // Legacy placeholder accepted during transition.
 export const STRUCTOGRAM_ASSIGNMENT_SYMBOL = "←"; // NS assignment symbol used in rendered statements.
 export const STRUCTOGRAM_LOOP_BODY_INSET_WIDTH = 28; // Left wrap band width for while-loop NS blocks.
+export const STRUCTOGRAM_TRY_FRAME_SIDE_WIDTH = 28; // Left wrap band width for try/catch/finally framed blocks.
+export const STRUCTOGRAM_TRY_FRAME_TOP_HEIGHT = STRUCTOGRAM_HEADER_HEIGHT; // Top frame band height for try/catch/finally blocks.
+export const STRUCTOGRAM_TRY_FRAME_BOTTOM_HEIGHT = STRUCTOGRAM_HEADER_HEIGHT; // Bottom frame band height for try/catch/finally blocks.
+export const STRUCTOGRAM_TRY_HEADER_LABEL = "try"; // Label shown in the top frame band for try/catch/finally blocks.
 export const STRUCTOGRAM_IF_HEADER_BASE_HEIGHT = STRUCTOGRAM_HEADER_HEIGHT + 10; // Baseline if-header height before adaptive growth.
 export const STRUCTOGRAM_IF_CONDITION_TOP_PADDING = 5; // Top padding for condition text in an if header.
 export const STRUCTOGRAM_IF_CONDITION_SIDE_CLEARANCE = 10; // Required side clearance from diagonals to condition box.
@@ -43,6 +47,7 @@ export type StructogramColors = {
   loopHeader: string;
   ifHeader: string;
   switchHeader: string;
+  tryWrapper: string;
   condition: string;
   branch: string;
   section: string;
@@ -56,6 +61,7 @@ export const STRUCTOGRAM_COLORS: StructogramColors = {
   loopHeader: "var(--structogram-loop-header)",
   ifHeader: "var(--structogram-if-header)",
   switchHeader: "var(--structogram-switch-header)",
+  tryWrapper: "var(--structogram-try-wrapper)",
   condition: "hsl(var(--accent) / 0.55)",
   branch: "hsl(var(--muted) / 0.30)",
   section: "hsl(var(--muted) / 0.50)"
@@ -69,6 +75,7 @@ export const STRUCTOGRAM_MONOCHROME_COLORS: StructogramColors = {
   loopHeader: "hsl(var(--background))",
   ifHeader: "hsl(var(--background))",
   switchHeader: "hsl(var(--background))",
+  tryWrapper: "hsl(var(--background))",
   condition: "hsl(var(--background))",
   branch: "hsl(var(--background))",
   section: "hsl(var(--background))"

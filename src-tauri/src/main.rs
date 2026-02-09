@@ -280,6 +280,8 @@ struct StructogramSettings {
     if_header_color: String,
     #[serde(default = "default_structogram_switch_header_color")]
     switch_header_color: String,
+    #[serde(default = "default_structogram_try_wrapper_color")]
+    try_wrapper_color: String,
 }
 
 impl Default for StructogramSettings {
@@ -288,6 +290,7 @@ impl Default for StructogramSettings {
             loop_header_color: default_structogram_loop_header_color(),
             if_header_color: default_structogram_if_header_color(),
             switch_header_color: default_structogram_switch_header_color(),
+            try_wrapper_color: default_structogram_try_wrapper_color(),
         }
     }
 }
@@ -388,6 +391,7 @@ impl Default for AppSettings {
                 loop_header_color: default_structogram_loop_header_color(),
                 if_header_color: default_structogram_if_header_color(),
                 switch_header_color: default_structogram_switch_header_color(),
+                try_wrapper_color: default_structogram_try_wrapper_color(),
             },
             layout: LayoutSettings {
                 uml_split_ratio: default_split_ratio(),
@@ -444,6 +448,10 @@ fn default_structogram_if_header_color() -> String {
 
 fn default_structogram_switch_header_color() -> String {
     "#d6e1ee".to_string()
+}
+
+fn default_structogram_try_wrapper_color() -> String {
+    "#f3e2c2".to_string()
 }
 
 #[derive(Serialize, Deserialize)]

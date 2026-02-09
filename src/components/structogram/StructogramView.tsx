@@ -46,6 +46,7 @@ const EXPORT_CSS_VARIABLES = [
   "--structogram-loop-header",
   "--structogram-if-header",
   "--structogram-switch-header",
+  "--structogram-try-wrapper",
   "--uml-font"
 ];
 

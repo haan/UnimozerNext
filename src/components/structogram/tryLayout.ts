@@ -1,4 +1,9 @@
-import { STRUCTOGRAM_HEADER_HEIGHT, STRUCTOGRAM_SECTION_HEADER_HEIGHT } from "./constants";
+import {
+  STRUCTOGRAM_SECTION_HEADER_HEIGHT,
+  STRUCTOGRAM_TRY_FRAME_BOTTOM_HEIGHT,
+  STRUCTOGRAM_TRY_FRAME_SIDE_WIDTH,
+  STRUCTOGRAM_TRY_FRAME_TOP_HEIGHT
+} from "./constants";
 
 export type TryCatchLayout<TBody> = {
   exception: string;
@@ -27,6 +32,7 @@ export const buildTryLayout = <TBody extends { width: number; height: number }>(
   finallyBranch,
   estimatedTextWidth
 }: BuildTryLayoutArgs<TBody>): TryLayoutNode<TBody> => {
+  const bodyWidth = Math.max(estimatedTextWidth("try"), body.width);
   const catchWidths = catches.map((entry) =>
     Math.max(estimatedTextWidth(`catch (${entry.exception})`), entry.body.width)
   );
@@ -34,15 +40,17 @@ export const buildTryLayout = <TBody extends { width: number; height: number }>(
     finallyBranch === null
       ? estimatedTextWidth("finally")
       : Math.max(estimatedTextWidth("finally"), finallyBranch.width);
-  const width = Math.max(estimatedTextWidth("try"), body.width, ...catchWidths, finallyWidth);
+  const contentWidth = Math.max(bodyWidth, ...catchWidths, finallyWidth);
+  const width = contentWidth + STRUCTOGRAM_TRY_FRAME_SIDE_WIDTH;
 
-  let height = STRUCTOGRAM_HEADER_HEIGHT + body.height;
+  let height = STRUCTOGRAM_TRY_FRAME_TOP_HEIGHT + body.height;
   for (const entry of catches) {
     height += STRUCTOGRAM_SECTION_HEADER_HEIGHT + entry.body.height;
   }
   if (finallyBranch) {
     height += STRUCTOGRAM_SECTION_HEADER_HEIGHT + finallyBranch.height;
   }
+  height += STRUCTOGRAM_TRY_FRAME_BOTTOM_HEIGHT;
 
   return {
     kind: "try",
