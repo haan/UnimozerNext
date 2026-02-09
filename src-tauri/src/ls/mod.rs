@@ -20,10 +20,10 @@ const LS_PROPERTY_RESOLUTION_MAX_DEPTH: usize = 8;
 const LS_REQUEST_TIMEOUT_SECONDS: u64 = 15;
 
 // Number of graceful wait checks before force-killing the LS process.
-const LS_STOP_WAIT_ATTEMPTS: usize = 30;
+const LS_STOP_WAIT_ATTEMPTS: usize = 10;
 
 // Delay between graceful wait checks during LS shutdown.
-const LS_STOP_WAIT_INTERVAL_MS: u64 = 100;
+const LS_STOP_WAIT_INTERVAL_MS: u64 = 50;
 
 // Poll interval for detecting unexpected LS process exits.
 const LS_CRASH_POLL_INTERVAL_MS: u64 = 500;
@@ -130,7 +130,7 @@ fn ensure_eclipse_metadata(project_root: &std::path::Path) -> Result<(), String>
 "#,
             project_name
         );
-        std::fs::write(&project_file, contents).map_err(|error| error.to_string())?;
+        std::fs::write(&project_file, contents).map_err(crate::command_error::to_command_error)?;
     }
 
     let needs_classpath_update = if classpath_file.exists() {
@@ -153,7 +153,7 @@ fn ensure_eclipse_metadata(project_root: &std::path::Path) -> Result<(), String>
 "#,
             src_dir, output_dir
         );
-        std::fs::write(&classpath_file, contents).map_err(|error| error.to_string())?;
+        std::fs::write(&classpath_file, contents).map_err(crate::command_error::to_command_error)?;
     }
 
     Ok(())
@@ -221,7 +221,7 @@ impl LsClient {
         let mut writer = jsonrpc::JsonRpcWriter::new(&mut *guard);
         writer
             .write_message(&message)
-            .map_err(|error| error.to_string())
+            .map_err(crate::command_error::to_command_error)
     }
 }
 
@@ -283,7 +283,7 @@ fn spawn_log_writer(stderr: impl std::io::Read + Send + 'static, log_path: PathB
 }
 
 fn java_executable_path(app: &AppHandle) -> Result<PathBuf, String> {
-    let java_rel = crate::java_executable_name();
+    let java_rel = crate::java_tools::java_executable_name();
     jdtls::resolve_resource(app, &java_rel)
         .ok_or_else(|| "Bundled Java runtime not found".to_string())
 }
@@ -362,7 +362,7 @@ fn stop_process(mut process: LsProcess) -> Result<(), String> {
     process
         .child
         .kill()
-        .map_err(|error| error.to_string())?;
+        .map_err(crate::command_error::to_command_error)?;
     Ok(())
 }
 
@@ -576,3 +576,4 @@ pub fn ls_format_document(
         .cloned()
         .unwrap_or_else(|| json!([])))
 }
+

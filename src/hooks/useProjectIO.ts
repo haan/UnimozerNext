@@ -61,7 +61,10 @@ type UseProjectIOArgs = {
 type UseProjectIOResult = {
   handleOpenProject: () => Promise<void>;
   handleOpenFolderProject: () => Promise<void>;
-  handleOpenPackedProjectPath: (archivePath: string) => Promise<void>;
+  handleOpenPackedProjectPath: (
+    archivePath: string,
+    options?: { clearConsole?: boolean }
+  ) => Promise<void>;
   handleNewProject: (options?: { clearConsole?: boolean }) => Promise<void>;
   openFileByPath: (path: string) => Promise<void>;
   handleSave: () => Promise<boolean>;
@@ -240,9 +243,12 @@ export const useProjectIO = ({
   );
 
   const handleOpenPackedProjectPath = useCallback(
-    async (archivePath: string) => {
+    async (archivePath: string, options?: { clearConsole?: boolean }) => {
+      const shouldClearConsole = options?.clearConsole ?? true;
       setStatus("Opening project...");
-      clearConsole();
+      if (shouldClearConsole) {
+        clearConsole();
+      }
       await prepareProjectSwitch();
       setBusy(true);
       try {
@@ -503,12 +509,8 @@ export const useProjectIO = ({
         projectRoot: projectPath,
         archivePath
       });
-      if (projectStorageMode === "packed" || projectStorageMode === "scratch") {
-        const activeArchivePath = await switchToPackedArchive(archivePath);
-        setStatus(`Project saved to ${toDisplayPath(activeArchivePath)}`);
-      } else {
-        setStatus(`Project saved to ${toDisplayPath(archivePath)}`);
-      }
+      const activeArchivePath = await switchToPackedArchive(archivePath);
+      setStatus(`Project saved to ${toDisplayPath(activeArchivePath)}`);
       return true;
     } catch (error) {
       setStatus(`Save As failed: ${formatStatus(error)}`);

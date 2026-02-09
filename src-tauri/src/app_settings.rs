@@ -1,0 +1,273 @@
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct UmlSettings {
+    show_dependencies: bool,
+    #[serde(default = "default_true")]
+    show_packages: bool,
+    #[serde(default = "default_true")]
+    show_swing_attributes: bool,
+    #[serde(default)]
+    panel_background: Option<String>,
+    #[serde(default = "default_true")]
+    code_highlight: bool,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct GeneralSettings {
+    #[serde(default = "default_font_size")]
+    font_size: u32,
+}
+
+impl Default for GeneralSettings {
+    fn default() -> Self {
+        Self {
+            font_size: default_font_size(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct EditorSettings {
+    #[serde(default = "default_editor_theme")]
+    theme: String,
+    #[serde(default = "default_tab_size")]
+    tab_size: u32,
+    #[serde(default = "default_insert_spaces")]
+    insert_spaces: bool,
+    #[serde(default = "default_false")]
+    auto_close_brackets: bool,
+    #[serde(default = "default_false")]
+    auto_close_quotes: bool,
+    #[serde(default = "default_false")]
+    auto_close_comments: bool,
+    #[serde(default = "default_true")]
+    word_wrap: bool,
+    #[serde(default = "default_true")]
+    auto_format_on_save: bool,
+}
+
+impl Default for EditorSettings {
+    fn default() -> Self {
+        Self {
+            theme: default_editor_theme(),
+            tab_size: default_tab_size(),
+            insert_spaces: default_insert_spaces(),
+            auto_close_brackets: default_false(),
+            auto_close_quotes: default_false(),
+            auto_close_comments: default_false(),
+            word_wrap: default_true(),
+            auto_format_on_save: default_true(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct AdvancedSettings {
+    #[serde(default = "default_false")]
+    debug_logging: bool,
+    #[serde(default = "default_true")]
+    structogram_colors: bool,
+}
+
+impl Default for AdvancedSettings {
+    fn default() -> Self {
+        Self {
+            debug_logging: default_false(),
+            structogram_colors: default_true(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct StructogramSettings {
+    #[serde(default = "default_structogram_loop_header_color")]
+    loop_header_color: String,
+    #[serde(default = "default_structogram_if_header_color")]
+    if_header_color: String,
+    #[serde(default = "default_structogram_switch_header_color")]
+    switch_header_color: String,
+    #[serde(default = "default_structogram_try_wrapper_color")]
+    try_wrapper_color: String,
+}
+
+impl Default for StructogramSettings {
+    fn default() -> Self {
+        Self {
+            loop_header_color: default_structogram_loop_header_color(),
+            if_header_color: default_structogram_if_header_color(),
+            switch_header_color: default_structogram_switch_header_color(),
+            try_wrapper_color: default_structogram_try_wrapper_color(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ObjectBenchSettings {
+    #[serde(default = "default_true")]
+    show_private_object_fields: bool,
+    #[serde(default = "default_true")]
+    show_inherited_object_fields: bool,
+    #[serde(default = "default_true")]
+    show_static_object_fields: bool,
+}
+
+impl Default for ObjectBenchSettings {
+    fn default() -> Self {
+        Self {
+            show_private_object_fields: default_true(),
+            show_inherited_object_fields: default_true(),
+            show_static_object_fields: default_true(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct LayoutSettings {
+    #[serde(default = "default_split_ratio")]
+    uml_split_ratio: f32,
+    #[serde(default = "default_console_split_ratio")]
+    console_split_ratio: f32,
+    #[serde(default = "default_object_bench_split_ratio")]
+    object_bench_split_ratio: f32,
+}
+
+impl Default for LayoutSettings {
+    fn default() -> Self {
+        Self {
+            uml_split_ratio: default_split_ratio(),
+            console_split_ratio: default_console_split_ratio(),
+            object_bench_split_ratio: default_object_bench_split_ratio(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct AppSettings {
+    #[serde(default)]
+    general: GeneralSettings,
+    uml: UmlSettings,
+    #[serde(default)]
+    object_bench: ObjectBenchSettings,
+    #[serde(default)]
+    editor: EditorSettings,
+    #[serde(default)]
+    advanced: AdvancedSettings,
+    #[serde(default)]
+    structogram: StructogramSettings,
+    #[serde(default)]
+    layout: LayoutSettings,
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            general: GeneralSettings {
+                font_size: default_font_size(),
+            },
+            uml: UmlSettings {
+                show_dependencies: true,
+                show_packages: default_true(),
+                show_swing_attributes: default_true(),
+                panel_background: None,
+                code_highlight: default_true(),
+            },
+            object_bench: ObjectBenchSettings {
+                show_private_object_fields: default_true(),
+                show_inherited_object_fields: default_true(),
+                show_static_object_fields: default_true(),
+            },
+            editor: EditorSettings {
+                theme: default_editor_theme(),
+                tab_size: default_tab_size(),
+                insert_spaces: default_insert_spaces(),
+                auto_close_brackets: default_false(),
+                auto_close_quotes: default_false(),
+                auto_close_comments: default_false(),
+                word_wrap: default_true(),
+                auto_format_on_save: default_true(),
+            },
+            advanced: AdvancedSettings {
+                debug_logging: default_false(),
+                structogram_colors: default_true(),
+            },
+            structogram: StructogramSettings {
+                loop_header_color: default_structogram_loop_header_color(),
+                if_header_color: default_structogram_if_header_color(),
+                switch_header_color: default_structogram_switch_header_color(),
+                try_wrapper_color: default_structogram_try_wrapper_color(),
+            },
+            layout: LayoutSettings {
+                uml_split_ratio: default_split_ratio(),
+                console_split_ratio: default_console_split_ratio(),
+                object_bench_split_ratio: default_object_bench_split_ratio(),
+            },
+        }
+    }
+}
+
+impl AppSettings {
+    pub(crate) fn debug_logging_enabled(&self) -> bool {
+        self.advanced.debug_logging
+    }
+}
+
+fn default_font_size() -> u32 {
+    14
+}
+
+fn default_editor_theme() -> String {
+    "default".to_string()
+}
+
+fn default_tab_size() -> u32 {
+    4
+}
+
+fn default_insert_spaces() -> bool {
+    true
+}
+
+fn default_false() -> bool {
+    false
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_split_ratio() -> f32 {
+    0.5
+}
+
+fn default_console_split_ratio() -> f32 {
+    0.75
+}
+
+fn default_object_bench_split_ratio() -> f32 {
+    0.75
+}
+
+fn default_structogram_loop_header_color() -> String {
+    "#d2ebd3".to_string()
+}
+
+fn default_structogram_if_header_color() -> String {
+    "#cec1eb".to_string()
+}
+
+fn default_structogram_switch_header_color() -> String {
+    "#d6e1ee".to_string()
+}
+
+fn default_structogram_try_wrapper_color() -> String {
+    "#f3e2c2".to_string()
+}

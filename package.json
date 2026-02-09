@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "cargo:check": "cargo check --manifest-path src-tauri/Cargo.toml",
+    "cargo:test": "cargo test --manifest-path src-tauri/Cargo.toml",
     "lint": "eslint .",
     "build:parser": "cd java-parser && gradle copyBridgeJar",
     "build:jshell": "cd jshell-bridge && gradle copyBridgeJar",

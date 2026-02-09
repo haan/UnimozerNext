@@ -26,6 +26,8 @@ type RunCompleteEvent = {
 type UseRunConsoleArgs = {
   projectPath: string | null;
   fileDrafts: Record<string, FileDraft>;
+  compileStatus: "success" | "failed" | null;
+  setCompileStatus: Dispatch<SetStateAction<"success" | "failed" | null>>;
   formatAndSaveUmlFiles: (setStatusMessage: boolean) => Promise<number>;
   setBusy: (busy: boolean) => void;
   setStatus: (status: string) => void;
@@ -50,6 +52,8 @@ type UseRunConsoleResult = {
 export const useRunConsole = ({
   projectPath,
   fileDrafts,
+  compileStatus,
+  setCompileStatus,
   formatAndSaveUmlFiles,
   setBusy,
   setStatus,
@@ -57,7 +61,6 @@ export const useRunConsole = ({
   onCompileSuccess,
   onCompileRequested
 }: UseRunConsoleArgs): UseRunConsoleResult => {
-  const [compileStatus, setCompileStatus] = useState<"success" | "failed" | null>(null);
   const [runSessionId, setRunSessionId] = useState<number | null>(null);
   const [consoleOutput, setConsoleOutput] = useState("");
   const runSessionRef = useRef<number | null>(null);
@@ -234,6 +237,7 @@ export const useRunConsole = ({
       projectPath,
       resetConsole,
       setBusy,
+      setCompileStatus,
       setStatus
     ]
   );

@@ -47,15 +47,15 @@ fn copy_dir_all(src: &Path, dest: &Path) -> Result<(), String> {
     if !src.is_dir() {
         return Err(format!("JDT LS config dir not found: {}", src.display()));
     }
-    fs::create_dir_all(dest).map_err(|error| error.to_string())?;
-    for entry in fs::read_dir(src).map_err(|error| error.to_string())? {
-        let entry = entry.map_err(|error| error.to_string())?;
+    fs::create_dir_all(dest).map_err(crate::command_error::to_command_error)?;
+    for entry in fs::read_dir(src).map_err(crate::command_error::to_command_error)? {
+        let entry = entry.map_err(crate::command_error::to_command_error)?;
         let path = entry.path();
         let target = dest.join(entry.file_name());
         if path.is_dir() {
             copy_dir_all(&path, &target)?;
         } else {
-            fs::copy(&path, &target).map_err(|error| error.to_string())?;
+            fs::copy(&path, &target).map_err(crate::command_error::to_command_error)?;
         }
     }
     Ok(())
@@ -97,9 +97,9 @@ fn jdtls_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 fn find_launcher_jar(plugins_dir: &Path) -> Result<PathBuf, String> {
     let mut matches: Vec<PathBuf> = Vec::new();
-    let entries = fs::read_dir(plugins_dir).map_err(|error| error.to_string())?;
+    let entries = fs::read_dir(plugins_dir).map_err(crate::command_error::to_command_error)?;
     for entry in entries {
-        let entry = entry.map_err(|error| error.to_string())?;
+        let entry = entry.map_err(crate::command_error::to_command_error)?;
         let path = entry.path();
         if let Some(name) = path.file_name().and_then(|item| item.to_str()) {
             if name.starts_with("org.eclipse.equinox.launcher_") && name.ends_with(".jar") {
@@ -121,7 +121,7 @@ pub fn ensure_writable_config(app: &AppHandle, build_id: &str) -> Result<PathBuf
     let config_root = app
         .path()
         .app_data_dir()
-        .map_err(|error| error.to_string())?
+        .map_err(crate::command_error::to_command_error)?
         .join("jdtls-config")
         .join(sanitize_name(build_id))
         .join(config_name);
@@ -136,10 +136,10 @@ pub fn workspace_dir(app: &AppHandle, project_root: &Path) -> Result<PathBuf, St
     let path = app
         .path()
         .app_data_dir()
-        .map_err(|error| error.to_string())?
+        .map_err(crate::command_error::to_command_error)?
         .join("jdtls-workspaces")
         .join(hash);
-    fs::create_dir_all(&path).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&path).map_err(crate::command_error::to_command_error)?;
     Ok(path)
 }
 
@@ -148,10 +148,10 @@ pub fn log_path(app: &AppHandle, project_root: &Path) -> Result<PathBuf, String>
     let dir = app
         .path()
         .app_data_dir()
-        .map_err(|error| error.to_string())?
+        .map_err(crate::command_error::to_command_error)?
         .join("logs")
         .join("jdtls");
-    fs::create_dir_all(&dir).map_err(|error| error.to_string())?;
+    fs::create_dir_all(&dir).map_err(crate::command_error::to_command_error)?;
     Ok(dir.join(format!("{}.log", hash)))
 }
 
@@ -200,6 +200,7 @@ pub fn spawn_jdtls(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let child = command.spawn().map_err(|error| error.to_string())?;
+    let child = command.spawn().map_err(crate::command_error::to_command_error)?;
     Ok((child, log_file))
 }
+

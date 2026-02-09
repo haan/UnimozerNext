@@ -602,3 +602,77 @@ A milestone is “done” when:
 - Works on Windows + Linux at minimum
 - No frequent crashes; errors are surfaced clearly in UI
 - Layout persistence stable and deterministic
+
+---
+
+## 17. Refactor Roadmap (God-Module Reduction)
+
+Goal: reduce coupling and size of `src/App.tsx` and `src-tauri/src/main.rs` without changing user-visible behavior.
+
+### Phase 1 - Frontend decomposition (behavior-preserving)
+- [x] Extract packed archive sync queue/effects from `App.tsx` into `usePackedArchiveSync`
+- [x] Extract startup launch/open queue flow into `useLaunchBootstrap`
+- [x] Extract window-close guard and unsaved-action interception into `useWindowCloseGuard`
+- [x] Extract menu capability flags and enable/disable logic into `useAppCapabilities`
+- [x] Keep all existing keyboard shortcuts and dialog flows unchanged
+
+### Phase 2 - Frontend state model hardening
+- [x] Introduce a dedicated reducer/store for project session state (path, mode, dirty, busy, compile status)
+- [x] Introduce `useProjectSessionState` reducer for `projectPath`, `projectStorageMode`, `packedArchivePath`, `busy`, and `status`
+- [x] Move `compileStatus` source-of-truth into `useProjectSessionState`
+- [x] Move dirty-state source-of-truth into reducer/store (replace distributed refs/derived flags)
+- [x] Move diagram/object-bench/editor UI state transitions behind explicit actions
+- [x] Add thin selectors for menu state to avoid recomputing large boolean matrices in `App.tsx`
+
+### Phase 3 - Backend modularization (`main.rs`)
+- [x] Split `main.rs` commands into feature modules (`project_io`, `compile_run`, `layout`, `settings`, `launch`)
+- [x] Extract project open/new/save commands into `project_io` module
+- [x] Extract settings read/write/default commands and startup settings helpers into `settings_io` module
+- [x] Extract launch queue parsing/state/commands into `launch_io` module
+- [x] Extract file/tree read-write commands into `fs_io` module
+- [x] Extract compile/run command handlers and run-state lifecycle into `compile_run` module
+- [x] Extract JShell command handlers and JShell lifecycle state into `jshell_io` module
+- [x] Extract parser bridge command handlers and parser lifecycle state into `parser_io` module
+- [x] Extract NetBeans export command into `project_io` module
+- [x] Extract zip/scratch workspace helpers into a dedicated backend service module
+- [x] Centralize command error mapping and status text normalization
+
+### Phase 4 - Safety net and regression checks
+- [x] Add backend regression tests for packed archive root naming and skip rules
+- [x] Add backend regression tests for NetBeans project create/extract primitives (`project_io`)
+- [x] Add backend regression tests for packed save success/failure paths (`save_packed_project`)
+- [ ] Add focused integration checks for open/new/save/save-as across `scratch`, `folder`, and `packed`
+- [x] Add launch-argument regression checks for `.umz` file association open flow
+- [x] Add compile + packed-sync failure-path checks (UI status + dirty semantics)
+
+### Phase Exit Smoke Tests
+
+Run this quick routine at the end of each phase.
+
+#### After Phase 1 (frontend extraction)
+- [ ] Launch app and verify it starts directly in scratch mode
+- [ ] Add one class, edit code, `Ctrl+S`, then `Save As` to `.umz`
+- [ ] Move a UML class and verify dirty clears after packed sync succeeds
+- [ ] Try closing via window `X` with unsaved edits and verify discard/save dialog appears
+- [ ] Reopen the same `.umz` and verify title, diagram, and editor restore correctly
+
+#### After Phase 2 (state model hardening)
+- [ ] Verify `scratch`, `folder`, and `packed` modes all open and behave correctly
+- [ ] Verify `New / Open / Open Folder / Save / Save As` behavior in each mode
+- [ ] Verify menu enable/disable rules still match context (compile/export/structogram)
+- [ ] Switch UML ↔ Structogram repeatedly and verify no stale UI state
+- [ ] Compile once and verify status, console, and object bench behavior remains correct
+
+#### After Phase 3 (backend modularization)
+- [ ] Open `.umz` from menu and by double-click file association
+- [ ] Compile and run a `main` method and verify console output
+- [ ] `Save As` to another `.umz`, then reopen both archives
+- [ ] Reopen the same `.umz` repeatedly to check file-lock resilience
+- [ ] Confirm startup remains responsive (no multi-second freeze)
+
+#### After Phase 4 (hardening/regressions)
+- [ ] Dirty-state matrix: code edit + UML move + New/Open/Exit prompts
+- [ ] Force packed sync failure and verify toast + dirty remains set
+- [ ] Verify diagram and structogram PNG copy/export still work
+- [ ] Verify settings persist/reload (including structogram settings)
+- [ ] Do one end-to-end pass: new scratch project → compile → save `.umz` → reopen

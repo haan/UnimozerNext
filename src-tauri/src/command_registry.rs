@@ -1,0 +1,37 @@
+pub(crate) fn with_invoke_handlers(
+    builder: tauri::Builder<tauri::Wry>,
+) -> tauri::Builder<tauri::Wry> {
+    builder.invoke_handler(tauri::generate_handler![
+        crate::fs_io::list_project_tree,
+        crate::fs_io::read_text_file,
+        crate::fs_io::write_text_file,
+        crate::fs_io::write_binary_file,
+        crate::fs_io::remove_text_file,
+        crate::project_io::open_packed_project,
+        crate::project_io::create_scratch_project,
+        crate::project_io::save_packed_project,
+        crate::compile_run::compile_project,
+        crate::compile_run::run_main,
+        crate::compile_run::cancel_run,
+        crate::jshell_io::jshell_start,
+        crate::jshell_io::jshell_stop,
+        crate::jshell_io::jshell_eval,
+        crate::jshell_io::jshell_inspect,
+        crate::jshell_io::jshell_vars,
+        crate::settings_io::read_settings,
+        crate::settings_io::read_default_settings,
+        crate::settings_io::write_settings,
+        crate::parser_io::parse_uml_graph,
+        crate::parser_io::add_field_to_class,
+        crate::parser_io::add_constructor_to_class,
+        crate::parser_io::add_method_to_class,
+        crate::ls::ls_start,
+        crate::ls::ls_stop,
+        crate::ls::ls_did_open,
+        crate::ls::ls_did_change,
+        crate::ls::ls_did_close,
+        crate::ls::ls_format_document,
+        crate::launch_io::take_startup_logs,
+        crate::launch_io::take_launch_open_paths
+    ])
+}
