@@ -80,10 +80,22 @@ jobs:
         run: npm ci
 
       - name: Build Java parser bridge
-        run: npm run build:parser
+        shell: pwsh
+        run: |
+          Push-Location java-parser
+          gradle copyBridgeJar --no-daemon
+          Pop-Location
 
       - name: Build JShell bridge
-        run: npm run build:jshell
+        shell: pwsh
+        run: |
+          Push-Location jshell-bridge
+          gradle copyBridgeJar --no-daemon
+          Pop-Location
+
+      - name: Stop Gradle daemons
+        shell: pwsh
+        run: gradle --stop
 
       - name: Prepare bundled JDK and JDTLS resources
         shell: pwsh
