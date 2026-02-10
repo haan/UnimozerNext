@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Setup Java (for bridge builds)
@@ -158,9 +158,6 @@ jobs:
             Write-Host "[resources] Verified JDTLS directory: $requiredDir"
           }
           Write-Host "[resources] Resource preparation complete."
-
-      - name: Build frontend
-        run: npm run build
 
       - name: Build Tauri installers (MSI, NSIS)
         run: npx tauri build --ci --bundles msi,nsis --config src-tauri/tauri.windows.conf.json
