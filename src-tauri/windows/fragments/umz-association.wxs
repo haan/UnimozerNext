@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="UmzFileAssociation" Guid="*">
+        <RegistryKey Root="HKCU" Key="Software\Classes\.umz">
+          <RegistryValue Type="string" Value="com.unimozer.next.umz" KeyPath="yes" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz">
+          <RegistryValue Type="string" Value="Unimozer Next Project File" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz\DefaultIcon">
+          <RegistryValue Type="string" Value="[#Path],0" />
+        </RegistryKey>
+        <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz\shell\open\command">
+          <RegistryValue Type="string" Value="&quot;[#Path]&quot; &quot;%1&quot;" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="UmzFileAssociationComponents">
+      <ComponentRef Id="UmzFileAssociation" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

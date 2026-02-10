@@ -41,6 +41,12 @@
         "description": "Unimozer Next Project File",
         "mimeType": "application/x-unimozer-project"
       }
-    ]
+    ],
+    "windows": {
+      "wix": {
+        "fragmentPaths": ["./windows/fragments/umz-association.wxs"],
+        "componentGroupRefs": ["UmzFileAssociationComponents"]
+      }
+    }
   }
 }
