@@ -18,11 +18,21 @@ pnpm-debug.log*
 /src-tauri/target/
 /src-tauri/.tauri/
 
-# Bundled JDKs
-/resources/jdk/
+# Bundled JDKs (track folder skeleton only)
+/resources/jdk/**
+!/resources/jdk/.gitkeep
+!/resources/jdk/win-x64/
+!/resources/jdk/win-x64/.gitkeep
 
-# Bundled JDTLS
-/resources/jdtls/
+# Bundled JDTLS (track folder skeleton only)
+/resources/jdtls/**
+!/resources/jdtls/.gitkeep
+!/resources/jdtls/plugins/
+!/resources/jdtls/plugins/.gitkeep
+!/resources/jdtls/config_win/
+!/resources/jdtls/config_win/.gitkeep
+!/resources/jdtls/features/
+!/resources/jdtls/features/.gitkeep
 
 # Java parser bridge
 /resources/java-parser/*.jar
