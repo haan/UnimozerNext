@@ -221,7 +221,7 @@ impl AppSettings {
 }
 
 fn default_font_size() -> u32 {
-    14
+    12
 }
 
 fn default_editor_theme() -> String {

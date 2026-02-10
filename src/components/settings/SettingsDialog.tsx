@@ -163,7 +163,7 @@ export const SettingsDialog = ({
                   <div className="flex w-44 items-center gap-3">
                     <Slider
                       value={[settings.general.fontSize]}
-                      min={10}
+                      min={8}
                       max={40}
                       step={1}
                       onValueChange={(value) =>
@@ -171,7 +171,7 @@ export const SettingsDialog = ({
                           ...settings,
                           general: {
                             ...settings.general,
-                            fontSize: value[0] ?? 14
+                            fontSize: value[0] ?? 12
                           }
                         })
                       }
