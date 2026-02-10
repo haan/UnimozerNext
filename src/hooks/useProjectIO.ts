@@ -584,6 +584,7 @@ export const useProjectIO = ({
         await refreshTree(projectPath);
         setFileDrafts({});
         await restoreOpenFile(projectPath);
+        setCompileStatus(null);
         setStatus("Project reloaded from disk.");
         return true;
       } catch (error) {
@@ -619,6 +620,7 @@ export const useProjectIO = ({
         const nextProjectRoot = response.projectRoot;
         setFileDrafts({});
         await restoreOpenFile(nextProjectRoot);
+        setCompileStatus(null);
         setStatus(`Project reloaded from ${toDisplayPath(response.archivePath)}.`);
         return true;
       } catch (error) {
@@ -644,6 +646,7 @@ export const useProjectIO = ({
     setPackedArchivePath,
     setProjectPath,
     setProjectStorageMode,
+    setCompileStatus,
     setStatus
   ]);
 

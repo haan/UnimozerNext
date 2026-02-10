@@ -52,6 +52,7 @@ export const useProjectDiskReload = ({
 }: UseProjectDiskReloadArgs): UseProjectDiskReloadResult => {
   const [reloadFromDiskDialogOpen, setReloadFromDiskDialogOpen] = useState(false);
   const pendingDetectedTokenRef = useRef<string | null>(null);
+  const pendingBusyTokenRef = useRef<string | null>(null);
   const lastObservedTokenRef = useRef<string | null>(null);
   const reloadInFlightRef = useRef(false);
   const wasBusyRef = useRef(false);
@@ -129,11 +130,12 @@ export const useProjectDiskReload = ({
   useEffect(() => {
     lastObservedTokenRef.current = null;
     pendingDetectedTokenRef.current = null;
+    pendingBusyTokenRef.current = null;
     setReloadFromDiskDialogOpen(false);
   }, [scopeKey]);
 
   useEffect(() => {
-    if (wasBusyRef.current && !busy) {
+    if (wasBusyRef.current && !busy && pendingBusyTokenRef.current === null) {
       void markDiskSnapshotCurrent();
     }
     wasBusyRef.current = busy;
@@ -149,7 +151,7 @@ export const useProjectDiskReload = ({
 
     const handleDetectedChange = async (token: string) => {
       if (busy) {
-        lastObservedTokenRef.current = token;
+        pendingBusyTokenRef.current = token;
         return;
       }
 
@@ -175,6 +177,12 @@ export const useProjectDiskReload = ({
       }
       pollInFlight = true;
       try {
+        if (!busy && pendingBusyTokenRef.current !== null) {
+          const pendingToken = pendingBusyTokenRef.current;
+          pendingBusyTokenRef.current = null;
+          await handleDetectedChange(pendingToken);
+          return;
+        }
         const token = await readDiskToken();
         if (cancelled || token === null) {
           return;

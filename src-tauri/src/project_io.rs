@@ -8,8 +8,8 @@ use zip::ZipArchive;
 
 use crate::command_error::{to_command_error, CommandResult};
 use crate::project_archive::{
-    packed_workspace_dir, prepare_fixed_workspace_dir, prepare_workspace_dir, scratch_workspace_root,
-    write_packed_archive,
+    packed_workspace_dir, packed_workspace_session_root, prepare_fixed_workspace_dir,
+    prepare_workspace_dir, scratch_workspace_root, write_packed_archive,
 };
 const SCRATCH_PROJECT_DIR_NAME: &str = "UnsavedProject";
 
@@ -169,6 +169,7 @@ pub fn open_packed_project(
 
 #[tauri::command]
 pub fn reload_packed_project_in_place(
+    app: AppHandle,
     archive_path: String,
     project_root: String,
 ) -> CommandResult<OpenPackedProjectResponse> {
@@ -189,10 +190,20 @@ pub fn reload_packed_project_in_place(
 
     let project_name = read_single_top_level_project_name(&mut archive)?;
     let current_project_root = PathBuf::from(project_root);
+    if !current_project_root.is_dir() {
+        return Err("Current project root is invalid".to_string());
+    }
     let workspace_dir = current_project_root
         .parent()
         .ok_or_else(|| "Current project workspace is invalid".to_string())?
         .to_path_buf();
+    let allowed_workspace_root = packed_workspace_session_root(&app)?;
+    let canonical_workspace_dir = fs::canonicalize(&workspace_dir).map_err(to_command_error)?;
+    let canonical_allowed_workspace_root =
+        fs::canonicalize(&allowed_workspace_root).map_err(to_command_error)?;
+    if !canonical_workspace_dir.starts_with(&canonical_allowed_workspace_root) {
+        return Err("Current project workspace is outside the packed session workspace".to_string());
+    }
     prepare_fixed_workspace_dir(&workspace_dir)?;
     extract_archive_to_workspace(&mut archive, &workspace_dir)?;
 

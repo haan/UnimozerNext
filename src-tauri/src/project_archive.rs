@@ -162,6 +162,18 @@ pub fn packed_workspace_dir(app: &AppHandle, archive_path: &Path) -> CommandResu
     Ok(workspace_root.join(format!("{}-{:016x}", safe_stem, hash)))
 }
 
+pub fn packed_workspace_session_root(app: &AppHandle) -> CommandResult<PathBuf> {
+    let local_data = app
+        .path()
+        .app_local_data_dir()
+        .map_err(to_command_error)?;
+    let workspace_root = local_data
+        .join("packed-workspaces")
+        .join(workspace_session_id(app));
+    fs::create_dir_all(&workspace_root).map_err(to_command_error)?;
+    Ok(workspace_root)
+}
+
 pub fn scratch_workspace_root(app: &AppHandle) -> CommandResult<PathBuf> {
     let local_data = app
         .path()
