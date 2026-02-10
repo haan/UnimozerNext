@@ -51,8 +51,10 @@ export const CallMethodDialog = ({
     });
   };
 
+  const hasEmptyParams = params.some((_, index) => (paramValues[index] ?? "").trim().length === 0);
+
   const handleSubmit = async () => {
-    if (busy || submitting) return;
+    if (busy || submitting || hasEmptyParams) return;
     setSubmitting(true);
     try {
       await onSubmit({ paramValues });
@@ -104,6 +106,7 @@ export const CallMethodDialog = ({
                       className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
                       value={paramValues[index] ?? ""}
                       placeholder="Java expression"
+                      required
                       onChange={(event) => updateParam(index, event.target.value)}
                     />
                   </div>
@@ -123,7 +126,7 @@ export const CallMethodDialog = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={busy || submitting}>
+            <Button type="submit" disabled={busy || submitting || hasEmptyParams}>
               Call
             </Button>
           </div>

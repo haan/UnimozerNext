@@ -48,6 +48,7 @@ export const ParameterList = ({
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 placeholder="Parameter name"
                 value={param.name}
+                required
                 aria-invalid={isInvalid}
                 onChange={(event) => onUpdate(param.id, { name: event.target.value })}
               />

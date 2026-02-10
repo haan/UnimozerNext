@@ -86,6 +86,7 @@ export const AddClassDialog = ({
               <input
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={form.name}
+                required
                 aria-invalid={nameValue ? !isNameValid : false}
                 onChange={(event) => update({ name: event.target.value })}
               />

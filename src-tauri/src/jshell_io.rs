@@ -115,6 +115,8 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
     session: &mut JshellSession,
     request: serde_json::Value,
 ) -> Result<T, String> {
+    const BRIDGE_RESPONSE_SCAN_LIMIT: usize = 512;
+
     let stderr_snapshot = || {
         if let Ok(lines) = session.stderr.lock() {
             if lines.is_empty() {
@@ -139,17 +141,82 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
         .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
 
     let mut response = String::new();
-    let bytes = session
-        .stdout
-        .read_line(&mut response)
-        .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
-    if bytes == 0 {
-        return Err(format!(
-            "JShell bridge closed unexpectedly{}",
-            stderr_snapshot()
-        ));
+    let mut noise_lines: Vec<String> = Vec::new();
+    let mut parsed: Option<serde_json::Value> = None;
+    let command_name = request
+        .get("cmd")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+
+    for _ in 0..BRIDGE_RESPONSE_SCAN_LIMIT {
+        response.clear();
+        let bytes = session
+            .stdout
+            .read_line(&mut response)
+            .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
+        if bytes == 0 {
+            return Err(format!(
+                "JShell bridge closed unexpectedly{}",
+                stderr_snapshot()
+            ));
+        }
+
+        let trimmed = response.trim_end_matches(|character| character == '\r' || character == '\n');
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        match serde_json::from_str::<serde_json::Value>(trimmed) {
+            Ok(value) => {
+                parsed = Some(value);
+                break;
+            }
+            Err(_) => {
+                noise_lines.push(trimmed.to_string());
+            }
+        }
     }
-    serde_json::from_str::<T>(&response).map_err(crate::command_error::to_command_error)
+
+    let mut value = parsed.ok_or_else(|| {
+        if noise_lines.is_empty() {
+            format!(
+                "JShell bridge did not return a JSON response{}",
+                stderr_snapshot()
+            )
+        } else {
+            format!(
+                "JShell bridge returned non-JSON output: {}{}",
+                noise_lines.join(" | "),
+                stderr_snapshot()
+            )
+        }
+    })?;
+
+    if command_name == "eval" && !noise_lines.is_empty() {
+        let merged_noise = noise_lines.join("\n");
+        if let Some(object) = value.as_object_mut() {
+            match object.get_mut("stdout") {
+                Some(existing) if existing.is_string() => {
+                    if let Some(current) = existing.as_str() {
+                        let combined = if current.is_empty() {
+                            merged_noise
+                        } else {
+                            format!("{current}\n{merged_noise}")
+                        };
+                        *existing = serde_json::Value::String(combined);
+                    }
+                }
+                _ => {
+                    object.insert(
+                        "stdout".to_string(),
+                        serde_json::Value::String(merged_noise),
+                    );
+                }
+            }
+        }
+    }
+
+    serde_json::from_value::<T>(value).map_err(crate::command_error::to_command_error)
 }
 
 #[tauri::command]

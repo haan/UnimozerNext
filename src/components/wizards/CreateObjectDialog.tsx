@@ -84,7 +84,14 @@ export const CreateObjectDialog = ({
   const isNameUnique = !existingNames.some(
     (name) => name.toLowerCase() === trimmedName.toLowerCase()
   );
-  const canSubmit = trimmedName.length > 0 && isNameValid && isNameUnique && !busy && !submitting;
+  const hasEmptyParams = params.some((_, index) => (paramValues[index] ?? "").trim().length === 0);
+  const canSubmit =
+    trimmedName.length > 0 &&
+    isNameValid &&
+    isNameUnique &&
+    !hasEmptyParams &&
+    !busy &&
+    !submitting;
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
@@ -118,6 +125,7 @@ export const CreateObjectDialog = ({
               <input
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={objectName}
+                required
                 aria-invalid={trimmedName ? !isNameValid || !isNameUnique : false}
                 onChange={(event) => setObjectName(event.target.value)}
               />
@@ -145,6 +153,7 @@ export const CreateObjectDialog = ({
                       className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
                       value={paramValues[index] ?? ""}
                       placeholder="Java expression"
+                      required
                       onChange={(event) => updateParam(index, event.target.value)}
                     />
                   </div>
