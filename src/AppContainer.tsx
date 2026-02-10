@@ -1,15 +1,12 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { editor as MonacoEditorType } from "monaco-editor";
 
-import { ConsolePanel } from "./components/console/ConsolePanel";
-import { CodePanel } from "./components/editor/CodePanel";
 import { AppMenu } from "./components/app/AppMenu";
-import { ObjectBenchSection } from "./components/app/ObjectBenchSection";
+import { AppWorkspacePanels } from "./components/app/AppWorkspacePanels";
 import type { DiagramViewMode } from "./components/diagram/DiagramPanel";
 import { AppDialogs } from "./components/app/AppDialogs";
-import { SplitHandle } from "./components/ui/split-handle";
 import { Toaster } from "./components/ui/sonner";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
@@ -33,7 +30,7 @@ import { useProjectSessionState } from "./hooks/useProjectSessionState";
 import { useProjectSessionController } from "./hooks/useProjectSessionController";
 import { useProjectActionOrchestration } from "./hooks/useProjectActionOrchestration";
 import { useDialogState } from "./hooks/useDialogState";
-import { useDiagramInteractions, type PendingRevealRequest } from "./hooks/useDiagramInteractions";
+import { useDiagramInteractions } from "./hooks/useDiagramInteractions";
 import { useClassEditActions } from "./hooks/useClassEditActions";
 import { useObjectBenchActions } from "./hooks/useObjectBenchActions";
 import { useClassSelectionActions } from "./hooks/useClassSelectionActions";
@@ -45,11 +42,8 @@ import { useEditorActions } from "./hooks/useEditorActions";
 import { useProjectViewState } from "./hooks/useProjectViewState";
 import { useMenuPreferenceActions } from "./hooks/useMenuPreferenceActions";
 import { useAppDerivedState } from "./hooks/useAppDerivedState";
-import type { ExportControls } from "./components/diagram/UmlDiagram";
-import type { StructogramExportControls } from "./components/structogram/StructogramView";
-import {
-  UML_PARSE_DRAFT_DEBOUNCE_MS
-} from "./constants/app";
+import { useUmlParseDrafts } from "./hooks/useUmlParseDrafts";
+import { useWorkspaceUiControllers } from "./hooks/useWorkspaceUiControllers";
 import {
   CONSOLE_MIN_HEIGHT_PX,
   EDITOR_MIN_HEIGHT_PX,
@@ -186,17 +180,6 @@ export default function AppContainer({
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
-  const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
-  const pendingRevealRef = useRef<PendingRevealRequest | null>(null);
-  const zoomControlsRef = useRef<{
-    zoomIn: () => void;
-    zoomOut: () => void;
-    resetZoom: () => void;
-  } | null>(null);
-  const exportControlsRef = useRef<ExportControls | null>(null);
-  const structogramExportControlsRef = useRef<StructogramExportControls | null>(null);
-  const [hasDiagramExportControls, setHasDiagramExportControls] = useState(false);
-  const [hasStructogramExportControls, setHasStructogramExportControls] = useState(false);
   const {
     monacoRef,
     lsReadyRef,
@@ -210,6 +193,23 @@ export default function AppContainer({
     projectPath,
     openFilePath,
     openFileContent: content
+  });
+  const {
+    editorRef,
+    pendingRevealRef,
+    applyPendingReveal,
+    clearPendingReveal,
+    zoomControlsRef,
+    exportControlsRef,
+    structogramExportControlsRef,
+    hasDiagramExportControls,
+    hasStructogramExportControls,
+    handleRegisterZoom,
+    handleRegisterExport,
+    handleRegisterStructogramExport
+  } = useWorkspaceUiControllers({
+    openFilePath,
+    monacoRef
   });
 
   const {
@@ -247,20 +247,10 @@ export default function AppContainer({
     notifyLsClose,
     setStatus
   });
-  const [umlParseDrafts, setUmlParseDrafts] = useState(fileDrafts);
-
-  useEffect(() => {
-    if (!projectPath) {
-      setUmlParseDrafts({});
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      setUmlParseDrafts(fileDrafts);
-    }, UML_PARSE_DRAFT_DEBOUNCE_MS);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [fileDrafts, projectPath]);
+  const umlParseDrafts = useUmlParseDrafts({
+    projectPath,
+    fileDrafts
+  });
 
   const { scratchHasClasses, dirty, visibleGraph, isMac } = useAppDerivedState({
     tree,
@@ -287,41 +277,6 @@ export default function AppContainer({
     packedArchivePath,
     projectPath
   });
-
-  const applyPendingReveal = useCallback(() => {
-    const pending = pendingRevealRef.current;
-    if (!pending) return;
-    const expiresAtMs = pending.requestedAtMs + pending.durationSeconds * 1000;
-    if (Date.now() > expiresAtMs) {
-      pendingRevealRef.current = null;
-      return;
-    }
-    const editor = editorRef.current;
-    const monaco = monacoRef.current;
-    if (!editor || !monaco) return;
-    const model = editor.getModel();
-    if (!model) return;
-    const modelPath = model.uri?.fsPath ?? "";
-    if (modelPath && modelPath.toLowerCase() !== pending.path.toLowerCase()) return;
-    const maxLine = model.getLineCount();
-    const line = Math.min(Math.max(pending.line, 1), maxLine);
-    const maxColumn = model.getLineMaxColumn(line);
-    const column = Math.min(Math.max(pending.column, 1), maxColumn);
-    editor.setPosition({ lineNumber: line, column });
-    editor.revealPositionInCenter({ lineNumber: line, column });
-    editor.focus();
-    pendingRevealRef.current = null;
-  }, [monacoRef]);
-
-  const clearPendingReveal = useCallback(() => {
-    pendingRevealRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    if (!openFile) {
-      editorRef.current = null;
-    }
-  }, [openFile]);
 
   const {
     lastCompileOutDirRef,
@@ -713,6 +668,25 @@ export default function AppContainer({
     setObjectBench,
     setStatus
   });
+  const handleEditorMount = useCallback(
+    (editor: MonacoEditorType.IStandaloneCodeEditor) => {
+      editorRef.current = editor;
+      applyPendingReveal();
+    },
+    [applyPendingReveal, editorRef]
+  );
+  const handleEditorCaretChange = useCallback(
+    (position: { lineNumber: number; column: number } | null) => {
+      setEditorCaret(position);
+    },
+    []
+  );
+  const handleOpenSettings = useCallback(() => {
+    setSettingsOpen(true);
+  }, [setSettingsOpen]);
+  const handleConfirmRemoveClass = useCallback(() => {
+    void confirmRemoveClass();
+  }, [confirmRemoveClass]);
 
   return (
     <div className="flex h-full flex-col">
@@ -723,7 +697,7 @@ export default function AppContainer({
         onRequestOpenFolderProject={onRequestOpenFolderProject}
         onSave={onSaveProject}
         onSaveAs={onSaveProjectAs}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={handleOpenSettings}
         onExit={onRequestExit}
         onUndo={() => triggerEditorAction("undo")}
         onRedo={() => triggerEditorAction("redo")}
@@ -754,131 +728,82 @@ export default function AppContainer({
         onCopyStructogramPng={handleCopyStructogramPng}
         onExportStructogramPng={handleExportStructogramPng}
       />
-
-      <div className="flex flex-1 overflow-hidden">
-        <main className="flex flex-1 flex-col bg-background">
-          <div ref={containerRef} className="relative flex flex-1 overflow-hidden">
-            <div
-              className="h-full min-w-0 overflow-hidden"
-              style={{ width: `${splitRatio * 100}%` }}
-            >
-                <ObjectBenchSection
-                  benchContainerRef={benchContainerRef}
-                  objectBenchSplitRatio={objectBenchSplitRatio}
-                  startBenchResize={startBenchResize}
-                  graph={visibleGraph}
-                  diagram={diagramState}
-                  compiled={compileStatus === "success"}
-                  backgroundColor={settings.uml.panelBackground}
-                  showPackages={showPackages}
-                  fontSize={fontSize}
-                  structogramColorsEnabled={structogramColorsEnabled}
-                  exportDefaultPath={exportDefaultPath}
-                  onExportStatus={handleExportStatus}
-                  onNodePositionChange={handleNodePositionChange}
-                  onNodeSelect={handleNodeSelect}
-                  onCompileProject={canCompileClass ? handleMenuCompileProject : undefined}
-                  onCompileClass={handleCompileClass}
-                  onRunMain={handleRunMain}
-                  onCreateObject={handleOpenCreateObject}
-                  onRemoveClass={requestRemoveClass}
-                  onAddField={handleOpenAddField}
-                  onAddConstructor={handleOpenAddConstructor}
-                  onAddMethod={handleOpenAddMethod}
-                  onFieldSelect={codeHighlightEnabled ? handleFieldSelect : undefined}
-                  onMethodSelect={codeHighlightEnabled ? handleMethodSelect : undefined}
-                  onRegisterZoom={(controls) => {
-                    zoomControlsRef.current = controls;
-                  }}
-                  onRegisterExport={(controls) => {
-                    exportControlsRef.current = controls;
-                    setHasDiagramExportControls(Boolean(controls));
-                  }}
-                  onRegisterStructogramExport={(controls) => {
-                    structogramExportControlsRef.current = controls;
-                    setHasStructogramExportControls(Boolean(controls));
-                  }}
-                  onAddClass={canAddClass ? () => setAddClassOpen(true) : undefined}
-                  viewMode={leftPanelViewMode}
-                  activeFilePath={openFilePath}
-                  caretLineNumber={editorCaret?.lineNumber ?? null}
-                  onDebugLog={debugLogging ? appendDebugOutput : undefined}
-                objectBench={objectBench}
-                showPrivate={showPrivateObjectFields}
-                showInherited={showInheritedObjectFields}
-                showStatic={showStaticObjectFields}
-                getMethodsForObject={getPublicMethodsForObject}
-                onCallMethod={handleOpenCallMethod}
-                onRemoveObject={handleRemoveObject}
-              />
-            </div>
-
-            <SplitHandle
-              orientation="vertical"
-              positionPercent={splitRatio * 100}
-              ariaLabel="Resize information panel"
-              onPointerDown={startUmlResize}
-            />
-
-            <section className="flex min-w-0 flex-1 flex-col">
-              <div
-                ref={consoleContainerRef}
-                className="relative flex min-h-0 flex-1 flex-col overflow-hidden"
-              >
-                <div
-                  className="flex-none overflow-hidden"
-                  style={{
-                    height: `${consoleSplitRatio * 100}%`,
-                    minHeight: `${EDITOR_MIN_HEIGHT_PX}px`
-                  }}
-                >
-                    <CodePanel
-                      openFile={openFile}
-                      fileUri={openFilePath ? toFileUri(openFilePath) : null}
-                      content={content}
-                      dirty={dirty}
-                      fontSize={fontSize}
-                      theme={settings.editor.theme}
-                      tabSize={settings.editor.tabSize}
-                      insertSpaces={settings.editor.insertSpaces}
-                      autoCloseBrackets={settings.editor.autoCloseBrackets}
-                      autoCloseQuotes={settings.editor.autoCloseQuotes}
-                      autoCloseComments={settings.editor.autoCloseComments}
-                      wordWrap={settings.editor.wordWrap}
-                      onChange={handleContentChange}
-                      debugLogging={debugLogging}
-                      onDebugLog={debugLogging ? appendDebugOutput : undefined}
-                      onEditorMount={(editor) => {
-                        editorRef.current = editor;
-                        applyPendingReveal();
-                      }}
-                      onCaretChange={(position) => {
-                        setEditorCaret(position);
-                      }}
-                    />
-                </div>
-                <SplitHandle
-                  orientation="horizontal"
-                  positionPercent={consoleSplitRatio * 100}
-                  ariaLabel="Resize console panel"
-                  onPointerDown={startConsoleResize}
-                />
-                <div
-                  className="flex-1 overflow-hidden"
-                  style={{ minHeight: `${CONSOLE_MIN_HEIGHT_PX}px` }}
-                >
-                  <ConsolePanel
-                    output={consoleOutput}
-                    fontSize={fontSize}
-                    running={runSessionId !== null}
-                    onStop={handleCancelRun}
-                  />
-                </div>
-              </div>
-            </section>
-          </div>
-        </main>
-      </div>
+      <AppWorkspacePanels
+        containerRef={containerRef}
+        consoleContainerRef={consoleContainerRef}
+        splitRatio={splitRatio}
+        consoleSplitRatio={consoleSplitRatio}
+        onStartUmlResize={startUmlResize}
+        onStartConsoleResize={startConsoleResize}
+        objectBenchSectionProps={{
+          benchContainerRef,
+          objectBenchSplitRatio,
+          startBenchResize,
+          graph: visibleGraph,
+          diagram: diagramState,
+          compiled: compileStatus === "success",
+          backgroundColor: settings.uml.panelBackground,
+          showPackages,
+          fontSize,
+          structogramColorsEnabled,
+          exportDefaultPath,
+          onExportStatus: handleExportStatus,
+          onNodePositionChange: handleNodePositionChange,
+          onNodeSelect: handleNodeSelect,
+          onCompileProject: canCompileClass ? handleMenuCompileProject : undefined,
+          onCompileClass: handleCompileClass,
+          onRunMain: handleRunMain,
+          onCreateObject: handleOpenCreateObject,
+          onRemoveClass: requestRemoveClass,
+          onAddField: handleOpenAddField,
+          onAddConstructor: handleOpenAddConstructor,
+          onAddMethod: handleOpenAddMethod,
+          onFieldSelect: codeHighlightEnabled ? handleFieldSelect : undefined,
+          onMethodSelect: codeHighlightEnabled ? handleMethodSelect : undefined,
+          onRegisterZoom: handleRegisterZoom,
+          onRegisterExport: handleRegisterExport,
+          onRegisterStructogramExport: handleRegisterStructogramExport,
+          onAddClass: canAddClass ? () => setAddClassOpen(true) : undefined,
+          viewMode: leftPanelViewMode,
+          activeFilePath: openFilePath,
+          caretLineNumber: editorCaret?.lineNumber ?? null,
+          onDebugLog: debugLogging ? appendDebugOutput : undefined,
+          objectBench,
+          showPrivate: showPrivateObjectFields,
+          showInherited: showInheritedObjectFields,
+          showStatic: showStaticObjectFields,
+          getMethodsForObject: getPublicMethodsForObject,
+          onCallMethod: handleOpenCallMethod,
+          onRemoveObject: handleRemoveObject
+        }}
+        codePanelProps={{
+          openFile,
+          fileUri: openFilePath ? toFileUri(openFilePath) : null,
+          content,
+          dirty,
+          fontSize,
+          theme: settings.editor.theme,
+          tabSize: settings.editor.tabSize,
+          insertSpaces: settings.editor.insertSpaces,
+          autoCloseBrackets: settings.editor.autoCloseBrackets,
+          autoCloseQuotes: settings.editor.autoCloseQuotes,
+          autoCloseComments: settings.editor.autoCloseComments,
+          wordWrap: settings.editor.wordWrap,
+          onChange: handleContentChange,
+          debugLogging,
+          onDebugLog: debugLogging ? appendDebugOutput : undefined,
+          onEditorMount: handleEditorMount,
+          onCaretChange: handleEditorCaretChange
+        }}
+        consolePanelProps={{
+          output: consoleOutput,
+          fontSize,
+          running: runSessionId !== null,
+          onStop: handleCancelRun
+        }}
+        editorMinHeightPx={EDITOR_MIN_HEIGHT_PX}
+        consoleMinHeightPx={CONSOLE_MIN_HEIGHT_PX}
+      />
 
       <footer className="border-t border-border bg-card px-4 py-2 text-xs text-muted-foreground">
         {status}
@@ -920,9 +845,7 @@ export default function AppContainer({
         removeClassOpen={removeClassOpen}
         onRemoveClassOpenChange={handleRemoveClassOpenChange}
         removeTargetName={removeTarget?.name ?? null}
-        onConfirmRemoveClass={() => {
-          void confirmRemoveClass();
-        }}
+        onConfirmRemoveClass={handleConfirmRemoveClass}
         confirmProjectActionOpen={confirmProjectActionOpen}
         onConfirmProjectActionOpenChange={onConfirmProjectActionOpenChange}
         canConfirmProjectAction={Boolean(pendingProjectAction)}
