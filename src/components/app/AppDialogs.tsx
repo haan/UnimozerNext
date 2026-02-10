@@ -61,6 +61,10 @@ type AppDialogsProps = {
   onConfirmProjectActionOpenChange: (open: boolean) => void;
   canConfirmProjectAction: boolean;
   onConfirmProjectAction: () => void;
+  reloadFromDiskDialogOpen: boolean;
+  onReloadFromDiskDialogOpenChange: (open: boolean) => void;
+  onConfirmReloadFromDisk: () => void;
+  onIgnoreReloadFromDisk: () => void;
   methodReturnOpen: boolean;
   onMethodReturnOpenChange: (open: boolean) => void;
   methodReturnLabel: string;
@@ -108,6 +112,10 @@ export const AppDialogs = ({
   onConfirmProjectActionOpenChange,
   canConfirmProjectAction,
   onConfirmProjectAction,
+  reloadFromDiskDialogOpen,
+  onReloadFromDiskDialogOpenChange,
+  onConfirmReloadFromDisk,
+  onIgnoreReloadFromDisk,
   methodReturnOpen,
   onMethodReturnOpenChange,
   methodReturnLabel,
@@ -236,6 +244,37 @@ export const AppDialogs = ({
             onClick={onConfirmProjectAction}
           >
             Continue
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog
+      open={reloadFromDiskDialogOpen}
+      onOpenChange={onReloadFromDiskDialogOpenChange}
+    >
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Files changed on disk</AlertDialogTitle>
+          <AlertDialogDescription className="text-center">
+            Your project changed outside Unimozer Next. Reloading will overwrite current unsaved
+            changes.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogCancel
+            variant="outline"
+            className="w-full"
+            disabled={busy}
+            onClick={onIgnoreReloadFromDisk}
+          >
+            Ignore
+          </AlertDialogCancel>
+          <AlertDialogAction
+            className="w-full"
+            disabled={busy}
+            onClick={onConfirmReloadFromDisk}
+          >
+            Reload
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

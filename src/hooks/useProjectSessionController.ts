@@ -15,6 +15,7 @@ type UseProjectSessionControllerArgs = {
   projectPath: string | null;
   projectStorageMode: ProjectStorageMode | null;
   packedArchivePath: string | null;
+  openFilePath: string | null;
   setProjectPath: Dispatch<SetStateAction<string | null>>;
   setProjectStorageMode: Dispatch<SetStateAction<ProjectStorageMode | null>>;
   setPackedArchivePath: Dispatch<SetStateAction<string | null>>;
@@ -48,6 +49,7 @@ export const useProjectSessionController = ({
   projectPath,
   projectStorageMode,
   packedArchivePath,
+  openFilePath,
   setProjectPath,
   setProjectStorageMode,
   setPackedArchivePath,
@@ -91,11 +93,13 @@ export const useProjectSessionController = ({
     openFileByPath,
     handleSave: saveProject,
     handleSaveAs: saveProjectAs,
-    loadDiagramState
+    loadDiagramState,
+    reloadCurrentProjectFromDisk
   } = useProjectIO({
     projectPath,
     projectStorageMode,
     packedArchivePath,
+    openFilePath,
     fileDrafts,
     lastGoodGraphRef,
     setProjectPath,
@@ -158,6 +162,7 @@ export const useProjectSessionController = ({
     openFileByPath,
     loadDiagramState,
     handleSave,
-    handleSaveAs
+    handleSaveAs,
+    reloadCurrentProjectFromDisk
   };
 };

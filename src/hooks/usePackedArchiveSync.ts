@@ -15,6 +15,7 @@ type UsePackedArchiveSyncArgs = {
   setStatus: (status: string) => void;
   setDiagramLayoutDirty: (value: boolean) => void;
   setPackedArchiveSyncFailed: (value: boolean) => void;
+  onPackedArchiveWriteSuccess?: () => void;
 };
 
 type UsePackedArchiveSyncResult = {
@@ -31,7 +32,8 @@ export const usePackedArchiveSync = ({
   trimStatus,
   setStatus,
   setDiagramLayoutDirty,
-  setPackedArchiveSyncFailed
+  setPackedArchiveSyncFailed,
+  onPackedArchiveWriteSuccess
 }: UsePackedArchiveSyncArgs): UsePackedArchiveSyncResult => {
   const syncInFlightRef = useRef(false);
   const syncTaskRef = useRef<Promise<void> | null>(null);
@@ -66,6 +68,7 @@ export const usePackedArchiveSync = ({
             projectRoot: root,
             archivePath
           });
+          onPackedArchiveWriteSuccess?.();
           setDiagramLayoutDirty(false);
           setPackedArchiveSyncFailed(false);
           toast.dismiss(PACKED_SYNC_ERROR_TOAST_ID);
@@ -91,6 +94,7 @@ export const usePackedArchiveSync = ({
     return task;
   }, [
     formatStatus,
+    onPackedArchiveWriteSuccess,
     setDiagramLayoutDirty,
     setPackedArchiveSyncFailed,
     setStatus,

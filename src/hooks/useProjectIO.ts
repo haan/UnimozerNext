@@ -9,7 +9,7 @@ import type { UmlGraph } from "../models/uml";
 import type { FileDraft } from "../models/drafts";
 import type { OpenFile } from "../models/openFile";
 import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "../services/diagram";
-import { basename, joinPath, toDisplayPath } from "../services/paths";
+import { basename, joinPath, toDisplayPath, toRelativePath } from "../services/paths";
 import {
   DEFAULT_NEW_PROJECT_FILE_NAME,
   PACKED_PROJECT_EXTENSION
@@ -33,6 +33,7 @@ type UseProjectIOArgs = {
   projectPath: string | null;
   projectStorageMode: ProjectStorageMode | null;
   packedArchivePath: string | null;
+  openFilePath: string | null;
   fileDrafts: Record<string, FileDraft>;
   lastGoodGraphRef: MutableRefObject<UmlGraph | null>;
   setProjectPath: Dispatch<SetStateAction<string | null>>;
@@ -66,16 +67,21 @@ type UseProjectIOResult = {
     options?: { clearConsole?: boolean }
   ) => Promise<void>;
   handleNewProject: (options?: { clearConsole?: boolean }) => Promise<void>;
-  openFileByPath: (path: string) => Promise<void>;
+  openFileByPath: (
+    path: string,
+    options?: { clearConsole?: boolean; preferDisk?: boolean }
+  ) => Promise<void>;
   handleSave: () => Promise<boolean>;
   handleSaveAs: () => Promise<boolean>;
   loadDiagramState: (root: string, graph: UmlGraph) => Promise<void>;
+  reloadCurrentProjectFromDisk: () => Promise<boolean>;
 };
 
 export const useProjectIO = ({
   projectPath,
   projectStorageMode,
   packedArchivePath,
+  openFilePath,
   fileDrafts,
   lastGoodGraphRef,
   setProjectPath,
@@ -148,6 +154,20 @@ export const useProjectIO = ({
     }
   }, [beforeProjectSwitch]);
 
+  const restartLsIfSameProjectRoot = useCallback(
+    async (nextProjectRoot: string) => {
+      if (!projectPath || nextProjectRoot !== projectPath) {
+        return;
+      }
+      try {
+        await invoke("ls_start", { projectRoot: nextProjectRoot });
+      } catch {
+        // Ignore restart errors; caller will surface follow-up failures.
+      }
+    },
+    [projectPath]
+  );
+
   const loadDiagramState = useCallback(
     async (root: string, graph: UmlGraph) => {
       const diagramFile = joinPath(root, "unimozer.json");
@@ -201,11 +221,15 @@ export const useProjectIO = ({
   );
 
   const openFileByPath = useCallback(
-    async (path: string) => {
-      clearConsole();
+    async (path: string, options?: { clearConsole?: boolean; preferDisk?: boolean }) => {
+      const shouldClearConsole = options?.clearConsole ?? true;
+      const preferDisk = options?.preferDisk ?? false;
+      if (shouldClearConsole) {
+        clearConsole();
+      }
       setBusy(true);
       try {
-        const existingDraft = fileDrafts[path];
+        const existingDraft = !preferDisk ? fileDrafts[path] : undefined;
         const name = basename(path);
         if (existingDraft) {
           setOpenFile({ name, path });
@@ -242,10 +266,9 @@ export const useProjectIO = ({
     ]
   );
 
-  const handleOpenPackedProjectPath = useCallback(
+  const openPackedProjectByPath = useCallback(
     async (archivePath: string, options?: { clearConsole?: boolean }) => {
       const shouldClearConsole = options?.clearConsole ?? true;
-      setStatus("Opening project...");
       if (shouldClearConsole) {
         clearConsole();
       }
@@ -260,23 +283,42 @@ export const useProjectIO = ({
         setProjectStorageMode("packed");
         setPackedArchivePath(response.archivePath);
         resetProjectSession();
-        setStatus(`Project loaded: ${toDisplayPath(response.archivePath)}`);
-      } catch (error) {
-        setStatus(`Failed to open project: ${formatStatus(error)}`);
+        await restartLsIfSameProjectRoot(response.projectRoot);
+        return response.projectRoot;
       } finally {
         setBusy(false);
       }
     },
     [
       clearConsole,
-      formatStatus,
       prepareProjectSwitch,
       refreshTree,
       resetProjectSession,
+      restartLsIfSameProjectRoot,
       setBusy,
       setPackedArchivePath,
       setProjectPath,
-      setProjectStorageMode,
+      setProjectStorageMode
+    ]
+  );
+
+  const handleOpenPackedProjectPath = useCallback(
+    async (archivePath: string, options?: { clearConsole?: boolean }) => {
+      setStatus("Opening project...");
+      try {
+        const projectRoot = await openPackedProjectByPath(archivePath, options);
+        if (!projectRoot) {
+          setStatus("Failed to open project: unknown error.");
+          return;
+        }
+        setStatus(`Project loaded: ${toDisplayPath(archivePath)}`);
+      } catch (error) {
+        setStatus(`Failed to open project: ${formatStatus(error)}`);
+      }
+    },
+    [
+      formatStatus,
+      openPackedProjectByPath,
       setStatus
     ]
   );
@@ -327,6 +369,7 @@ export const useProjectIO = ({
       setProjectStorageMode("folder");
       setPackedArchivePath(null);
       resetProjectSession();
+      await restartLsIfSameProjectRoot(dir);
       setStatus(`Project loaded: ${toDisplayPath(dir)}`);
     } catch (error) {
       setStatus(`Failed to open folder project: ${formatStatus(error)}`);
@@ -339,6 +382,7 @@ export const useProjectIO = ({
     prepareProjectSwitch,
     refreshTree,
     resetProjectSession,
+    restartLsIfSameProjectRoot,
     setBusy,
     setPackedArchivePath,
     setProjectPath,
@@ -382,27 +426,10 @@ export const useProjectIO = ({
 
   const switchToPackedArchive = useCallback(
     async (archivePath: string) => {
-      clearConsole();
-      await prepareProjectSwitch();
-      const response = await invoke<OpenPackedProjectResponse>("open_packed_project", {
-        archivePath
-      });
-      await refreshTree(response.projectRoot);
-      setProjectPath(response.projectRoot);
-      setProjectStorageMode("packed");
-      setPackedArchivePath(response.archivePath);
-      resetProjectSession();
-      return response.archivePath;
+      await openPackedProjectByPath(archivePath, { clearConsole: true });
+      return archivePath;
     },
-    [
-      clearConsole,
-      prepareProjectSwitch,
-      refreshTree,
-      resetProjectSession,
-      setPackedArchivePath,
-      setProjectPath,
-      setProjectStorageMode
-    ]
+    [openPackedProjectByPath]
   );
 
   const handleSave = useCallback(async () => {
@@ -530,6 +557,96 @@ export const useProjectIO = ({
     switchToPackedArchive
   ]);
 
+  const reloadCurrentProjectFromDisk = useCallback(async () => {
+    if (!projectPath || !projectStorageMode) {
+      setStatus("Open a project before reloading.");
+      return false;
+    }
+
+    const previousProjectRoot = projectPath;
+    const previousOpenFilePath = openFilePath;
+
+    const restoreOpenFile = async (nextProjectRoot: string) => {
+      if (!previousOpenFilePath) {
+        return;
+      }
+      const relativeFilePath = toRelativePath(previousOpenFilePath, previousProjectRoot);
+      const candidatePath =
+        relativeFilePath === previousOpenFilePath
+          ? previousOpenFilePath
+          : joinPath(nextProjectRoot, relativeFilePath);
+      await openFileByPath(candidatePath, { clearConsole: false, preferDisk: true });
+    };
+
+    if (projectStorageMode === "folder" || projectStorageMode === "scratch") {
+      setBusy(true);
+      try {
+        await refreshTree(projectPath);
+        setFileDrafts({});
+        await restoreOpenFile(projectPath);
+        setStatus("Project reloaded from disk.");
+        return true;
+      } catch (error) {
+        setStatus(`Failed to reload project: ${formatStatus(error)}`);
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    if (projectStorageMode === "packed") {
+      if (!packedArchivePath) {
+        setStatus("Failed to reload project: archive path is missing.");
+        return false;
+      }
+      if (!projectPath) {
+        setStatus("Failed to reload project: workspace path is missing.");
+        return false;
+      }
+      setBusy(true);
+      try {
+        const response = await invoke<OpenPackedProjectResponse>(
+          "reload_packed_project_in_place",
+          {
+            archivePath: packedArchivePath,
+            projectRoot: projectPath
+          }
+        );
+        await refreshTree(response.projectRoot);
+        setProjectPath(response.projectRoot);
+        setProjectStorageMode("packed");
+        setPackedArchivePath(response.archivePath);
+        const nextProjectRoot = response.projectRoot;
+        setFileDrafts({});
+        await restoreOpenFile(nextProjectRoot);
+        setStatus(`Project reloaded from ${toDisplayPath(response.archivePath)}.`);
+        return true;
+      } catch (error) {
+        setStatus(`Failed to reload project: ${formatStatus(error)}`);
+        return false;
+      } finally {
+        setBusy(false);
+      }
+    }
+
+    setStatus("Reload is not available for the current project mode.");
+    return false;
+  }, [
+    formatStatus,
+    openFileByPath,
+    openFilePath,
+    packedArchivePath,
+    projectPath,
+    projectStorageMode,
+    refreshTree,
+    setBusy,
+    setFileDrafts,
+    setPackedArchivePath,
+    setProjectPath,
+    setProjectStorageMode,
+    setStatus
+  ]);
+
   return {
     handleOpenProject,
     handleOpenFolderProject,
@@ -538,6 +655,7 @@ export const useProjectIO = ({
     openFileByPath,
     handleSave,
     handleSaveAs,
-    loadDiagramState
+    loadDiagramState,
+    reloadCurrentProjectFromDisk
   };
 };

@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { editor as MonacoEditorType } from "monaco-editor";
 
@@ -44,6 +44,7 @@ import { useMenuPreferenceActions } from "./hooks/useMenuPreferenceActions";
 import { useAppDerivedState } from "./hooks/useAppDerivedState";
 import { useUmlParseDrafts } from "./hooks/useUmlParseDrafts";
 import { useWorkspaceUiControllers } from "./hooks/useWorkspaceUiControllers";
+import { useProjectDiskReload } from "./hooks/useProjectDiskReload";
 import {
   CONSOLE_MIN_HEIGHT_PX,
   EDITOR_MIN_HEIGHT_PX,
@@ -212,6 +213,8 @@ export default function AppContainer({
     monacoRef
   });
 
+  const markDiskSnapshotCurrentRef = useRef<() => Promise<void>>(async () => {});
+
   const {
     requestPackedArchiveSync,
     awaitPackedArchiveSync,
@@ -224,7 +227,10 @@ export default function AppContainer({
     trimStatus,
     setStatus,
     setDiagramLayoutDirty,
-    setPackedArchiveSyncFailed
+    setPackedArchiveSyncFailed,
+    onPackedArchiveWriteSuccess: () => {
+      void markDiskSnapshotCurrentRef.current();
+    }
   });
 
   const {
@@ -383,11 +389,13 @@ export default function AppContainer({
     openFileByPath,
     loadDiagramState,
     handleSave,
-    handleSaveAs
+    handleSaveAs,
+    reloadCurrentProjectFromDisk
   } = useProjectSessionController({
     projectPath,
     projectStorageMode,
     packedArchivePath,
+    openFilePath,
     setProjectPath,
     setProjectStorageMode,
     setPackedArchivePath,
@@ -453,6 +461,47 @@ export default function AppContainer({
     scratchHasClasses,
     hasPackedArchiveSyncChanges: projectStorageMode === "packed" && packedArchiveSyncFailed
   });
+
+  const reloadCurrentProjectFromDiskWithCaret = useCallback(async () => {
+    const previousCaret = editorRef.current?.getPosition() ?? editorCaret;
+    const reloaded = await reloadCurrentProjectFromDisk();
+    if (!reloaded || !previousCaret) {
+      return reloaded;
+    }
+
+    window.setTimeout(() => {
+      const editor = editorRef.current;
+      if (!editor) {
+        return;
+      }
+      editor.setPosition(previousCaret);
+      editor.revealPositionInCenter(previousCaret);
+    }, 0);
+
+    return reloaded;
+  }, [editorCaret, editorRef, reloadCurrentProjectFromDisk]);
+
+  const {
+    reloadFromDiskDialogOpen,
+    onReloadFromDiskDialogOpenChange,
+    confirmReloadFromDisk,
+    ignoreReloadFromDisk,
+    markDiskSnapshotCurrent
+  } = useProjectDiskReload({
+    projectPath,
+    projectStorageMode,
+    packedArchivePath,
+    busy,
+    hasPendingProjectChanges,
+    reloadCurrentProjectFromDisk: reloadCurrentProjectFromDiskWithCaret,
+    setStatus,
+    formatStatus
+  });
+
+  useEffect(() => {
+    markDiskSnapshotCurrentRef.current = markDiskSnapshotCurrent;
+  }, [markDiskSnapshotCurrent]);
+
   const appMenuState = useAppMenuState({
     busy,
     hasPendingProjectChanges,
@@ -583,6 +632,16 @@ export default function AppContainer({
     setLeftPanelViewMode
   });
 
+  const handleSaveAndRefreshDiskSnapshot = useCallback(async () => {
+    await handleSave();
+    await markDiskSnapshotCurrent();
+  }, [handleSave, markDiskSnapshotCurrent]);
+
+  const handleSaveAsAndRefreshDiskSnapshot = useCallback(async () => {
+    await handleSaveAs();
+    await markDiskSnapshotCurrent();
+  }, [handleSaveAs, markDiskSnapshotCurrent]);
+
   const {
     confirmProjectActionOpen,
     pendingProjectAction,
@@ -602,8 +661,8 @@ export default function AppContainer({
     handleOpenProject,
     handleOpenFolderProject,
     handleNewProject,
-    handleSave,
-    handleSaveAs,
+    handleSave: handleSaveAndRefreshDiskSnapshot,
+    handleSaveAs: handleSaveAsAndRefreshDiskSnapshot,
     handleZoomIn,
     handleZoomOut,
     handleZoomReset
@@ -850,6 +909,10 @@ export default function AppContainer({
         onConfirmProjectActionOpenChange={onConfirmProjectActionOpenChange}
         canConfirmProjectAction={Boolean(pendingProjectAction)}
         onConfirmProjectAction={confirmProjectAction}
+        reloadFromDiskDialogOpen={reloadFromDiskDialogOpen}
+        onReloadFromDiskDialogOpenChange={onReloadFromDiskDialogOpenChange}
+        onConfirmReloadFromDisk={confirmReloadFromDisk}
+        onIgnoreReloadFromDisk={ignoreReloadFromDisk}
         methodReturnOpen={methodReturnOpen}
         onMethodReturnOpenChange={handleMethodReturnOpenChange}
         methodReturnLabel={methodReturnLabel}

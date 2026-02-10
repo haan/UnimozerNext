@@ -168,6 +168,48 @@ pub fn open_packed_project(
 }
 
 #[tauri::command]
+pub fn reload_packed_project_in_place(
+    archive_path: String,
+    project_root: String,
+) -> CommandResult<OpenPackedProjectResponse> {
+    let archive_input = PathBuf::from(&archive_path);
+    if !archive_input.exists() {
+        return Err("Project file not found".to_string());
+    }
+    if !archive_input.is_file() {
+        return Err("Project file path is not a file".to_string());
+    }
+
+    let canonical_archive = fs::canonicalize(&archive_input).unwrap_or(archive_input);
+    let archive_file = fs::File::open(&canonical_archive).map_err(to_command_error)?;
+    let mut archive = ZipArchive::new(archive_file).map_err(to_command_error)?;
+    if archive.len() == 0 {
+        return Err("Project archive is empty".to_string());
+    }
+
+    let project_name = read_single_top_level_project_name(&mut archive)?;
+    let current_project_root = PathBuf::from(project_root);
+    let workspace_dir = current_project_root
+        .parent()
+        .ok_or_else(|| "Current project workspace is invalid".to_string())?
+        .to_path_buf();
+    prepare_fixed_workspace_dir(&workspace_dir)?;
+    extract_archive_to_workspace(&mut archive, &workspace_dir)?;
+
+    let next_project_root = workspace_dir.join(&project_name);
+    if !next_project_root.is_dir() {
+        return Err("Archive top-level project folder could not be extracted".to_string());
+    }
+
+    Ok(OpenPackedProjectResponse {
+        archive_path: canonical_archive.to_string_lossy().to_string(),
+        workspace_dir: workspace_dir.to_string_lossy().to_string(),
+        project_root: next_project_root.to_string_lossy().to_string(),
+        project_name,
+    })
+}
+
+#[tauri::command]
 pub fn create_scratch_project(app: AppHandle) -> CommandResult<OpenScratchProjectResponse> {
     let workspace_root = scratch_workspace_root(&app)?;
     let project_name = SCRATCH_PROJECT_DIR_NAME.to_string();
