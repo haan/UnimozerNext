@@ -1,0 +1,150 @@
+name: Windows Build (Manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build (branch, tag, or commit SHA)
+        required: false
+        default: main
+      publish_release:
+        description: Override and publish GitHub release for this run
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    env:
+      TEMURIN_WIN_X64_ZIP_URL: ${{ vars.TEMURIN_WIN_X64_ZIP_URL }}
+      TEMURIN_WIN_X64_SHA256: ${{ vars.TEMURIN_WIN_X64_SHA256 }}
+      JDTLS_WIN_DIST_URL: ${{ vars.JDTLS_WIN_DIST_URL }}
+      JDTLS_WIN_DIST_SHA256: ${{ vars.JDTLS_WIN_DIST_SHA256 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java (for bridge builds)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore resource archive cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/temurin
+            .cache/jdtls
+          key: windows-resources-${{ env.TEMURIN_WIN_X64_SHA256 }}-${{ env.JDTLS_WIN_DIST_SHA256 }}
+
+      - name: Validate required variables
+        shell: pwsh
+        run: |
+          $required = @(
+            "TEMURIN_WIN_X64_ZIP_URL",
+            "TEMURIN_WIN_X64_SHA256",
+            "JDTLS_WIN_DIST_URL",
+            "JDTLS_WIN_DIST_SHA256"
+          )
+          foreach ($name in $required) {
+            $value = (Get-Item "env:$name").Value
+            if ([string]::IsNullOrWhiteSpace($value)) {
+              throw "Missing required Actions variable: $name"
+            }
+          }
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Java parser bridge
+        run: npm run build:parser
+
+      - name: Build JShell bridge
+        run: npm run build:jshell
+
+      - name: Prepare bundled JDK and JDTLS resources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          New-Item -ItemType Directory -Force -Path ".cache/temurin" | Out-Null
+          New-Item -ItemType Directory -Force -Path ".cache/jdtls" | Out-Null
+
+          $temurinArchive = ".cache/temurin/temurin-win-x64.zip"
+          if (!(Test-Path $temurinArchive)) {
+            Invoke-WebRequest -Uri "$env:TEMURIN_WIN_X64_ZIP_URL" -OutFile $temurinArchive
+          }
+          $temurinHash = (Get-FileHash $temurinArchive -Algorithm SHA256).Hash.ToLower()
+          if ($temurinHash -ne "$env:TEMURIN_WIN_X64_SHA256".ToLower()) {
+            throw "Temurin SHA256 mismatch: expected $env:TEMURIN_WIN_X64_SHA256, got $temurinHash"
+          }
+
+          $jdtlsArchive = ".cache/jdtls/jdtls.tar.gz"
+          if (!(Test-Path $jdtlsArchive)) {
+            Invoke-WebRequest -Uri "$env:JDTLS_WIN_DIST_URL" -OutFile $jdtlsArchive
+          }
+          $jdtlsHash = (Get-FileHash $jdtlsArchive -Algorithm SHA256).Hash.ToLower()
+          if ($jdtlsHash -ne "$env:JDTLS_WIN_DIST_SHA256".ToLower()) {
+            throw "JDTLS SHA256 mismatch: expected $env:JDTLS_WIN_DIST_SHA256, got $jdtlsHash"
+          }
+
+          $jdkTarget = "resources/jdk/win-x64"
+          if (Test-Path $jdkTarget) { Remove-Item -Recurse -Force $jdkTarget }
+          New-Item -ItemType Directory -Force -Path $jdkTarget | Out-Null
+          $jdkExtract = ".cache/temurin/extracted"
+          if (Test-Path $jdkExtract) { Remove-Item -Recurse -Force $jdkExtract }
+          Expand-Archive -Path $temurinArchive -DestinationPath $jdkExtract -Force
+          $jdkRoot = Get-ChildItem -Path $jdkExtract -Directory | Select-Object -First 1
+          if ($null -eq $jdkRoot) { throw "Could not find extracted JDK directory" }
+          Copy-Item -Path (Join-Path $jdkRoot.FullName "*") -Destination $jdkTarget -Recurse -Force
+
+          $jdtlsTarget = "resources/jdtls"
+          if (Test-Path $jdtlsTarget) { Remove-Item -Recurse -Force $jdtlsTarget }
+          New-Item -ItemType Directory -Force -Path $jdtlsTarget | Out-Null
+          tar -xzf $jdtlsArchive -C $jdtlsTarget
+
+          foreach ($requiredDir in @("plugins", "config_win", "features")) {
+            if (!(Test-Path (Join-Path $jdtlsTarget $requiredDir))) {
+              throw "JDTLS archive missing expected directory: $requiredDir"
+            }
+          }
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Tauri installers (MSI, NSIS)
+        run: npx tauri build --ci --bundles msi,nsis --config src-tauri/tauri.windows.conf.json
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: ${{ vars.PUBLISH_GH_RELEASE == 'true' || github.event.inputs.publish_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
