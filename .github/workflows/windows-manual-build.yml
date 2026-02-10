@@ -89,29 +89,39 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
+          Write-Host "[resources] Preparing bundled JDK and JDTLS resources..."
 
           New-Item -ItemType Directory -Force -Path ".cache/temurin" | Out-Null
           New-Item -ItemType Directory -Force -Path ".cache/jdtls" | Out-Null
 
           $temurinArchive = ".cache/temurin/temurin-win-x64.zip"
           if (!(Test-Path $temurinArchive)) {
+            Write-Host "[resources] Temurin archive cache miss; downloading from URL."
             Invoke-WebRequest -Uri "$env:TEMURIN_WIN_X64_ZIP_URL" -OutFile $temurinArchive
+          } else {
+            Write-Host "[resources] Temurin archive cache hit: $temurinArchive"
           }
           $temurinHash = (Get-FileHash $temurinArchive -Algorithm SHA256).Hash.ToLower()
           if ($temurinHash -ne "$env:TEMURIN_WIN_X64_SHA256".ToLower()) {
             throw "Temurin SHA256 mismatch: expected $env:TEMURIN_WIN_X64_SHA256, got $temurinHash"
           }
+          Write-Host "[resources] Temurin SHA256 verified."
 
           $jdtlsArchive = ".cache/jdtls/jdtls.tar.gz"
           if (!(Test-Path $jdtlsArchive)) {
+            Write-Host "[resources] JDTLS archive cache miss; downloading from URL."
             Invoke-WebRequest -Uri "$env:JDTLS_WIN_DIST_URL" -OutFile $jdtlsArchive
+          } else {
+            Write-Host "[resources] JDTLS archive cache hit: $jdtlsArchive"
           }
           $jdtlsHash = (Get-FileHash $jdtlsArchive -Algorithm SHA256).Hash.ToLower()
           if ($jdtlsHash -ne "$env:JDTLS_WIN_DIST_SHA256".ToLower()) {
             throw "JDTLS SHA256 mismatch: expected $env:JDTLS_WIN_DIST_SHA256, got $jdtlsHash"
           }
+          Write-Host "[resources] JDTLS SHA256 verified."
 
           $jdkTarget = "resources/jdk/win-x64"
+          Write-Host "[resources] Extracting JDK into $jdkTarget"
           if (Test-Path $jdkTarget) { Remove-Item -Recurse -Force $jdkTarget }
           New-Item -ItemType Directory -Force -Path $jdkTarget | Out-Null
           $jdkExtract = ".cache/temurin/extracted"
@@ -120,17 +130,22 @@ jobs:
           $jdkRoot = Get-ChildItem -Path $jdkExtract -Directory | Select-Object -First 1
           if ($null -eq $jdkRoot) { throw "Could not find extracted JDK directory" }
           Copy-Item -Path (Join-Path $jdkRoot.FullName "*") -Destination $jdkTarget -Recurse -Force
+          Write-Host "[resources] JDK extracted successfully."
 
           $jdtlsTarget = "resources/jdtls"
+          Write-Host "[resources] Extracting JDTLS into $jdtlsTarget"
           if (Test-Path $jdtlsTarget) { Remove-Item -Recurse -Force $jdtlsTarget }
           New-Item -ItemType Directory -Force -Path $jdtlsTarget | Out-Null
           tar -xzf $jdtlsArchive -C $jdtlsTarget
+          Write-Host "[resources] JDTLS extracted successfully."
 
           foreach ($requiredDir in @("plugins", "config_win", "features")) {
             if (!(Test-Path (Join-Path $jdtlsTarget $requiredDir))) {
               throw "JDTLS archive missing expected directory: $requiredDir"
             }
+            Write-Host "[resources] Verified JDTLS directory: $requiredDir"
           }
+          Write-Host "[resources] Resource preparation complete."
 
       - name: Build frontend
         run: npm run build
