@@ -87,14 +87,14 @@ jobs:
         shell: pwsh
         run: |
           Push-Location java-parser
-          gradle copyBridgeJar --no-daemon
+          gradle copyBridgeJar --no-daemon --rerun-tasks
           Pop-Location
 
       - name: Build JShell bridge
         shell: pwsh
         run: |
           Push-Location jshell-bridge
-          gradle copyBridgeJar --no-daemon
+          gradle copyBridgeJar --no-daemon --rerun-tasks
           Pop-Location
 
       - name: Stop Gradle daemons
@@ -163,8 +163,36 @@ jobs:
           }
           Write-Host "[resources] Resource preparation complete."
 
+      - name: Clean cached bundle intermediates
+        shell: pwsh
+        run: |
+          Remove-Item -Recurse -Force "src-tauri/target/release/wix" -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force "src-tauri/target/release/bundle" -ErrorAction SilentlyContinue
+
       - name: Build Tauri installers (MSI, NSIS)
-        run: npx tauri build --ci --bundles msi,nsis --config src-tauri/tauri.windows.conf.json
+        env:
+          RUST_LOG: tauri_bundler=trace
+          RUST_BACKTRACE: "1"
+        run: npx tauri build --ci --bundles "msi,nsis" --config src-tauri/tauri.windows.conf.json
+
+      - name: Dump WiX debug files on failure
+        if: failure()
+        shell: pwsh
+        run: |
+          Write-Host "[debug] Listing WiX output directory..."
+          if (Test-Path "src-tauri/target/release/wix") {
+            Get-ChildItem -Recurse "src-tauri/target/release/wix" | Select-Object FullName, Length
+          } else {
+            Write-Host "[debug] No WiX directory found."
+          }
+          if (Test-Path "src-tauri/target/release/wix/x64/main.wxs") {
+            Write-Host "[debug] First 250 lines of main.wxs:"
+            Get-Content "src-tauri/target/release/wix/x64/main.wxs" -TotalCount 250
+          }
+          if (Test-Path "src-tauri/windows/fragments/umz-association.wxs") {
+            Write-Host "[debug] Fragment used:"
+            Get-Content "src-tauri/windows/fragments/umz-association.wxs"
+          }
 
       - name: Upload installer artifacts
         uses: actions/upload-artifact@v4
