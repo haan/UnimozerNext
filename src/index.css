@@ -97,103 +97,191 @@ body,
   display: none !important;
 }
 
-.monaco-editor .editor-scope-depth-0,
-.monaco-editor .editor-scope-depth-1,
-.monaco-editor .editor-scope-depth-2,
-.monaco-editor .editor-scope-depth-3,
-.monaco-editor .editor-scope-depth-4,
-.monaco-editor .editor-scope-depth-5,
-.monaco-editor .view-line .editor-scope-depth-0,
-.monaco-editor .view-line .editor-scope-depth-1,
-.monaco-editor .view-line .editor-scope-depth-2,
-.monaco-editor .view-line .editor-scope-depth-3,
-.monaco-editor .view-line .editor-scope-depth-4,
-.monaco-editor .view-line .editor-scope-depth-5 {
-  border-radius: 4px;
+.monaco-editor {
+  --scope-indent-step: 4ch;
+  --scope-bg-1: #bfe8c5;
+  --scope-bg-2: #f3edb2;
+  --scope-bg-3: #c9bdf0;
+  --scope-bg-4: #e9b4df;
+  --scope-bg-5: #bcc9f2;
+  --scope-bg-6: #f1cfaf;
+  --scope-selection-bg: #9ec3ff;
 }
 
-.monaco-editor .editor-scope-depth-0,
-.monaco-editor .view-line .editor-scope-depth-0 {
-  background-color: rgba(81, 133, 214, 0.12);
-  box-shadow: inset 2px 0 0 rgba(55, 111, 197, 0.35);
+.monaco-editor.vs-dark,
+.monaco-editor.hc-black {
+  --scope-bg-1: #355a40;
+  --scope-bg-2: #706835;
+  --scope-bg-3: #5e4f86;
+  --scope-bg-4: #7f5074;
+  --scope-bg-5: #556596;
+  --scope-bg-6: #84664a;
+  --scope-selection-bg: #5f86d1;
 }
 
-.monaco-editor .editor-scope-depth-1,
-.monaco-editor .view-line .editor-scope-depth-1 {
-  background-color: rgba(60, 170, 155, 0.12);
-  box-shadow: inset 2px 0 0 rgba(42, 138, 124, 0.35);
+.monaco-editor .editor-scope-line,
+.monaco-editor .view-line .editor-scope-line {
+  border-radius: 0;
+  background-color: var(--scope-fill-color, transparent);
+  background-image: var(--scope-stripes, none);
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
 }
 
-.monaco-editor .editor-scope-depth-2,
-.monaco-editor .view-line .editor-scope-depth-2 {
-  background-color: rgba(134, 176, 84, 0.12);
-  box-shadow: inset 2px 0 0 rgba(104, 145, 56, 0.35);
+.scope-highlighting-enabled .monaco-editor .focused .selected-text,
+.scope-highlighting-enabled .monaco-editor .selected-text,
+.scope-highlighting-enabled .monaco-editor .selected-text.inline-selected-text,
+.scope-highlighting-enabled .monaco-editor .view-overlays .selected-text,
+.scope-highlighting-enabled .monaco-editor .view-overlays .selected-text.inline-selected-text,
+.scope-highlighting-enabled .monaco-editor .editor-scope-line .selected-text,
+.scope-highlighting-enabled .monaco-editor .view-line .editor-scope-line .selected-text {
+  background-color: transparent !important;
 }
 
-.monaco-editor .editor-scope-depth-3,
-.monaco-editor .view-line .editor-scope-depth-3 {
-  background-color: rgba(224, 174, 67, 0.13);
-  box-shadow: inset 2px 0 0 rgba(192, 142, 40, 0.35);
+.scope-highlighting-enabled .monaco-editor .editor-scope-active-selection,
+.scope-highlighting-enabled .monaco-editor .view-line .editor-scope-active-selection,
+.scope-highlighting-enabled .monaco-editor .view-overlays .editor-scope-active-selection {
+  background-color: var(--scope-selection-bg) !important;
+  box-shadow:
+    0 -1px 0 var(--scope-selection-bg),
+    0 1px 0 var(--scope-selection-bg) !important;
+  mix-blend-mode: normal !important;
 }
 
-.monaco-editor .editor-scope-depth-4,
-.monaco-editor .view-line .editor-scope-depth-4 {
-  background-color: rgba(220, 114, 157, 0.12);
-  box-shadow: inset 2px 0 0 rgba(186, 83, 126, 0.34);
+.monaco-editor .editor-scope-fill-0,
+.monaco-editor .view-line .editor-scope-fill-0 {
+  --scope-fill-color: transparent;
 }
 
-.monaco-editor .editor-scope-depth-5,
-.monaco-editor .view-line .editor-scope-depth-5 {
-  background-color: rgba(154, 129, 224, 0.12);
-  box-shadow: inset 2px 0 0 rgba(125, 101, 198, 0.34);
+.monaco-editor .editor-scope-fill-1,
+.monaco-editor .view-line .editor-scope-fill-1 {
+  --scope-fill-color: var(--scope-bg-1);
 }
 
-.monaco-editor.vs-dark .editor-scope-depth-0,
-.monaco-editor.hc-black .editor-scope-depth-0,
-.monaco-editor.vs-dark .view-line .editor-scope-depth-0,
-.monaco-editor.hc-black .view-line .editor-scope-depth-0 {
-  background-color: rgba(66, 120, 197, 0.24);
-  box-shadow: inset 2px 0 0 rgba(137, 182, 255, 0.45);
+.monaco-editor .editor-scope-fill-2,
+.monaco-editor .view-line .editor-scope-fill-2 {
+  --scope-fill-color: var(--scope-bg-2);
 }
 
-.monaco-editor.vs-dark .editor-scope-depth-1,
-.monaco-editor.hc-black .editor-scope-depth-1,
-.monaco-editor.vs-dark .view-line .editor-scope-depth-1,
-.monaco-editor.hc-black .view-line .editor-scope-depth-1 {
-  background-color: rgba(46, 145, 130, 0.24);
-  box-shadow: inset 2px 0 0 rgba(117, 215, 197, 0.45);
+.monaco-editor .editor-scope-fill-3,
+.monaco-editor .view-line .editor-scope-fill-3 {
+  --scope-fill-color: var(--scope-bg-3);
 }
 
-.monaco-editor.vs-dark .editor-scope-depth-2,
-.monaco-editor.hc-black .editor-scope-depth-2,
-.monaco-editor.vs-dark .view-line .editor-scope-depth-2,
-.monaco-editor.hc-black .view-line .editor-scope-depth-2 {
-  background-color: rgba(93, 138, 58, 0.24);
-  box-shadow: inset 2px 0 0 rgba(168, 212, 132, 0.45);
+.monaco-editor .editor-scope-fill-4,
+.monaco-editor .view-line .editor-scope-fill-4 {
+  --scope-fill-color: var(--scope-bg-4);
 }
 
-.monaco-editor.vs-dark .editor-scope-depth-3,
-.monaco-editor.hc-black .editor-scope-depth-3,
-.monaco-editor.vs-dark .view-line .editor-scope-depth-3,
-.monaco-editor.hc-black .view-line .editor-scope-depth-3 {
-  background-color: rgba(161, 122, 48, 0.26);
-  box-shadow: inset 2px 0 0 rgba(232, 193, 118, 0.46);
+.monaco-editor .editor-scope-fill-5,
+.monaco-editor .view-line .editor-scope-fill-5 {
+  --scope-fill-color: var(--scope-bg-5);
 }
 
-.monaco-editor.vs-dark .editor-scope-depth-4,
-.monaco-editor.hc-black .editor-scope-depth-4,
-.monaco-editor.vs-dark .view-line .editor-scope-depth-4,
-.monaco-editor.hc-black .view-line .editor-scope-depth-4 {
-  background-color: rgba(150, 69, 103, 0.24);
-  box-shadow: inset 2px 0 0 rgba(221, 141, 176, 0.45);
+.monaco-editor .editor-scope-fill-6,
+.monaco-editor .view-line .editor-scope-fill-6 {
+  --scope-fill-color: var(--scope-bg-6);
 }
 
-.monaco-editor.vs-dark .editor-scope-depth-5,
-.monaco-editor.hc-black .editor-scope-depth-5,
-.monaco-editor.vs-dark .view-line .editor-scope-depth-5,
-.monaco-editor.hc-black .view-line .editor-scope-depth-5 {
-  background-color: rgba(101, 85, 170, 0.24);
-  box-shadow: inset 2px 0 0 rgba(174, 157, 238, 0.45);
+.monaco-editor .editor-scope-stripes-0,
+.monaco-editor .view-line .editor-scope-stripes-0 {
+  --scope-stripes: none;
+}
+
+.monaco-editor .editor-scope-stripes-1,
+.monaco-editor .view-line .editor-scope-stripes-1 {
+  --scope-stripes: linear-gradient(
+    90deg,
+    var(--scope-bg-1) 0,
+    var(--scope-bg-1) calc(var(--scope-indent-step) * 1),
+    transparent calc(var(--scope-indent-step) * 1),
+    transparent 100%
+  );
+}
+
+.monaco-editor .editor-scope-stripes-2,
+.monaco-editor .view-line .editor-scope-stripes-2 {
+  --scope-stripes: linear-gradient(
+    90deg,
+    var(--scope-bg-1) 0,
+    var(--scope-bg-1) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 2),
+    transparent calc(var(--scope-indent-step) * 2),
+    transparent 100%
+  );
+}
+
+.monaco-editor .editor-scope-stripes-3,
+.monaco-editor .view-line .editor-scope-stripes-3 {
+  --scope-stripes: linear-gradient(
+    90deg,
+    var(--scope-bg-1) 0,
+    var(--scope-bg-1) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 3),
+    transparent calc(var(--scope-indent-step) * 3),
+    transparent 100%
+  );
+}
+
+.monaco-editor .editor-scope-stripes-4,
+.monaco-editor .view-line .editor-scope-stripes-4 {
+  --scope-stripes: linear-gradient(
+    90deg,
+    var(--scope-bg-1) 0,
+    var(--scope-bg-1) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 3),
+    var(--scope-bg-4) calc(var(--scope-indent-step) * 3),
+    var(--scope-bg-4) calc(var(--scope-indent-step) * 4),
+    transparent calc(var(--scope-indent-step) * 4),
+    transparent 100%
+  );
+}
+
+.monaco-editor .editor-scope-stripes-5,
+.monaco-editor .view-line .editor-scope-stripes-5 {
+  --scope-stripes: linear-gradient(
+    90deg,
+    var(--scope-bg-1) 0,
+    var(--scope-bg-1) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 3),
+    var(--scope-bg-4) calc(var(--scope-indent-step) * 3),
+    var(--scope-bg-4) calc(var(--scope-indent-step) * 4),
+    var(--scope-bg-5) calc(var(--scope-indent-step) * 4),
+    var(--scope-bg-5) calc(var(--scope-indent-step) * 5),
+    transparent calc(var(--scope-indent-step) * 5),
+    transparent 100%
+  );
+}
+
+.monaco-editor .editor-scope-stripes-6,
+.monaco-editor .view-line .editor-scope-stripes-6 {
+  --scope-stripes: linear-gradient(
+    90deg,
+    var(--scope-bg-1) 0,
+    var(--scope-bg-1) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 1),
+    var(--scope-bg-2) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 2),
+    var(--scope-bg-3) calc(var(--scope-indent-step) * 3),
+    var(--scope-bg-4) calc(var(--scope-indent-step) * 3),
+    var(--scope-bg-4) calc(var(--scope-indent-step) * 4),
+    var(--scope-bg-5) calc(var(--scope-indent-step) * 4),
+    var(--scope-bg-5) calc(var(--scope-indent-step) * 5),
+    var(--scope-bg-6) calc(var(--scope-indent-step) * 5),
+    var(--scope-bg-6) calc(var(--scope-indent-step) * 6),
+    transparent calc(var(--scope-indent-step) * 6),
+    transparent 100%
+  );
 }
 
 .editor-separator-handle {

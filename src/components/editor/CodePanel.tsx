@@ -1,6 +1,7 @@
 import MonacoEditor from "@monaco-editor/react";
 import type { editor as MonacoEditorType } from "monaco-editor";
 import { memo, useCallback, useEffect, useRef } from "react";
+import type { CSSProperties } from "react";
 
 import { registerMonacoThemes, resolveMonacoTheme } from "../../services/monacoThemes";
 
@@ -34,16 +35,55 @@ type Disposable = { dispose: () => void };
 
 const SCOPE_COLOR_COUNT = 6;
 
-const computeScopeDepthPerLine = (source: string): number[] => {
-  const depths: number[] = [0];
+type ScopeLineInfo = {
+  startDepth: number;
+  leadingCloseCount: number;
+  openCount: number;
+  closeCount: number;
+  hasCodeToken: boolean;
+  hasCommentToken: boolean;
+};
+
+type SelectionLike = {
+  selectionStartLineNumber: number;
+  selectionStartColumn: number;
+  positionLineNumber: number;
+  positionColumn: number;
+};
+
+const SCOPE_STRUCTURAL_INSERT_PATTERN = /[{}"'\/\\*\r\n]/;
+
+const computeScopeLineInfo = (source: string): ScopeLineInfo[] => {
+  const lines: ScopeLineInfo[] = [];
   let depth = 0;
-  let lineIndex = 0;
+  let line: ScopeLineInfo = {
+    startDepth: 0,
+    leadingCloseCount: 0,
+    openCount: 0,
+    closeCount: 0,
+    hasCodeToken: false,
+    hasCommentToken: false
+  };
+  let leadingPhase = true;
   let inLineComment = false;
   let inBlockComment = false;
   let inString = false;
   let inChar = false;
   let inTextBlock = false;
   let escaped = false;
+
+  const pushLine = () => {
+    lines.push(line);
+    line = {
+      startDepth: depth,
+      leadingCloseCount: 0,
+      openCount: 0,
+      closeCount: 0,
+      hasCodeToken: false,
+      hasCommentToken: false
+    };
+    leadingPhase = true;
+  };
 
   for (let index = 0; index < source.length; index += 1) {
     const char = source[index] ?? "";
@@ -55,23 +95,23 @@ const computeScopeDepthPerLine = (source: string): number[] => {
     }
 
     if (inLineComment) {
+      line.hasCommentToken = true;
       if (char === "\n") {
         inLineComment = false;
-        lineIndex += 1;
-        depths[lineIndex] = depth;
+        pushLine();
       }
       continue;
     }
 
     if (inBlockComment) {
+      line.hasCommentToken = true;
       if (char === "*" && next === "/") {
         inBlockComment = false;
         index += 1;
         continue;
       }
       if (char === "\n") {
-        lineIndex += 1;
-        depths[lineIndex] = depth;
+        pushLine();
       }
       continue;
     }
@@ -83,8 +123,7 @@ const computeScopeDepthPerLine = (source: string): number[] => {
         continue;
       }
       if (char === "\n") {
-        lineIndex += 1;
-        depths[lineIndex] = depth;
+        pushLine();
       }
       continue;
     }
@@ -98,8 +137,7 @@ const computeScopeDepthPerLine = (source: string): number[] => {
         inString = false;
       }
       if (char === "\n") {
-        lineIndex += 1;
-        depths[lineIndex] = depth;
+        pushLine();
       }
       continue;
     }
@@ -113,75 +151,296 @@ const computeScopeDepthPerLine = (source: string): number[] => {
         inChar = false;
       }
       if (char === "\n") {
-        lineIndex += 1;
-        depths[lineIndex] = depth;
+        pushLine();
       }
       continue;
     }
 
     if (char === "/" && next === "/") {
+      line.hasCommentToken = true;
+      leadingPhase = false;
       inLineComment = true;
       index += 1;
       continue;
     }
     if (char === "/" && next === "*") {
+      line.hasCommentToken = true;
+      leadingPhase = false;
       inBlockComment = true;
       index += 1;
       continue;
     }
     if (char === '"' && next === '"' && nextNext === '"') {
+      leadingPhase = false;
       inTextBlock = true;
       index += 2;
       continue;
     }
     if (char === '"') {
+      leadingPhase = false;
       inString = true;
       continue;
     }
     if (char === "'") {
+      leadingPhase = false;
       inChar = true;
       continue;
     }
+    if (char === " " || char === "\t") {
+      continue;
+    }
     if (char === "{") {
+      line.hasCodeToken = true;
+      line.openCount += 1;
+      leadingPhase = false;
       depth += 1;
       continue;
     }
     if (char === "}") {
+      line.hasCodeToken = true;
+      line.closeCount += 1;
+      if (leadingPhase) {
+        line.leadingCloseCount += 1;
+      } else {
+        leadingPhase = false;
+      }
       depth = Math.max(0, depth - 1);
       continue;
     }
     if (char === "\n") {
-      lineIndex += 1;
-      depths[lineIndex] = depth;
+      pushLine();
+      continue;
     }
+    line.hasCodeToken = true;
+    leadingPhase = false;
   }
 
-  return depths;
+  lines.push(line);
+  return lines;
 };
 
 const createScopeDecorations = (
   monaco: typeof import("monaco-editor"),
   model: MonacoEditorType.ITextModel
 ): MonacoEditorType.IModelDeltaDecoration[] => {
-  const scopeDepthByLine = computeScopeDepthPerLine(model.getValue());
+  const scopeLineInfo = computeScopeLineInfo(model.getValue());
   const lineCount = model.getLineCount();
+  const lineTexts = Array.from({ length: lineCount }, (_, index) =>
+    model.getLineContent(index + 1)
+  );
+  const stripeDepths: number[] = new Array(lineCount).fill(0);
+  const fillDepths: number[] = new Array(lineCount).fill(0);
   const decorations: MonacoEditorType.IModelDeltaDecoration[] = [];
 
   for (let lineNumber = 1; lineNumber <= lineCount; lineNumber += 1) {
-    const scopeDepth = scopeDepthByLine[lineNumber - 1] ?? 0;
-    if (scopeDepth <= 0) {
+    const info = scopeLineInfo[lineNumber - 1] ?? {
+      startDepth: 0,
+      leadingCloseCount: 0,
+      openCount: 0,
+      closeCount: 0,
+      hasCodeToken: false,
+      hasCommentToken: false
+    };
+    const effectiveDepth = Math.max(0, info.startDepth - info.leadingCloseCount);
+    stripeDepths[lineNumber - 1] = Math.min(effectiveDepth, SCOPE_COLOR_COUNT);
+
+    let fillDepth = 0;
+    if (info.openCount > 0) {
+      fillDepth = Math.min(effectiveDepth + 1, SCOPE_COLOR_COUNT);
+    } else if (info.leadingCloseCount > 0) {
+      fillDepth = Math.min(info.startDepth, SCOPE_COLOR_COUNT);
+    }
+    fillDepths[lineNumber - 1] = fillDepth;
+  }
+
+  const resolveFollowingBlockFillDepth = (lineNumber: number): number => {
+    for (let scanLine = lineNumber + 1; scanLine <= lineCount; scanLine += 1) {
+      const trimmed = lineTexts[scanLine - 1]?.trim() ?? "";
+      if (trimmed.length === 0) {
+        continue;
+      }
+      if (
+        trimmed.startsWith("//") ||
+        trimmed.startsWith("/*") ||
+        trimmed.startsWith("*") ||
+        trimmed.startsWith("*/")
+      ) {
+        continue;
+      }
+      if (trimmed.startsWith("}")) {
+        return 0;
+      }
+      const info = scopeLineInfo[scanLine - 1];
+      if (info && info.openCount > 0) {
+        const effectiveDepth = Math.max(0, info.startDepth - info.leadingCloseCount);
+        return Math.min(effectiveDepth + 1, SCOPE_COLOR_COUNT);
+      }
+      if (trimmed.includes(";")) {
+        return 0;
+      }
+    }
+    return 0;
+  };
+
+  for (let lineNumber = 1; lineNumber <= lineCount; lineNumber += 1) {
+    const info = scopeLineInfo[lineNumber - 1];
+    if (!info) {
+      continue;
+    }
+    if (fillDepths[lineNumber - 1] !== 0) {
+      continue;
+    }
+    if (!info.hasCommentToken || info.hasCodeToken) {
+      continue;
+    }
+    const effectiveDepth = Math.max(0, info.startDepth - info.leadingCloseCount);
+    if (effectiveDepth > 0) {
+      fillDepths[lineNumber - 1] = Math.min(effectiveDepth, SCOPE_COLOR_COUNT);
+      continue;
+    }
+    fillDepths[lineNumber - 1] = resolveFollowingBlockFillDepth(lineNumber);
+  }
+
+  let javadocStartLine: number | null = null;
+  for (let lineNumber = 1; lineNumber <= lineCount; lineNumber += 1) {
+    const trimmed = lineTexts[lineNumber - 1]?.trim() ?? "";
+    if (javadocStartLine === null) {
+      if (!trimmed.startsWith("/**")) {
+        continue;
+      }
+      javadocStartLine = lineNumber;
+    }
+    if (!trimmed.includes("*/")) {
+      continue;
+    }
+    const blockFillDepth = resolveFollowingBlockFillDepth(lineNumber);
+    if (blockFillDepth > 0 && javadocStartLine !== null) {
+      for (
+        let javadocLine = javadocStartLine;
+        javadocLine <= lineNumber;
+        javadocLine += 1
+      ) {
+        fillDepths[javadocLine - 1] = blockFillDepth;
+      }
+    }
+    javadocStartLine = null;
+  }
+
+  for (let lineNumber = 1; lineNumber <= lineCount; lineNumber += 1) {
+    const stripeDepth = stripeDepths[lineNumber - 1] ?? 0;
+    const fillDepth = fillDepths[lineNumber - 1] ?? 0;
+    if (stripeDepth === 0 && fillDepth === 0) {
       continue;
     }
     decorations.push({
       range: new monaco.Range(lineNumber, 1, lineNumber, model.getLineMaxColumn(lineNumber)),
       options: {
         isWholeLine: true,
-        className: `editor-scope-depth-${(scopeDepth - 1) % SCOPE_COLOR_COUNT}`
+        className: `editor-scope-line editor-scope-stripes-${stripeDepth} editor-scope-fill-${fillDepth}`
       }
     });
   }
 
   return decorations;
+};
+
+const createScopeSelectionDecorations = (
+  monaco: typeof import("monaco-editor"),
+  selections: readonly SelectionLike[]
+): MonacoEditorType.IModelDeltaDecoration[] => {
+  const decorations: MonacoEditorType.IModelDeltaDecoration[] = [];
+  for (const selection of selections) {
+    let startLine = selection.selectionStartLineNumber;
+    let startColumn = selection.selectionStartColumn;
+    let endLine = selection.positionLineNumber;
+    let endColumn = selection.positionColumn;
+
+    if (startLine === endLine && startColumn === endColumn) {
+      continue;
+    }
+
+    if (startLine > endLine || (startLine === endLine && startColumn > endColumn)) {
+      [startLine, endLine] = [endLine, startLine];
+      [startColumn, endColumn] = [endColumn, startColumn];
+    }
+
+    decorations.push({
+      range: new monaco.Range(startLine, startColumn, endLine, endColumn),
+      options: {
+        inlineClassName: "editor-scope-active-selection",
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+      }
+    });
+  }
+  return decorations;
+};
+
+const shouldRefreshScopeForContentChanges = (
+  event: MonacoEditorType.IModelContentChangedEvent
+) => {
+  for (const change of event.changes) {
+    if (change.rangeLength > 0) {
+      return true;
+    }
+    if (SCOPE_STRUCTURAL_INSERT_PATTERN.test(change.text)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const collectScopeDecorationStats = (model: MonacoEditorType.ITextModel) => {
+  let scopeLineDecorations = 0;
+  let scopeSelectionDecorations = 0;
+  const decorations = model.getAllDecorations();
+  for (const decoration of decorations) {
+    const className = decoration.options.className ?? "";
+    const inlineClassName = decoration.options.inlineClassName ?? "";
+    if (className.includes("editor-scope-line")) {
+      scopeLineDecorations += 1;
+    }
+    if (inlineClassName.includes("editor-scope-active-selection")) {
+      scopeSelectionDecorations += 1;
+    }
+  }
+  return {
+    scopeLineDecorations,
+    scopeSelectionDecorations
+  };
+};
+
+const deltaModelDecorations = (
+  model: MonacoEditorType.ITextModel,
+  trackedByUri: Map<string, string[]>,
+  nextDecorations: MonacoEditorType.IModelDeltaDecoration[]
+) => {
+  const key = model.uri.toString();
+  const previous = trackedByUri.get(key) ?? [];
+  const next = model.deltaDecorations(previous, nextDecorations);
+  if (next.length > 0) {
+    trackedByUri.set(key, next);
+  } else {
+    trackedByUri.delete(key);
+  }
+  return next;
+};
+
+const clearTrackedDecorations = (
+  monaco: typeof import("monaco-editor") | null,
+  trackedByUri: Map<string, string[]>
+) => {
+  if (!monaco) {
+    trackedByUri.clear();
+    return;
+  }
+  for (const [uri, ids] of trackedByUri) {
+    const model = monaco.editor.getModel(monaco.Uri.parse(uri));
+    if (!model) {
+      continue;
+    }
+    model.deltaDecorations(ids, []);
+  }
+  trackedByUri.clear();
 };
 
 export const CodePanel = memo(
@@ -207,8 +466,10 @@ export const CodePanel = memo(
     const monacoRef = useRef<typeof import("monaco-editor") | null>(null);
     const editorRef = useRef<MonacoEditorType.IStandaloneCodeEditor | null>(null);
     const subscriptionsRef = useRef<Disposable[]>([]);
-    const scopeDecorationIdsRef = useRef<string[]>([]);
+    const scopeDecorationIdsByUriRef = useRef<Map<string, string[]>>(new Map());
+    const selectionDecorationIdsByUriRef = useRef<Map<string, string[]>>(new Map());
     const scopeRefreshFrameRef = useRef<number | null>(null);
+    const selectionRefreshFrameRef = useRef<number | null>(null);
     const lastEditorValueRef = useRef<string | null>(null);
     const resolvedTheme = resolveMonacoTheme(theme);
     const debugEnabled = Boolean(debugLogging && onDebugLog);
@@ -244,13 +505,12 @@ export const CodePanel = memo(
           window.cancelAnimationFrame(scopeRefreshFrameRef.current);
           scopeRefreshFrameRef.current = null;
         }
-        const editor = editorRef.current;
-        const model = editor?.getModel();
-        if (model) {
-          scopeDecorationIdsRef.current = model.deltaDecorations(scopeDecorationIdsRef.current, []);
-        } else {
-          scopeDecorationIdsRef.current = [];
+        if (selectionRefreshFrameRef.current !== null) {
+          window.cancelAnimationFrame(selectionRefreshFrameRef.current);
+          selectionRefreshFrameRef.current = null;
         }
+        clearTrackedDecorations(monacoRef.current, scopeDecorationIdsByUriRef.current);
+        clearTrackedDecorations(monacoRef.current, selectionDecorationIdsByUriRef.current);
         subscriptionsRef.current.forEach((subscription) => subscription.dispose());
         subscriptionsRef.current = [];
       };
@@ -303,23 +563,61 @@ export const CodePanel = memo(
             scopeRefreshFrameRef.current = null;
             const model = editor.getModel();
             if (!model) {
-              scopeDecorationIdsRef.current = [];
               return;
             }
             if (!scopeHighlighting || !monacoRef.current) {
-              scopeDecorationIdsRef.current = model.deltaDecorations(
-                scopeDecorationIdsRef.current,
+              deltaModelDecorations(
+                model,
+                scopeDecorationIdsByUriRef.current,
                 []
               );
               return;
             }
             const decorations = createScopeDecorations(monacoRef.current, model);
-            scopeDecorationIdsRef.current = model.deltaDecorations(
-              scopeDecorationIdsRef.current,
+            const ids = deltaModelDecorations(
+              model,
+              scopeDecorationIdsByUriRef.current,
               decorations
             );
             if (debugEnabled) {
-              logEvent(`scope decorations=${decorations.length}`);
+              const stats = collectScopeDecorationStats(model);
+              logEvent(
+                `scope refresh uri=${model.uri.toString()} applied=${decorations.length} tracked=${ids.length} totalScope=${stats.scopeLineDecorations}`
+              );
+            }
+          });
+        };
+
+        const refreshSelectionDecorations = () => {
+          if (selectionRefreshFrameRef.current !== null) {
+            window.cancelAnimationFrame(selectionRefreshFrameRef.current);
+          }
+          selectionRefreshFrameRef.current = window.requestAnimationFrame(() => {
+            selectionRefreshFrameRef.current = null;
+            const model = editor.getModel();
+            if (!model) {
+              return;
+            }
+            if (!scopeHighlighting || !monacoRef.current) {
+              deltaModelDecorations(
+                model,
+                selectionDecorationIdsByUriRef.current,
+                []
+              );
+              return;
+            }
+            const selections = editor.getSelections() ?? [];
+            const decorations = createScopeSelectionDecorations(monacoRef.current, selections);
+            const ids = deltaModelDecorations(
+              model,
+              selectionDecorationIdsByUriRef.current,
+              decorations
+            );
+            if (debugEnabled) {
+              const stats = collectScopeDecorationStats(model);
+              logEvent(
+                `selection refresh uri=${model.uri.toString()} applied=${decorations.length} tracked=${ids.length} totalScopeSelection=${stats.scopeSelectionDecorations}`
+              );
             }
           });
         };
@@ -327,6 +625,7 @@ export const CodePanel = memo(
         const subscriptions: Disposable[] = [
           editor.onDidChangeModel((event) => {
             refreshScopeDecorations();
+            refreshSelectionDecorations();
             if (debugEnabled) {
               logEvent(
                 `model change${event.newModelUrl ? ` -> ${event.newModelUrl.toString()}` : ""}`
@@ -334,13 +633,19 @@ export const CodePanel = memo(
             }
           }),
           editor.onDidChangeModelContent((event) => {
-            refreshScopeDecorations();
+            if (shouldRefreshScopeForContentChanges(event)) {
+              refreshScopeDecorations();
+            }
+            refreshSelectionDecorations();
             if (debugEnabled) {
               const model = editor.getModel();
               logEvent(
                 `content change (changes=${event.changes.length}) version=${model?.getVersionId() ?? "?"}`
               );
             }
+          }),
+          editor.onDidChangeCursorSelection(() => {
+            refreshSelectionDecorations();
           }),
           editor.onDidChangeCursorPosition((event) => {
             onCaretChange?.({
@@ -355,6 +660,16 @@ export const CodePanel = memo(
           })
         ];
 
+        if (monacoRef.current) {
+          subscriptions.push(
+            monacoRef.current.editor.onWillDisposeModel((disposedModel) => {
+              const key = disposedModel.uri.toString();
+              scopeDecorationIdsByUriRef.current.delete(key);
+              selectionDecorationIdsByUriRef.current.delete(key);
+            })
+          );
+        }
+
         if (debugEnabled) {
           subscriptions.push(
             editor.onDidFocusEditorText(() => {
@@ -368,6 +683,7 @@ export const CodePanel = memo(
 
         subscriptionsRef.current = subscriptions;
         refreshScopeDecorations();
+        refreshSelectionDecorations();
       },
       [debugEnabled, logEvent, onCaretChange, scopeHighlighting]
     );
@@ -381,8 +697,15 @@ export const CodePanel = memo(
       syncExternalContent(editorRef.current);
     }, [syncExternalContent]);
 
+    const scopeStyle = {
+      "--scope-indent-step": `${Math.max(1, tabSize)}ch`
+    } as CSSProperties;
+
     return (
-      <div className="flex h-full flex-col overflow-hidden">
+      <div
+        className={`flex h-full flex-col overflow-hidden${scopeHighlighting ? " scope-highlighting-enabled" : ""}`}
+        style={scopeStyle}
+      >
         <div className="flex-1 min-h-0">
           {openFile ? (
             <MonacoEditor
