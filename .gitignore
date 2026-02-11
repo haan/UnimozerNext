@@ -55,6 +55,12 @@ Thumbs.db
 # local
 *.local
 
+# Example project: keep sources/docs, ignore generated workspace files
+/examples/jshell-smoke-project/build/
+/examples/jshell-smoke-project/.project
+/examples/jshell-smoke-project/.classpath
+/examples/jshell-smoke-project/unimozer.json
+
 # icons/build output
 /src-tauri/icons/*.png
 /src-tauri/icons/*.icns

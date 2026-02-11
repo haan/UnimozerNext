@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Locale;
 
 public final class JshellBridge {
+    private static final String RESPONSE_PREFIX = "__UNIMOZER_BRIDGE__:";
     private final ObjectMapper mapper = new ObjectMapper();
     private final JShell jshell;
 
@@ -79,7 +80,7 @@ public final class JshellBridge {
                 } catch (Throwable error) {
                     response = errorResponse(error.getMessage());
                 }
-                writer.println(mapper.writeValueAsString(response));
+                writer.println(RESPONSE_PREFIX + mapper.writeValueAsString(response));
             }
         }
     }

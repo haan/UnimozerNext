@@ -116,6 +116,8 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
     request: serde_json::Value,
 ) -> Result<T, String> {
     const BRIDGE_RESPONSE_SCAN_LIMIT: usize = 512;
+    const BRIDGE_EVAL_RESPONSE_SCAN_LIMIT: usize = 50_000;
+    const BRIDGE_RESPONSE_PREFIX: &str = "__UNIMOZER_BRIDGE__:";
 
     let stderr_snapshot = || {
         if let Ok(lines) = session.stderr.lock() {
@@ -140,19 +142,26 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
         .flush()
         .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
 
-    let mut response = String::new();
+    let mut response = Vec::<u8>::new();
     let mut noise_lines: Vec<String> = Vec::new();
     let mut parsed: Option<serde_json::Value> = None;
+    let mut legacy_candidate: Option<serde_json::Value> = None;
+    let mut legacy_candidate_line: Option<String> = None;
     let command_name = request
         .get("cmd")
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
+    let scan_limit = if command_name == "eval" {
+        BRIDGE_EVAL_RESPONSE_SCAN_LIMIT
+    } else {
+        BRIDGE_RESPONSE_SCAN_LIMIT
+    };
 
-    for _ in 0..BRIDGE_RESPONSE_SCAN_LIMIT {
+    for _ in 0..scan_limit {
         response.clear();
         let bytes = session
             .stdout
-            .read_line(&mut response)
+            .read_until(b'\n', &mut response)
             .map_err(|error| format!("{}{}", error, stderr_snapshot()))?;
         if bytes == 0 {
             return Err(format!(
@@ -161,19 +170,61 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
             ));
         }
 
-        let trimmed = response.trim_end_matches(|character| character == '\r' || character == '\n');
+        let decoded = String::from_utf8_lossy(&response);
+        let trimmed =
+            decoded.trim_end_matches(|character| character == '\r' || character == '\n');
         if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Some(payload) = trimmed.strip_prefix(BRIDGE_RESPONSE_PREFIX) {
+            match serde_json::from_str::<serde_json::Value>(payload) {
+                Ok(value) => {
+                    parsed = Some(value);
+                    break;
+                }
+                Err(_) => {
+                    noise_lines.push(trimmed.to_string());
+                }
+            }
             continue;
         }
 
         match serde_json::from_str::<serde_json::Value>(trimmed) {
             Ok(value) => {
-                parsed = Some(value);
-                break;
+                let is_bridge_response = value
+                    .as_object()
+                    .and_then(|object| object.get("ok"))
+                    .is_some_and(|ok| ok.is_boolean());
+                if is_bridge_response {
+                    if command_name == "eval" {
+                        legacy_candidate_line = Some(trimmed.to_string());
+                        legacy_candidate = Some(value);
+                        noise_lines.push(trimmed.to_string());
+                        continue;
+                    }
+                    parsed = Some(value);
+                    break;
+                }
+                noise_lines.push(trimmed.to_string());
             }
             Err(_) => {
                 noise_lines.push(trimmed.to_string());
             }
+        }
+    }
+
+    if parsed.is_none() && command_name == "eval" {
+        if let Some(candidate) = legacy_candidate.take() {
+            if let Some(candidate_line) = legacy_candidate_line {
+                if let Some(position) = noise_lines
+                    .iter()
+                    .rposition(|line| line == &candidate_line)
+                {
+                    noise_lines.remove(position);
+                }
+            }
+            parsed = Some(candidate);
         }
     }
 

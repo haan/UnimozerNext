@@ -193,11 +193,15 @@ export const useJshellActions = ({
 
       const logJshellOutput = (stdout?: string | null, stderr?: string | null) => {
         const jshellTime = new Date().toLocaleTimeString();
-        if (stdout) {
-          logDebug(() => `[${jshellTime}] JShell output\n${stdout.trim()}`);
+        const trimmedStdout = stdout?.trim();
+        if (trimmedStdout) {
+          appendConsoleOutput(trimmedStdout);
+          logDebug(() => `[${jshellTime}] JShell output\n${trimmedStdout}`);
         }
-        if (stderr) {
-          logDebug(() => `[${jshellTime}] JShell error output\n${stderr.trim()}`);
+        const trimmedStderr = stderr?.trim();
+        if (trimmedStderr) {
+          appendConsoleOutput(trimmedStderr);
+          logDebug(() => `[${jshellTime}] JShell error output\n${trimmedStderr}`);
         }
       };
 
