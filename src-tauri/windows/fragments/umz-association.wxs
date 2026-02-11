@@ -10,10 +10,10 @@
           <RegistryValue Type="string" Value="Unimozer Next Project File" />
         </RegistryKey>
         <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz\DefaultIcon">
-          <RegistryValue Type="string" Value="[#Path],0" />
+          <RegistryValue Type="string" Value="[INSTALLDIR]unimozer-next.exe,0" />
         </RegistryKey>
         <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz\shell\open\command">
-          <RegistryValue Type="string" Value="&quot;[#Path]&quot; &quot;%1&quot;" />
+          <RegistryValue Type="string" Value="&quot;[INSTALLDIR]unimozer-next.exe&quot; &quot;%1&quot;" />
         </RegistryKey>
       </Component>
     </DirectoryRef>
