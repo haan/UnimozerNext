@@ -235,12 +235,8 @@ pub fn run_main(
 
     let _ = app.emit("run-start", RunStartEvent { run_id });
 
-    if let Some(stdout) = stdout {
-        spawn_output_reader(app.clone(), stdout, run_id, "stdout");
-    }
-    if let Some(stderr) = stderr {
-        spawn_output_reader(app.clone(), stderr, run_id, "stderr");
-    }
+    let mut stdout_handle = stdout.map(|pipe| spawn_output_reader(app.clone(), pipe, run_id, "stdout"));
+    let mut stderr_handle = stderr.map(|pipe| spawn_output_reader(app.clone(), pipe, run_id, "stderr"));
 
     let current_slot = state.current.clone();
     let app_handle = app.clone();
@@ -263,6 +259,13 @@ pub fn run_main(
         };
 
         if let Some(status) = status {
+            if let Some(handle) = stdout_handle.take() {
+                let _ = handle.join();
+            }
+            if let Some(handle) = stderr_handle.take() {
+                let _ = handle.join();
+            }
+
             if let Ok(mut guard) = current_slot.lock() {
                 if guard.as_ref().map(|handle| handle.id == run_id).unwrap_or(false) {
                     *guard = None;
@@ -315,17 +318,17 @@ fn spawn_output_reader<R: std::io::Read + Send + 'static>(
     reader: R,
     run_id: u64,
     stream: &str,
-) {
+) -> std::thread::JoinHandle<()> {
     let stream_name = stream.to_string();
     std::thread::spawn(move || {
         let mut buf = BufReader::new(reader);
-        let mut line = String::new();
+        let mut line = Vec::new();
         let mut buffer = String::new();
         let mut emitted_bytes: usize = 0;
         let mut truncated = false;
         loop {
             line.clear();
-            match buf.read_line(&mut line) {
+            match buf.read_until(b'\n', &mut line) {
                 Ok(0) => break,
                 Ok(_) => {
                     if emitted_bytes >= RUN_OUTPUT_MAX_EMIT_BYTES {
@@ -341,7 +344,8 @@ fn spawn_output_reader<R: std::io::Read + Send + 'static>(
                         continue;
                     }
 
-                    let trimmed = line.trim_end_matches(&['\r', '\n'][..]);
+                    let line_text = String::from_utf8_lossy(&line);
+                    let trimmed = line_text.trim_end_matches(&['\r', '\n'][..]);
                     if !buffer.is_empty() {
                         buffer.push('\n');
                     }
@@ -368,6 +372,6 @@ fn spawn_output_reader<R: std::io::Read + Send + 'static>(
             };
             let _ = app.emit("run-output", payload);
         }
-    });
+    })
 }
 

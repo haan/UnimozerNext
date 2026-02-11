@@ -8,7 +8,12 @@ import type { FileNode } from "../models/files";
 import type { UmlGraph } from "../models/uml";
 import type { FileDraft } from "../models/drafts";
 import type { OpenFile } from "../models/openFile";
-import { createDefaultDiagramState, mergeDiagramState, parseLegacyPck } from "../services/diagram";
+import {
+  createDefaultDiagramState,
+  mergeDiagramState,
+  normalizeDiagramState,
+  parseLegacyPck
+} from "../services/diagram";
 import { basename, joinPath, toDisplayPath, toRelativePath } from "../services/paths";
 import {
   DEFAULT_NEW_PROJECT_FILE_NAME,
@@ -173,11 +178,15 @@ export const useProjectIO = ({
       const diagramFile = joinPath(root, "unimozer.json");
       let baseState: DiagramState | null = null;
       let loadedFromDisk = false;
+      let stateWasNormalized = false;
 
       try {
         const text = await invoke<string>("read_text_file", { path: diagramFile });
-        baseState = JSON.parse(text) as DiagramState;
+        const parsed = JSON.parse(text) as unknown;
+        const normalized = normalizeDiagramState(parsed);
+        baseState = normalized;
         loadedFromDisk = true;
+        stateWasNormalized = JSON.stringify(parsed) !== JSON.stringify(normalized);
       } catch {
         baseState = null;
       }
@@ -210,7 +219,7 @@ export const useProjectIO = ({
       setDiagramState(merged.state);
       setDiagramPath(diagramFile);
 
-      if (!loadedFromDisk || merged.added) {
+      if (!loadedFromDisk || merged.added || stateWasNormalized) {
         await invoke("write_text_file", {
           path: diagramFile,
           contents: JSON.stringify(merged.state, null, 2)

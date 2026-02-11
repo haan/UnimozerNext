@@ -2,4 +2,4 @@
 export const CONSOLE_FLUSH_DELAY_MS = 50;
 
 // Maximum number of retained console lines before truncating from the top.
-export const CONSOLE_MAX_LINES = 2000;
+export const CONSOLE_MAX_LINES = 10000;

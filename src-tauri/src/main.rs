@@ -40,7 +40,7 @@ pub(crate) const RUN_POLL_INTERVAL_MS: u64 = 200;
 pub(crate) const RUN_OUTPUT_CHUNK_SIZE_BYTES: usize = 8 * 1024;
 
 // Safety cap to avoid unbounded frontend event traffic from runaway output.
-pub(crate) const RUN_OUTPUT_MAX_EMIT_BYTES: usize = 200 * 1024;
+pub(crate) const RUN_OUTPUT_MAX_EMIT_BYTES: usize = 2 * 1024 * 1024;
 
 fn main() {
     let builder = tauri::Builder::default()

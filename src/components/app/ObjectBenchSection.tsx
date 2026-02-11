@@ -1,5 +1,5 @@
 import type { PointerEvent, RefObject } from "react";
-import type { DiagramState } from "../../models/diagram";
+import type { DiagramState, DiagramViewport } from "../../models/diagram";
 import type { ObjectInstance } from "../../models/objectBench";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
 import { OBJECT_BENCH_MIN_HEIGHT_PX } from "../../constants/layout";
@@ -22,6 +22,7 @@ type ObjectBenchSectionProps = {
   exportDefaultPath?: string | null;
   onExportStatus?: (message: string) => void;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
+  onViewportChange: (viewport: DiagramViewport, commit: boolean) => void;
   onNodeSelect: (id: string) => void;
   onCompileProject?: () => void;
   onCompileClass: (node: UmlNode) => void;
@@ -64,6 +65,7 @@ export const ObjectBenchSection = ({
   exportDefaultPath,
   onExportStatus,
   onNodePositionChange,
+  onViewportChange,
   onNodeSelect,
   onCompileProject,
   onCompileClass,
@@ -108,6 +110,7 @@ export const ObjectBenchSection = ({
           exportDefaultPath={exportDefaultPath}
           onExportStatus={onExportStatus}
           onNodePositionChange={onNodePositionChange}
+          onViewportChange={onViewportChange}
           onNodeSelect={onNodeSelect}
           onCompileProject={onCompileProject}
           onCompileClass={onCompileClass}

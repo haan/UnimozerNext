@@ -4,7 +4,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
 import { Image as TauriImage } from "@tauri-apps/api/image";
 
-import type { DiagramState } from "../../models/diagram";
+import type { DiagramState, DiagramViewport } from "../../models/diagram";
 import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
 import { basename, joinPath } from "../../services/paths";
 import { Association } from "./Association";
@@ -234,6 +234,7 @@ export type UmlDiagramProps = {
   backgroundColor?: string | null;
   exportDefaultPath?: string | null;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
+  onViewportChange?: (viewport: DiagramViewport, commit: boolean) => void;
   onNodeSelect?: (id: string) => void;
   onCompileClass?: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
@@ -300,6 +301,7 @@ export const UmlDiagram = ({
   backgroundColor,
   exportDefaultPath,
   onNodePositionChange,
+  onViewportChange,
   onNodeSelect,
   onCompileClass,
   onRunMain,
@@ -318,40 +320,85 @@ export const UmlDiagram = ({
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [draggingPackage, setDraggingPackage] = useState<PackageDragState | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
-  const [view, setView] = useState({
-    x: DEFAULT_VIEW_X,
-    y: DEFAULT_VIEW_Y,
-    scale: DEFAULT_VIEW_SCALE
-  });
+  const [view, setView] = useState(() => ({
+    x: diagram.viewport?.panX ?? DEFAULT_VIEW_X,
+    y: diagram.viewport?.panY ?? DEFAULT_VIEW_Y,
+    scale: clamp(diagram.viewport?.zoom ?? DEFAULT_VIEW_SCALE, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE)
+  }));
+  const viewRef = useRef(view);
   const [fontReady, setFontReady] = useState(false);
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
   const headerHeight = umlFontSize + 2 * HEADER_VERTICAL_PADDING;
   const rowHeight = Math.round(umlFontSize * UML_LINE_HEIGHT);
+
+  const commitViewport = useCallback(
+    (next: { x: number; y: number; scale: number }, commit: boolean) => {
+      onViewportChange?.(
+        {
+          panX: next.x,
+          panY: next.y,
+          zoom: next.scale
+        },
+        commit
+      );
+    },
+    [onViewportChange]
+  );
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  useEffect(() => {
+    const next = {
+      x: diagram.viewport?.panX ?? DEFAULT_VIEW_X,
+      y: diagram.viewport?.panY ?? DEFAULT_VIEW_Y,
+      scale: clamp(diagram.viewport?.zoom ?? DEFAULT_VIEW_SCALE, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE)
+    };
+    const current = viewRef.current;
+    if (
+      current.x === next.x &&
+      current.y === next.y &&
+      current.scale === next.scale
+    ) {
+      return;
+    }
+    viewRef.current = next;
+    setView(next);
+  }, [diagram.viewport?.panX, diagram.viewport?.panY, diagram.viewport?.zoom]);
+
   const zoomAt = useCallback((factor: number, clientX?: number, clientY?: number) => {
     const svg = svgRef.current;
     if (!svg) return;
+    const current = viewRef.current;
     const rect = svg.getBoundingClientRect();
     const sx =
       typeof clientX === "number" ? clientX - rect.left : rect.width / 2;
     const sy =
       typeof clientY === "number" ? clientY - rect.top : rect.height / 2;
-    setView((current) => {
-      const nextScale = Math.min(MAX_ZOOM_SCALE, Math.max(MIN_ZOOM_SCALE, current.scale * factor));
-      const worldX = sx / current.scale - current.x;
-      const worldY = sy / current.scale - current.y;
-      const nextX = sx / nextScale - worldX;
-      const nextY = sy / nextScale - worldY;
-      return { x: nextX, y: nextY, scale: nextScale };
-    });
-  }, []);
+    const nextScale = clamp(current.scale * factor, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE);
+    const worldX = sx / current.scale - current.x;
+    const worldY = sy / current.scale - current.y;
+    const next = {
+      x: sx / nextScale - worldX,
+      y: sy / nextScale - worldY,
+      scale: nextScale
+    };
+    viewRef.current = next;
+    setView(next);
+    commitViewport(next, true);
+  }, [commitViewport]);
 
   const resetZoom = useCallback(() => {
-    setView({
+    const next = {
       x: DEFAULT_VIEW_X,
       y: DEFAULT_VIEW_Y,
       scale: DEFAULT_VIEW_SCALE
-    });
-  }, []);
+    };
+    viewRef.current = next;
+    setView(next);
+    commitViewport(next, true);
+  }, [commitViewport]);
 
   useEffect(() => {
     let cancelled = false;
@@ -390,7 +437,7 @@ export const UmlDiagram = ({
   useEffect(() => {
     const handleMove = (event: PointerEvent) => {
       if (dragging) {
-        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, viewRef.current);
         const x = point.x - dragging.offsetX;
         const y = point.y - dragging.offsetY;
         const moved =
@@ -405,7 +452,7 @@ export const UmlDiagram = ({
       }
 
       if (draggingPackage) {
-        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, viewRef.current);
         const dx = point.x - draggingPackage.startX;
         const dy = point.y - draggingPackage.startY;
         const moved =
@@ -424,11 +471,17 @@ export const UmlDiagram = ({
       if (panning) {
         const dx = (event.clientX - panning.startClientX) / panning.scale;
         const dy = (event.clientY - panning.startClientY) / panning.scale;
-        setView((current) => ({
-          ...current,
+        const next = {
           x: panning.startX + dx,
           y: panning.startY + dy
-        }));
+        };
+        const current = viewRef.current;
+        if (current.x === next.x && current.y === next.y) {
+          return;
+        }
+        const updated = { ...current, ...next };
+        viewRef.current = updated;
+        setView(updated);
       }
     };
 
@@ -455,6 +508,7 @@ export const UmlDiagram = ({
         });
       }
       if (panning) {
+        commitViewport(viewRef.current, true);
         setPanning(null);
       }
     };
@@ -471,9 +525,9 @@ export const UmlDiagram = ({
     draggingPackage,
     panning,
     diagram.nodes,
+    commitViewport,
     onNodePositionChange,
-    onNodeSelect,
-    view
+    onNodeSelect
   ]);
 
   const layerTransform = useMemo(

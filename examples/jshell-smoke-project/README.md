@@ -11,3 +11,5 @@ This folder contains 5 Java classes to stress-test:
 - inheritance behavior
 
 Open `examples/jshell-smoke-project` as a folder project in the app.
+
+Use `examples/jshell-smoke-project/SMOKE_TEST.md` for the step-by-step validation checklist.

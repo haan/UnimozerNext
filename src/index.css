@@ -1,5 +1,7 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
 @config "../tailwind.config.cjs";
+@source "../index.html";
+@source "./**/*.{ts,tsx}";
 
 @font-face {
   font-family: "JetBrains Mono";

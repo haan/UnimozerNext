@@ -20,9 +20,11 @@ public class StudentRecord {
     }
 
     public double average() {
-        if (grades.isEmpty()) return 0.0;
+        if (grades.isEmpty())
+            return 0.0;
         int sum = 0;
-        for (int g : grades) sum += g;
+        for (int g : grades)
+            sum += g;
         return (double) sum / grades.size();
     }
 

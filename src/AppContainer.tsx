@@ -553,6 +553,7 @@ export default function AppContainer({
 
   const {
     handleNodePositionChange,
+    handleViewportChange,
     handleNodeSelect,
     handleFieldSelect,
     handleMethodSelect
@@ -808,6 +809,7 @@ export default function AppContainer({
           exportDefaultPath,
           onExportStatus: handleExportStatus,
           onNodePositionChange: handleNodePositionChange,
+          onViewportChange: handleViewportChange,
           onNodeSelect: handleNodeSelect,
           onCompileProject: canCompileClass ? handleMenuCompileProject : undefined,
           onCompileClass: handleCompileClass,

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { STRUCTOGRAM_METHOD_SWITCH_DEBOUNCE_MS } from "../../constants/app";
-import type { DiagramState } from "../../models/diagram";
+import type { DiagramState, DiagramViewport } from "../../models/diagram";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
 import {
   ContextMenu,
@@ -32,6 +32,7 @@ export type DiagramPanelProps = {
   exportDefaultPath?: string | null;
   onExportStatus?: (message: string) => void;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
+  onViewportChange: (viewport: DiagramViewport, commit: boolean) => void;
   onNodeSelect: (id: string) => void;
   onCompileProject?: () => void;
   onCompileClass: (node: UmlNode) => void;
@@ -91,6 +92,7 @@ export const DiagramPanel = ({
   exportDefaultPath,
   onExportStatus,
   onNodePositionChange,
+  onViewportChange,
   onNodeSelect,
   onCompileProject,
   onCompileClass,
@@ -206,6 +208,7 @@ export const DiagramPanel = ({
                 exportDefaultPath={exportDefaultPath}
                 onExportStatus={onExportStatus}
                 onNodePositionChange={onNodePositionChange}
+                onViewportChange={onViewportChange}
                 onNodeSelect={onNodeSelect}
                 onCompileClass={onCompileClass}
                 onRunMain={onRunMain}

@@ -34,7 +34,8 @@ public class InheritanceDemo {
         }
     }
 
-    public InheritanceDemo() {}
+    public InheritanceDemo() {
+    }
 
     public int runCounter(String name, int start, int steps) {
         NamedCounter c = new NamedCounter(name, start);

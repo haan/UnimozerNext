@@ -3,7 +3,7 @@ import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import { UML_REVEAL_REQUEST_TTL_SECONDS } from "../constants/app";
-import type { DiagramState } from "../models/diagram";
+import type { DiagramState, DiagramViewport } from "../models/diagram";
 import type { UmlNode, UmlGraph } from "../models/uml";
 import { basename } from "../services/paths";
 
@@ -31,6 +31,7 @@ type UseDiagramInteractionsArgs = {
 
 type UseDiagramInteractionsResult = {
   handleNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
+  handleViewportChange: (viewport: DiagramViewport, commit: boolean) => void;
   handleNodeSelect: (id: string) => void;
   handleFieldSelect: (field: UmlNode["fields"][number], node: UmlNode) => void;
   handleMethodSelect: (method: UmlNode["methods"][number], node: UmlNode) => void;
@@ -77,6 +78,48 @@ export const useDiagramInteractions = ({
       if (!commit || !diagramPath || !nextToPersist) {
         return;
       }
+      void invoke("write_text_file", {
+        path: diagramPath,
+        contents: JSON.stringify(nextToPersist, null, 2)
+      })
+        .then(() => {
+          requestPackedArchiveSync();
+        })
+        .catch(() => undefined);
+    },
+    [diagramPath, requestPackedArchiveSync, setDiagramState]
+  );
+
+  const handleViewportChange = useCallback(
+    (viewport: DiagramViewport, commit: boolean) => {
+      let nextToPersist: DiagramState | null = null;
+      setDiagramState((prev) => {
+        if (!prev) return prev;
+        const current = prev.viewport;
+        const unchanged =
+          current.panX === viewport.panX &&
+          current.panY === viewport.panY &&
+          current.zoom === viewport.zoom;
+        if (unchanged) {
+          if (commit) {
+            nextToPersist = prev;
+          }
+          return prev;
+        }
+        const next = {
+          ...prev,
+          viewport
+        };
+        if (commit) {
+          nextToPersist = next;
+        }
+        return next;
+      });
+
+      if (!commit || !diagramPath || !nextToPersist) {
+        return;
+      }
+
       void invoke("write_text_file", {
         path: diagramPath,
         contents: JSON.stringify(nextToPersist, null, 2)
@@ -164,6 +207,7 @@ export const useDiagramInteractions = ({
 
   return {
     handleNodePositionChange,
+    handleViewportChange,
     handleNodeSelect,
     handleFieldSelect,
     handleMethodSelect

@@ -22,6 +22,65 @@ export const createDefaultDiagramState = (): DiagramState => ({
   }
 });
 
+export const normalizeDiagramState = (input: unknown): DiagramState => {
+  const fallback = createDefaultDiagramState();
+  if (!input || typeof input !== "object") {
+    return fallback;
+  }
+
+  const candidate = input as Partial<DiagramState> & {
+    viewport?: Partial<DiagramState["viewport"]>;
+  };
+
+  const viewport: Partial<DiagramState["viewport"]> = candidate.viewport ?? {};
+
+  return {
+    version: 1,
+    showFields:
+      typeof candidate.showFields === "boolean"
+        ? candidate.showFields
+        : fallback.showFields,
+    showMethods:
+      typeof candidate.showMethods === "boolean"
+        ? candidate.showMethods
+        : fallback.showMethods,
+    showParams:
+      typeof candidate.showParams === "boolean"
+        ? candidate.showParams
+        : fallback.showParams,
+    showTypes:
+      typeof candidate.showTypes === "boolean"
+        ? candidate.showTypes
+        : fallback.showTypes,
+    showVisibility:
+      typeof candidate.showVisibility === "boolean"
+        ? candidate.showVisibility
+        : fallback.showVisibility,
+    showRelations:
+      typeof candidate.showRelations === "boolean"
+        ? candidate.showRelations
+        : fallback.showRelations,
+    nodes:
+      candidate.nodes && typeof candidate.nodes === "object"
+        ? candidate.nodes
+        : fallback.nodes,
+    viewport: {
+      panX:
+        typeof viewport.panX === "number" && Number.isFinite(viewport.panX)
+          ? viewport.panX
+          : fallback.viewport.panX,
+      panY:
+        typeof viewport.panY === "number" && Number.isFinite(viewport.panY)
+          ? viewport.panY
+          : fallback.viewport.panY,
+      zoom:
+        typeof viewport.zoom === "number" && Number.isFinite(viewport.zoom)
+          ? viewport.zoom
+          : fallback.viewport.zoom
+    }
+  };
+};
+
 const positionForIndex = (index: number): DiagramNodePosition => {
   const col = index % GRID_COLS;
   const row = Math.floor(index / GRID_COLS);
