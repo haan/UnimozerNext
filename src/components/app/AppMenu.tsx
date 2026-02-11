@@ -37,6 +37,7 @@ type AppMenuProps = {
   structogramMode: boolean;
   structogramColorsEnabled: boolean;
   wordWrap: boolean;
+  scopeHighlighting: boolean;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onRequestOpenFolderProject: () => void;
@@ -61,6 +62,7 @@ type AppMenuProps = {
   onToggleStructogramMode: (value: boolean) => void;
   onToggleStructogramColors: (value: boolean) => void;
   onToggleWordWrap: (value: boolean) => void;
+  onToggleScopeHighlighting: (value: boolean) => void;
   onAddClass: () => void;
   onAddConstructor: () => void;
   onAddField: () => void;
@@ -96,6 +98,7 @@ export const AppMenu = ({
   structogramMode,
   structogramColorsEnabled,
   wordWrap,
+  scopeHighlighting,
   onRequestNewProject,
   onRequestOpenProject,
   onRequestOpenFolderProject,
@@ -120,6 +123,7 @@ export const AppMenu = ({
   onToggleStructogramMode,
   onToggleStructogramColors,
   onToggleWordWrap,
+  onToggleScopeHighlighting,
   onAddClass,
   onAddConstructor,
   onAddField,
@@ -270,6 +274,12 @@ export const AppMenu = ({
                   onCheckedChange={(checked) => onToggleWordWrap(Boolean(checked))}
                 >
                   Word wrap
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={scopeHighlighting}
+                  onCheckedChange={(checked) => onToggleScopeHighlighting(Boolean(checked))}
+                >
+                  Code highlighting
                 </MenubarCheckboxItem>
               </MenubarSubContent>
             </MenubarSub>

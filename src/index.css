@@ -97,6 +97,105 @@ body,
   display: none !important;
 }
 
+.monaco-editor .editor-scope-depth-0,
+.monaco-editor .editor-scope-depth-1,
+.monaco-editor .editor-scope-depth-2,
+.monaco-editor .editor-scope-depth-3,
+.monaco-editor .editor-scope-depth-4,
+.monaco-editor .editor-scope-depth-5,
+.monaco-editor .view-line .editor-scope-depth-0,
+.monaco-editor .view-line .editor-scope-depth-1,
+.monaco-editor .view-line .editor-scope-depth-2,
+.monaco-editor .view-line .editor-scope-depth-3,
+.monaco-editor .view-line .editor-scope-depth-4,
+.monaco-editor .view-line .editor-scope-depth-5 {
+  border-radius: 4px;
+}
+
+.monaco-editor .editor-scope-depth-0,
+.monaco-editor .view-line .editor-scope-depth-0 {
+  background-color: rgba(81, 133, 214, 0.12);
+  box-shadow: inset 2px 0 0 rgba(55, 111, 197, 0.35);
+}
+
+.monaco-editor .editor-scope-depth-1,
+.monaco-editor .view-line .editor-scope-depth-1 {
+  background-color: rgba(60, 170, 155, 0.12);
+  box-shadow: inset 2px 0 0 rgba(42, 138, 124, 0.35);
+}
+
+.monaco-editor .editor-scope-depth-2,
+.monaco-editor .view-line .editor-scope-depth-2 {
+  background-color: rgba(134, 176, 84, 0.12);
+  box-shadow: inset 2px 0 0 rgba(104, 145, 56, 0.35);
+}
+
+.monaco-editor .editor-scope-depth-3,
+.monaco-editor .view-line .editor-scope-depth-3 {
+  background-color: rgba(224, 174, 67, 0.13);
+  box-shadow: inset 2px 0 0 rgba(192, 142, 40, 0.35);
+}
+
+.monaco-editor .editor-scope-depth-4,
+.monaco-editor .view-line .editor-scope-depth-4 {
+  background-color: rgba(220, 114, 157, 0.12);
+  box-shadow: inset 2px 0 0 rgba(186, 83, 126, 0.34);
+}
+
+.monaco-editor .editor-scope-depth-5,
+.monaco-editor .view-line .editor-scope-depth-5 {
+  background-color: rgba(154, 129, 224, 0.12);
+  box-shadow: inset 2px 0 0 rgba(125, 101, 198, 0.34);
+}
+
+.monaco-editor.vs-dark .editor-scope-depth-0,
+.monaco-editor.hc-black .editor-scope-depth-0,
+.monaco-editor.vs-dark .view-line .editor-scope-depth-0,
+.monaco-editor.hc-black .view-line .editor-scope-depth-0 {
+  background-color: rgba(66, 120, 197, 0.24);
+  box-shadow: inset 2px 0 0 rgba(137, 182, 255, 0.45);
+}
+
+.monaco-editor.vs-dark .editor-scope-depth-1,
+.monaco-editor.hc-black .editor-scope-depth-1,
+.monaco-editor.vs-dark .view-line .editor-scope-depth-1,
+.monaco-editor.hc-black .view-line .editor-scope-depth-1 {
+  background-color: rgba(46, 145, 130, 0.24);
+  box-shadow: inset 2px 0 0 rgba(117, 215, 197, 0.45);
+}
+
+.monaco-editor.vs-dark .editor-scope-depth-2,
+.monaco-editor.hc-black .editor-scope-depth-2,
+.monaco-editor.vs-dark .view-line .editor-scope-depth-2,
+.monaco-editor.hc-black .view-line .editor-scope-depth-2 {
+  background-color: rgba(93, 138, 58, 0.24);
+  box-shadow: inset 2px 0 0 rgba(168, 212, 132, 0.45);
+}
+
+.monaco-editor.vs-dark .editor-scope-depth-3,
+.monaco-editor.hc-black .editor-scope-depth-3,
+.monaco-editor.vs-dark .view-line .editor-scope-depth-3,
+.monaco-editor.hc-black .view-line .editor-scope-depth-3 {
+  background-color: rgba(161, 122, 48, 0.26);
+  box-shadow: inset 2px 0 0 rgba(232, 193, 118, 0.46);
+}
+
+.monaco-editor.vs-dark .editor-scope-depth-4,
+.monaco-editor.hc-black .editor-scope-depth-4,
+.monaco-editor.vs-dark .view-line .editor-scope-depth-4,
+.monaco-editor.hc-black .view-line .editor-scope-depth-4 {
+  background-color: rgba(150, 69, 103, 0.24);
+  box-shadow: inset 2px 0 0 rgba(221, 141, 176, 0.45);
+}
+
+.monaco-editor.vs-dark .editor-scope-depth-5,
+.monaco-editor.hc-black .editor-scope-depth-5,
+.monaco-editor.vs-dark .view-line .editor-scope-depth-5,
+.monaco-editor.hc-black .view-line .editor-scope-depth-5 {
+  background-color: rgba(101, 85, 170, 0.24);
+  box-shadow: inset 2px 0 0 rgba(174, 157, 238, 0.45);
+}
+
 .editor-separator-handle {
   transition: background-color 150ms;
 }

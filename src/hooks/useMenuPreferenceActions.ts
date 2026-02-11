@@ -20,6 +20,7 @@ type UseMenuPreferenceActionsResult = {
   handleToggleStructogramMode: (value: boolean) => void;
   handleToggleStructogramColors: (value: boolean) => void;
   handleToggleWordWrap: (value: boolean) => void;
+  handleToggleScopeHighlighting: (value: boolean) => void;
 };
 
 export const useMenuPreferenceActions = ({
@@ -128,6 +129,19 @@ export const useMenuPreferenceActions = ({
     [handleSettingsChange, settings]
   );
 
+  const handleToggleScopeHighlighting = useCallback(
+    (value: boolean) => {
+      handleSettingsChange({
+        ...settings,
+        editor: {
+          ...settings.editor,
+          scopeHighlighting: value
+        }
+      });
+    },
+    [handleSettingsChange, settings]
+  );
+
   return {
     handleToggleShowPrivate,
     handleToggleShowInherited,
@@ -137,6 +151,7 @@ export const useMenuPreferenceActions = ({
     handleToggleShowSwingAttributes,
     handleToggleStructogramMode,
     handleToggleStructogramColors,
-    handleToggleWordWrap
+    handleToggleWordWrap,
+    handleToggleScopeHighlighting
   };
 };

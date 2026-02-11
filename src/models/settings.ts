@@ -14,6 +14,7 @@ export type EditorSettings = {
   autoCloseQuotes: boolean;
   autoCloseComments: boolean;
   wordWrap: boolean;
+  scopeHighlighting: boolean;
   autoFormatOnSave: boolean;
 };
 

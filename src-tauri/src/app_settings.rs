@@ -46,6 +46,8 @@ struct EditorSettings {
     auto_close_comments: bool,
     #[serde(default = "default_true")]
     word_wrap: bool,
+    #[serde(default = "default_false")]
+    scope_highlighting: bool,
     #[serde(default = "default_true")]
     auto_format_on_save: bool,
 }
@@ -60,6 +62,7 @@ impl Default for EditorSettings {
             auto_close_quotes: default_false(),
             auto_close_comments: default_false(),
             word_wrap: default_true(),
+            scope_highlighting: default_false(),
             auto_format_on_save: default_true(),
         }
     }
@@ -193,6 +196,7 @@ impl Default for AppSettings {
                 auto_close_quotes: default_false(),
                 auto_close_comments: default_false(),
                 word_wrap: default_true(),
+                scope_highlighting: default_false(),
                 auto_format_on_save: default_true(),
             },
             advanced: AdvancedSettings {

@@ -26,6 +26,7 @@ type UseAppMenuStateArgs = {
   leftPanelViewMode: DiagramViewMode;
   structogramColorsEnabled: boolean;
   wordWrap: boolean;
+  scopeHighlighting: boolean;
 };
 
 export type AppMenuState = {
@@ -52,6 +53,7 @@ export type AppMenuState = {
   structogramMode: boolean;
   structogramColorsEnabled: boolean;
   wordWrap: boolean;
+  scopeHighlighting: boolean;
 };
 
 export const useAppMenuState = ({
@@ -77,7 +79,8 @@ export const useAppMenuState = ({
   canUseStructogramMode,
   leftPanelViewMode,
   structogramColorsEnabled,
-  wordWrap
+  wordWrap,
+  scopeHighlighting
 }: UseAppMenuStateArgs): AppMenuState =>
   useMemo(
     () => ({
@@ -103,7 +106,8 @@ export const useAppMenuState = ({
       canUseStructogramMode,
       structogramMode: leftPanelViewMode === "structogram",
       structogramColorsEnabled,
-      wordWrap
+      wordWrap,
+      scopeHighlighting
     }),
     [
       busy,
@@ -128,6 +132,7 @@ export const useAppMenuState = ({
       showSwingAttributes,
       structogramColorsEnabled,
       wordWrap,
+      scopeHighlighting,
       zoomDisabled
     ]
   );

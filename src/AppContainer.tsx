@@ -158,6 +158,7 @@ export default function AppContainer({
     settings.objectBench.showStaticObjectFields;
   const showSwingAttributes = settings.uml.showSwingAttributes;
   const wordWrap = settings.editor.wordWrap;
+  const scopeHighlighting = settings.editor.scopeHighlighting;
   const {
     containerRef,
     consoleContainerRef,
@@ -525,7 +526,8 @@ export default function AppContainer({
     canUseStructogramMode,
     leftPanelViewMode,
     structogramColorsEnabled,
-    wordWrap
+    wordWrap,
+    scopeHighlighting
   });
 
 
@@ -626,7 +628,8 @@ export default function AppContainer({
     handleToggleShowSwingAttributes,
     handleToggleStructogramMode,
     handleToggleStructogramColors,
-    handleToggleWordWrap
+    handleToggleWordWrap,
+    handleToggleScopeHighlighting
   } = useMenuPreferenceActions({
     settings,
     handleSettingsChange,
@@ -778,6 +781,7 @@ export default function AppContainer({
         onToggleStructogramMode={handleToggleStructogramMode}
         onToggleStructogramColors={handleToggleStructogramColors}
         onToggleWordWrap={handleToggleWordWrap}
+        onToggleScopeHighlighting={handleToggleScopeHighlighting}
         onAddClass={handleMenuAddClass}
         onAddConstructor={handleMenuAddConstructor}
         onAddField={handleMenuAddField}
@@ -850,6 +854,7 @@ export default function AppContainer({
           autoCloseQuotes: settings.editor.autoCloseQuotes,
           autoCloseComments: settings.editor.autoCloseComments,
           wordWrap: settings.editor.wordWrap,
+          scopeHighlighting: settings.editor.scopeHighlighting,
           onChange: handleContentChange,
           debugLogging,
           onDebugLog: debugLogging ? appendDebugOutput : undefined,

@@ -518,6 +518,27 @@ export const SettingsDialog = ({
                     }
                   />
                 </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Code highlighting</p>
+                    <p className="text-xs text-muted-foreground">
+                      Show BlueJ-style nested scope colors in the code editor.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.editor.scopeHighlighting}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        editor: {
+                          ...settings.editor,
+                          scopeHighlighting: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
               </div>
             ) : activeGroup === "Structogram" ? (
               <div className="mt-4 grid gap-2">
