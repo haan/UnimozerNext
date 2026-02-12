@@ -148,6 +148,18 @@ body,
   mix-blend-mode: normal !important;
 }
 
+.scope-highlighting-enabled .monaco-editor .editor-scope-active-selection-empty {
+  display: inline-block;
+  width: 1ch;
+  height: 1.5em; /* fallback */
+  height: 1lh;   /* preferred */
+  background-color: var(--scope-selection-bg) !important;
+  box-shadow:
+    0 -1px 0 var(--scope-selection-bg),
+    0 1px 0 var(--scope-selection-bg);
+  vertical-align: text-bottom;
+}
+
 .monaco-editor .editor-scope-fill-0,
 .monaco-editor .view-line .editor-scope-fill-0 {
   --scope-fill-color: transparent;

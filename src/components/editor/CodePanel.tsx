@@ -346,9 +346,11 @@ const createScopeDecorations = (
 
 const createScopeSelectionDecorations = (
   monaco: typeof import("monaco-editor"),
+  model: MonacoEditorType.ITextModel,
   selections: readonly SelectionLike[]
 ): MonacoEditorType.IModelDeltaDecoration[] => {
   const decorations: MonacoEditorType.IModelDeltaDecoration[] = [];
+  const emptyLineMarkerSet = new Set<number>();
   for (const selection of selections) {
     let startLine = selection.selectionStartLineNumber;
     let startColumn = selection.selectionStartColumn;
@@ -368,6 +370,26 @@ const createScopeSelectionDecorations = (
       range: new monaco.Range(startLine, startColumn, endLine, endColumn),
       options: {
         inlineClassName: "editor-scope-active-selection",
+        stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
+      }
+    });
+
+    if (endLine - startLine < 2) {
+      continue;
+    }
+    for (let lineNumber = startLine + 1; lineNumber <= endLine - 1; lineNumber += 1) {
+      if (model.getLineLength(lineNumber) !== 0) {
+        continue;
+      }
+      emptyLineMarkerSet.add(lineNumber);
+    }
+  }
+
+  for (const lineNumber of emptyLineMarkerSet) {
+    decorations.push({
+      range: new monaco.Range(lineNumber, 1, lineNumber, 1),
+      options: {
+        beforeContentClassName: "editor-scope-active-selection-empty",
         stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
       }
     });
@@ -583,7 +605,11 @@ export const CodePanel = memo(
               return;
             }
             const selections = editor.getSelections() ?? [];
-            const decorations = createScopeSelectionDecorations(monacoRef.current, selections);
+            const decorations = createScopeSelectionDecorations(
+              monacoRef.current,
+              model,
+              selections
+            );
             deltaModelDecorations(
               model,
               selectionDecorationIdsByUriRef.current,
