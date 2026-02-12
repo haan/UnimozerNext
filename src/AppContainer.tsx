@@ -103,6 +103,7 @@ export default function AppContainer({
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const fontSizeRef = useRef(settings.general.fontSize);
   const {
     addClassOpen,
     setAddClassOpen,
@@ -744,6 +745,39 @@ export default function AppContainer({
     },
     []
   );
+
+  useEffect(() => {
+    fontSizeRef.current = settings.general.fontSize;
+  }, [settings.general.fontSize]);
+
+  useEffect(() => {
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) {
+        return;
+      }
+      event.preventDefault();
+      if (event.deltaY === 0) {
+        return;
+      }
+      const step = event.deltaY < 0 ? 1 : -1;
+      const next = Math.max(8, Math.min(40, fontSizeRef.current + step));
+      if (next === fontSizeRef.current) {
+        return;
+      }
+      fontSizeRef.current = next;
+      handleSettingsChange({
+        ...settings,
+        general: {
+          ...settings.general,
+          fontSize: next
+        }
+      });
+    };
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return () => {
+      window.removeEventListener("wheel", onWheel, true);
+    };
+  }, [handleSettingsChange, settings]);
   const handleOpenSettings = useCallback(() => {
     setSettingsOpen(true);
   }, [setSettingsOpen]);

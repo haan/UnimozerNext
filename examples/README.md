@@ -11,3 +11,6 @@
 
 - `reload-disk-project`  
   Reload-from-disk behavior checks for externally modified source files.
+
+- `code-highlighting-project`  
+  Scope/highlight rendering checks (nested blocks, javadocs, comments, selection behavior).

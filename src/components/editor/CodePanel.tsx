@@ -389,26 +389,6 @@ const shouldRefreshScopeForContentChanges = (
   return false;
 };
 
-const collectScopeDecorationStats = (model: MonacoEditorType.ITextModel) => {
-  let scopeLineDecorations = 0;
-  let scopeSelectionDecorations = 0;
-  const decorations = model.getAllDecorations();
-  for (const decoration of decorations) {
-    const className = decoration.options.className ?? "";
-    const inlineClassName = decoration.options.inlineClassName ?? "";
-    if (className.includes("editor-scope-line")) {
-      scopeLineDecorations += 1;
-    }
-    if (inlineClassName.includes("editor-scope-active-selection")) {
-      scopeSelectionDecorations += 1;
-    }
-  }
-  return {
-    scopeLineDecorations,
-    scopeSelectionDecorations
-  };
-};
-
 const deltaModelDecorations = (
   model: MonacoEditorType.ITextModel,
   trackedByUri: Map<string, string[]>,
@@ -574,17 +554,11 @@ export const CodePanel = memo(
               return;
             }
             const decorations = createScopeDecorations(monacoRef.current, model);
-            const ids = deltaModelDecorations(
+            deltaModelDecorations(
               model,
               scopeDecorationIdsByUriRef.current,
               decorations
             );
-            if (debugEnabled) {
-              const stats = collectScopeDecorationStats(model);
-              logEvent(
-                `scope refresh uri=${model.uri.toString()} applied=${decorations.length} tracked=${ids.length} totalScope=${stats.scopeLineDecorations}`
-              );
-            }
           });
         };
 
@@ -608,17 +582,11 @@ export const CodePanel = memo(
             }
             const selections = editor.getSelections() ?? [];
             const decorations = createScopeSelectionDecorations(monacoRef.current, selections);
-            const ids = deltaModelDecorations(
+            deltaModelDecorations(
               model,
               selectionDecorationIdsByUriRef.current,
               decorations
             );
-            if (debugEnabled) {
-              const stats = collectScopeDecorationStats(model);
-              logEvent(
-                `selection refresh uri=${model.uri.toString()} applied=${decorations.length} tracked=${ids.length} totalScopeSelection=${stats.scopeSelectionDecorations}`
-              );
-            }
           });
         };
 
@@ -722,6 +690,14 @@ export const CodePanel = memo(
               onMount={(editor) => {
                 editorRef.current = editor;
                 registerEditorEventListeners(editor);
+                const monaco = monacoRef.current;
+                if (monaco) {
+                  editor.addCommand(monaco.KeyCode.F1, () => {});
+                  editor.addCommand(
+                    monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyP,
+                    () => {}
+                  );
+                }
                 onEditorMount?.(editor);
                 syncExternalContent(editor);
                 const position = editor.getPosition();
@@ -748,6 +724,7 @@ export const CodePanel = memo(
                 quickSuggestions: false,
                 wordBasedSuggestions: "off",
                 glyphMargin: true,
+                contextmenu: false,
                 renderValidationDecorations: "on",
                 tabSize,
                 insertSpaces,
