@@ -22,7 +22,7 @@ jobs:
       matrix:
         include:
           - arch: x64
-            os: macos-13
+            os: macos-15-intel
             rust_target: x86_64-apple-darwin
             jdk_dir: mac-x64
             jdtls_config_dir: config_mac
@@ -149,7 +149,8 @@ jobs:
             echo "[resources] Temurin archive cache hit: $temurin_archive"
           fi
           temurin_hash="$(shasum -a 256 "$temurin_archive" | awk '{print tolower($1)}')"
-          if [[ "$temurin_hash" != "${temurin_sha,,}" ]]; then
+          temurin_sha_lc="$(printf '%s' "$temurin_sha" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$temurin_hash" != "$temurin_sha_lc" ]]; then
             echo "Temurin SHA256 mismatch: expected $temurin_sha, got $temurin_hash" >&2
             exit 1
           fi
@@ -163,7 +164,8 @@ jobs:
             echo "[resources] JDTLS archive cache hit: $jdtls_archive"
           fi
           jdtls_hash="$(shasum -a 256 "$jdtls_archive" | awk '{print tolower($1)}')"
-          if [[ "$jdtls_hash" != "${JDTLS_DIST_SHA256,,}" ]]; then
+          jdtls_sha_lc="$(printf '%s' "$JDTLS_DIST_SHA256" | tr '[:upper:]' '[:lower:]')"
+          if [[ "$jdtls_hash" != "$jdtls_sha_lc" ]]; then
             echo "JDTLS SHA256 mismatch: expected $JDTLS_DIST_SHA256, got $jdtls_hash" >&2
             exit 1
           fi
