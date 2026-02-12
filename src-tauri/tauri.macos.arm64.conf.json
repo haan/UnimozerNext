@@ -1,6 +1,6 @@
 {
   "bundle": {
-    "targets": ["app", "dmg"],
+    "targets": ["dmg"],
     "resources": [
       "../resources/jdk/mac-arm64/**/*",
       "../resources/java-parser/**/*",

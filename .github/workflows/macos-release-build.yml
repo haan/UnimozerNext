@@ -217,11 +217,11 @@ jobs:
           rm -rf "src-tauri/target/release/bundle"
           rm -rf "src-tauri/target/${{ matrix.rust_target }}/release/bundle"
 
-      - name: Build Tauri app bundles (app, dmg)
+      - name: Build Tauri dmg bundles
         env:
           RUST_LOG: tauri_bundler=trace
           RUST_BACKTRACE: "1"
-        run: npx tauri build --ci --target ${{ matrix.rust_target }} --bundles "app,dmg" --config ${{ matrix.tauri_config }}
+        run: npx tauri build --ci --target ${{ matrix.rust_target }} --bundles "dmg" --config ${{ matrix.tauri_config }}
 
       - name: Upload macOS bundle artifacts
         uses: actions/upload-artifact@v4
@@ -229,8 +229,6 @@ jobs:
           name: macos-${{ matrix.arch }}-bundles
           path: |
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -240,5 +238,3 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: |
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz
