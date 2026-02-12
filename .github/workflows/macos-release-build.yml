@@ -1,0 +1,242 @@
+name: macOS Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build (branch, tag, or commit SHA)
+        required: false
+        default: main
+      publish_release:
+        description: Override and publish GitHub release for this run
+        required: false
+        default: "false"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: macos-13
+            rust_target: x86_64-apple-darwin
+            jdk_dir: mac-x64
+            jdtls_config_dir: config_mac
+            tauri_config: src-tauri/tauri.macos.x64.conf.json
+          - arch: arm64
+            os: macos-14
+            rust_target: aarch64-apple-darwin
+            jdk_dir: mac-arm64
+            jdtls_config_dir: config_mac_arm
+            tauri_config: src-tauri/tauri.macos.arm64.conf.json
+    runs-on: ${{ matrix.os }}
+    env:
+      TEMURIN_MAC_X64_TAR_GZ_URL: ${{ vars.TEMURIN_MAC_X64_TAR_GZ_URL }}
+      TEMURIN_MAC_X64_SHA256: ${{ vars.TEMURIN_MAC_X64_SHA256 }}
+      TEMURIN_MAC_ARM64_TAR_GZ_URL: ${{ vars.TEMURIN_MAC_ARM64_TAR_GZ_URL }}
+      TEMURIN_MAC_ARM64_SHA256: ${{ vars.TEMURIN_MAC_ARM64_SHA256 }}
+      JDTLS_DIST_URL: ${{ vars.JDTLS_DIST_URL }}
+      JDTLS_DIST_SHA256: ${{ vars.JDTLS_DIST_SHA256 }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Setup Java (for bridge builds)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: current
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Restore Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            src-tauri -> target
+
+      - name: Restore resource archive cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/temurin
+            .cache/jdtls
+          key: macos-resources-${{ matrix.arch }}-${{ matrix.arch == 'x64' && env.TEMURIN_MAC_X64_SHA256 || env.TEMURIN_MAC_ARM64_SHA256 }}-${{ env.JDTLS_DIST_SHA256 }}
+
+      - name: Validate required variables
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            "TEMURIN_MAC_X64_TAR_GZ_URL"
+            "TEMURIN_MAC_X64_SHA256"
+            "TEMURIN_MAC_ARM64_TAR_GZ_URL"
+            "TEMURIN_MAC_ARM64_SHA256"
+            "JDTLS_DIST_URL"
+            "JDTLS_DIST_SHA256"
+          )
+          for name in "${required[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "Missing required Actions variable: $name" >&2
+              exit 1
+            fi
+          done
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build Java parser bridge
+        shell: bash
+        run: |
+          pushd java-parser
+          gradle copyBridgeJar --no-daemon --rerun-tasks
+          popd
+
+      - name: Build JShell bridge
+        shell: bash
+        run: |
+          pushd jshell-bridge
+          gradle copyBridgeJar --no-daemon --rerun-tasks
+          popd
+
+      - name: Stop Gradle daemons
+        shell: bash
+        run: gradle --stop || true
+
+      - name: Prepare bundled JDK and JDTLS resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "[resources] Preparing bundled JDK and JDTLS resources..."
+
+          mkdir -p .cache/temurin .cache/jdtls
+
+          if [[ "${{ matrix.arch }}" == "x64" ]]; then
+            temurin_url="$TEMURIN_MAC_X64_TAR_GZ_URL"
+            temurin_sha="$TEMURIN_MAC_X64_SHA256"
+          else
+            temurin_url="$TEMURIN_MAC_ARM64_TAR_GZ_URL"
+            temurin_sha="$TEMURIN_MAC_ARM64_SHA256"
+          fi
+
+          temurin_archive=".cache/temurin/temurin-mac-${{ matrix.arch }}.tar.gz"
+          if [[ ! -f "$temurin_archive" ]]; then
+            echo "[resources] Temurin archive cache miss; downloading from URL."
+            curl -fL "$temurin_url" -o "$temurin_archive"
+          else
+            echo "[resources] Temurin archive cache hit: $temurin_archive"
+          fi
+          temurin_hash="$(shasum -a 256 "$temurin_archive" | awk '{print tolower($1)}')"
+          if [[ "$temurin_hash" != "${temurin_sha,,}" ]]; then
+            echo "Temurin SHA256 mismatch: expected $temurin_sha, got $temurin_hash" >&2
+            exit 1
+          fi
+          echo "[resources] Temurin SHA256 verified."
+
+          jdtls_archive=".cache/jdtls/jdtls.tar.gz"
+          if [[ ! -f "$jdtls_archive" ]]; then
+            echo "[resources] JDTLS archive cache miss; downloading from URL."
+            curl -fL "$JDTLS_DIST_URL" -o "$jdtls_archive"
+          else
+            echo "[resources] JDTLS archive cache hit: $jdtls_archive"
+          fi
+          jdtls_hash="$(shasum -a 256 "$jdtls_archive" | awk '{print tolower($1)}')"
+          if [[ "$jdtls_hash" != "${JDTLS_DIST_SHA256,,}" ]]; then
+            echo "JDTLS SHA256 mismatch: expected $JDTLS_DIST_SHA256, got $jdtls_hash" >&2
+            exit 1
+          fi
+          echo "[resources] JDTLS SHA256 verified."
+
+          jdk_target="resources/jdk/${{ matrix.jdk_dir }}"
+          echo "[resources] Extracting JDK into $jdk_target"
+          rm -rf "$jdk_target"
+          mkdir -p "$jdk_target"
+          jdk_extract=".cache/temurin/extracted-${{ matrix.arch }}"
+          rm -rf "$jdk_extract"
+          mkdir -p "$jdk_extract"
+          tar -xzf "$temurin_archive" -C "$jdk_extract"
+          jdk_root="$(find "$jdk_extract" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          if [[ -z "$jdk_root" ]]; then
+            echo "Could not find extracted JDK directory" >&2
+            exit 1
+          fi
+          jdk_home="$jdk_root"
+          if [[ -d "$jdk_root/Contents/Home" ]]; then
+            jdk_home="$jdk_root/Contents/Home"
+          fi
+          cp -a "$jdk_home"/. "$jdk_target"/
+          if [[ ! -x "$jdk_target/bin/java" || ! -x "$jdk_target/bin/javac" ]]; then
+            echo "Extracted macOS JDK is missing bin/java or bin/javac in $jdk_target" >&2
+            exit 1
+          fi
+          echo "[resources] JDK extracted successfully."
+
+          jdtls_target="resources/jdtls"
+          echo "[resources] Extracting JDTLS into $jdtls_target"
+          rm -rf "$jdtls_target"
+          mkdir -p "$jdtls_target"
+          tar -xzf "$jdtls_archive" -C "$jdtls_target"
+          echo "[resources] JDTLS extracted successfully."
+
+          for required_dir in plugins features "${{ matrix.jdtls_config_dir }}"; do
+            if [[ ! -d "$jdtls_target/$required_dir" ]]; then
+              echo "JDTLS archive missing expected directory: $required_dir" >&2
+              exit 1
+            fi
+            echo "[resources] Verified JDTLS directory: $required_dir"
+          done
+          echo "[resources] Resource preparation complete."
+
+      - name: Clean cached bundle intermediates
+        shell: bash
+        run: |
+          rm -rf "src-tauri/target/release/bundle"
+          rm -rf "src-tauri/target/${{ matrix.rust_target }}/release/bundle"
+
+      - name: Build Tauri app bundles (app, dmg)
+        env:
+          RUST_LOG: tauri_bundler=trace
+          RUST_BACKTRACE: "1"
+        run: npx tauri build --ci --target ${{ matrix.rust_target }} --bundles "app,dmg" --config ${{ matrix.tauri_config }}
+
+      - name: Upload macOS bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.arch }}-bundles
+          path: |
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: ${{ vars.PUBLISH_GH_RELEASE == 'true' || github.event.inputs.publish_release == 'true' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz

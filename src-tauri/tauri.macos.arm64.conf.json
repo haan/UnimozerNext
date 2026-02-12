@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "targets": ["app", "dmg"],
+    "resources": [
+      "../resources/jdk/mac-arm64/**/*",
+      "../resources/java-parser/**/*",
+      "../resources/jshell-bridge/**/*",
+      "../resources/jdtls/plugins/**/*",
+      "../resources/jdtls/config_mac_arm/**/*",
+      "../resources/jdtls/features/**/*"
+    ]
+  }
+}

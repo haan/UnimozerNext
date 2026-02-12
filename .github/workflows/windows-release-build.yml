@@ -25,8 +25,8 @@ jobs:
     env:
       TEMURIN_WIN_X64_ZIP_URL: ${{ vars.TEMURIN_WIN_X64_ZIP_URL }}
       TEMURIN_WIN_X64_SHA256: ${{ vars.TEMURIN_WIN_X64_SHA256 }}
-      JDTLS_WIN_DIST_URL: ${{ vars.JDTLS_WIN_DIST_URL }}
-      JDTLS_WIN_DIST_SHA256: ${{ vars.JDTLS_WIN_DIST_SHA256 }}
+      JDTLS_DIST_URL: ${{ vars.JDTLS_DIST_URL }}
+      JDTLS_DIST_SHA256: ${{ vars.JDTLS_DIST_SHA256 }}
 
     steps:
       - name: Checkout
@@ -62,7 +62,7 @@ jobs:
           path: |
             .cache/temurin
             .cache/jdtls
-          key: windows-resources-${{ env.TEMURIN_WIN_X64_SHA256 }}-${{ env.JDTLS_WIN_DIST_SHA256 }}
+          key: windows-resources-${{ env.TEMURIN_WIN_X64_SHA256 }}-${{ env.JDTLS_DIST_SHA256 }}
 
       - name: Validate required variables
         shell: pwsh
@@ -70,8 +70,8 @@ jobs:
           $required = @(
             "TEMURIN_WIN_X64_ZIP_URL",
             "TEMURIN_WIN_X64_SHA256",
-            "JDTLS_WIN_DIST_URL",
-            "JDTLS_WIN_DIST_SHA256"
+            "JDTLS_DIST_URL",
+            "JDTLS_DIST_SHA256"
           )
           foreach ($name in $required) {
             $value = (Get-Item "env:$name").Value
@@ -126,13 +126,13 @@ jobs:
           $jdtlsArchive = ".cache/jdtls/jdtls.tar.gz"
           if (!(Test-Path $jdtlsArchive)) {
             Write-Host "[resources] JDTLS archive cache miss; downloading from URL."
-            Invoke-WebRequest -Uri "$env:JDTLS_WIN_DIST_URL" -OutFile $jdtlsArchive
+            Invoke-WebRequest -Uri "$env:JDTLS_DIST_URL" -OutFile $jdtlsArchive
           } else {
             Write-Host "[resources] JDTLS archive cache hit: $jdtlsArchive"
           }
           $jdtlsHash = (Get-FileHash $jdtlsArchive -Algorithm SHA256).Hash.ToLower()
-          if ($jdtlsHash -ne "$env:JDTLS_WIN_DIST_SHA256".ToLower()) {
-            throw "JDTLS SHA256 mismatch: expected $env:JDTLS_WIN_DIST_SHA256, got $jdtlsHash"
+          if ($jdtlsHash -ne "$env:JDTLS_DIST_SHA256".ToLower()) {
+            throw "JDTLS SHA256 mismatch: expected $env:JDTLS_DIST_SHA256, got $jdtlsHash"
           }
           Write-Host "[resources] JDTLS SHA256 verified."
 

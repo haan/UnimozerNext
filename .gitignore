@@ -23,6 +23,10 @@ pnpm-debug.log*
 !/resources/jdk/.gitkeep
 !/resources/jdk/win-x64/
 !/resources/jdk/win-x64/.gitkeep
+!/resources/jdk/mac-x64/
+!/resources/jdk/mac-x64/.gitkeep
+!/resources/jdk/mac-arm64/
+!/resources/jdk/mac-arm64/.gitkeep
 
 # Bundled JDTLS (track folder skeleton only)
 /resources/jdtls/**
