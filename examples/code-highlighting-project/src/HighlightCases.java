@@ -1,6 +1,7 @@
 /**
  * Scope-highlighting focused Java sample.
  */
+
 public class HighlightCases {
 
     private int counter = 0;
