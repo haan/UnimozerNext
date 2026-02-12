@@ -1,6 +1,6 @@
 [package]
 name = "unimozer-next"
-version = "0.10.4"
+version = "0.10.5"
 description = "Unimozer Next"
 authors = ["Laurent Haan"]
 edition = "2021"
