@@ -51,7 +51,7 @@ type SelectionLike = {
   positionColumn: number;
 };
 
-const SCOPE_STRUCTURAL_INSERT_PATTERN = /[{}"'\/\\*\r\n]/;
+const SCOPE_STRUCTURAL_INSERT_PATTERN = /[{}"'/\\*\r\n]/;
 
 const computeScopeLineInfo = (source: string): ScopeLineInfo[] => {
   const lines: ScopeLineInfo[] = [];
@@ -479,22 +479,24 @@ export const CodePanel = memo(
       void applyTheme(monacoRef.current);
     }, [applyTheme]);
 
-    useEffect(() => {
-      return () => {
-        if (scopeRefreshFrameRef.current !== null) {
-          window.cancelAnimationFrame(scopeRefreshFrameRef.current);
-          scopeRefreshFrameRef.current = null;
-        }
+  useEffect(() => {
+    const scopeDecorationIdsByUri = scopeDecorationIdsByUriRef.current;
+    const selectionDecorationIdsByUri = selectionDecorationIdsByUriRef.current;
+    return () => {
+      if (scopeRefreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(scopeRefreshFrameRef.current);
+        scopeRefreshFrameRef.current = null;
+      }
         if (selectionRefreshFrameRef.current !== null) {
           window.cancelAnimationFrame(selectionRefreshFrameRef.current);
           selectionRefreshFrameRef.current = null;
         }
-        clearTrackedDecorations(monacoRef.current, scopeDecorationIdsByUriRef.current);
-        clearTrackedDecorations(monacoRef.current, selectionDecorationIdsByUriRef.current);
-        subscriptionsRef.current.forEach((subscription) => subscription.dispose());
-        subscriptionsRef.current = [];
-      };
-    }, []);
+      clearTrackedDecorations(monacoRef.current, scopeDecorationIdsByUri);
+      clearTrackedDecorations(monacoRef.current, selectionDecorationIdsByUri);
+      subscriptionsRef.current.forEach((subscription) => subscription.dispose());
+      subscriptionsRef.current = [];
+    };
+  }, []);
 
     const syncExternalContent = useCallback(
       (editor: MonacoEditorType.IStandaloneCodeEditor | null) => {
