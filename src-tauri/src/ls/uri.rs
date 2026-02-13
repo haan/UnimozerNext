@@ -66,10 +66,11 @@ pub fn path_to_uri(path: &Path) -> String {
 pub fn uri_to_path(uri: &str) -> PathBuf {
     let stripped = uri.trim_start_matches("file://");
     let decoded = percent_decode(stripped);
-    let normalized = if decoded.starts_with('/') && decoded.len() > 3 && decoded.as_bytes()[2] == b':' {
-        decoded.trim_start_matches('/').to_string()
-    } else {
-        decoded
-    };
+    let normalized =
+        if decoded.starts_with('/') && decoded.len() > 3 && decoded.as_bytes()[2] == b':' {
+            decoded.trim_start_matches('/').to_string()
+        } else {
+            decoded
+        };
     PathBuf::from(normalized)
 }

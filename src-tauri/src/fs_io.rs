@@ -239,4 +239,3 @@ fn collect_java_fingerprint_entries(
     entries.push((relative, metadata.len(), modified_timestamp_ms(&metadata)));
     Ok(())
 }
-

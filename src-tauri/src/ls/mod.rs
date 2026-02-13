@@ -32,7 +32,7 @@ const LS_CRASH_POLL_INTERVAL_MS: u64 = 500;
 const LS_DID_OPEN_INITIAL_VERSION: i32 = 1;
 
 fn parse_properties(path: &std::path::Path) -> HashMap<String, String> {
-  let mut values = HashMap::new();
+    let mut values = HashMap::new();
     let Ok(contents) = std::fs::read_to_string(path) else {
         return values;
     };
@@ -54,14 +54,10 @@ fn parse_properties(path: &std::path::Path) -> HashMap<String, String> {
             values.insert(key.to_string(), value.to_string());
         }
     }
-  values
+    values
 }
 
-fn resolve_property_value(
-    key: &str,
-    props: &HashMap<String, String>,
-    depth: usize,
-) -> String {
+fn resolve_property_value(key: &str, props: &HashMap<String, String>, depth: usize) -> String {
     if depth > LS_PROPERTY_RESOLUTION_MAX_DEPTH {
         return props.get(key).cloned().unwrap_or_default();
     }
@@ -98,7 +94,10 @@ fn ensure_eclipse_metadata(project_root: &std::path::Path) -> Result<(), String>
     }
 
     let nb_props = parse_properties(&project_root.join("nbproject").join("project.properties"));
-    let raw_src_dir = nb_props.get("src.dir").cloned().unwrap_or_else(|| "src".to_string());
+    let raw_src_dir = nb_props
+        .get("src.dir")
+        .cloned()
+        .unwrap_or_else(|| "src".to_string());
     let raw_output_dir = nb_props
         .get("build.classes.dir")
         .cloned()
@@ -153,7 +152,8 @@ fn ensure_eclipse_metadata(project_root: &std::path::Path) -> Result<(), String>
 "#,
             src_dir, output_dir
         );
-        std::fs::write(&classpath_file, contents).map_err(crate::command_error::to_command_error)?;
+        std::fs::write(&classpath_file, contents)
+            .map_err(crate::command_error::to_command_error)?;
     }
 
     Ok(())
@@ -393,7 +393,11 @@ fn with_client<T>(
 }
 
 #[tauri::command]
-pub fn ls_start(app: AppHandle, state: tauri::State<LsState>, project_root: String) -> Result<String, String> {
+pub fn ls_start(
+    app: AppHandle,
+    state: tauri::State<LsState>,
+    project_root: String,
+) -> Result<String, String> {
     let root_path = if project_root.starts_with("file://") {
         uri::uri_to_path(&project_root)
     } else {
@@ -517,7 +521,9 @@ pub fn ls_did_open(
             "text": text
         }
     });
-    with_client(&state, |client| client.send_notification("textDocument/didOpen", params))
+    with_client(&state, |client| {
+        client.send_notification("textDocument/didOpen", params)
+    })
 }
 
 #[tauri::command]
@@ -536,7 +542,9 @@ pub fn ls_did_change(
             { "text": text }
         ]
     });
-    with_client(&state, |client| client.send_notification("textDocument/didChange", params))
+    with_client(&state, |client| {
+        client.send_notification("textDocument/didChange", params)
+    })
 }
 
 #[tauri::command]
@@ -546,7 +554,9 @@ pub fn ls_did_close(state: tauri::State<LsState>, uri: String) -> Result<(), Str
             "uri": uri
         }
     });
-    with_client(&state, |client| client.send_notification("textDocument/didClose", params))
+    with_client(&state, |client| {
+        client.send_notification("textDocument/didClose", params)
+    })
 }
 
 #[tauri::command]
@@ -571,9 +581,5 @@ pub fn ls_format_document(
     if let Some(error) = response.get("error") {
         return Err(error.to_string());
     }
-    Ok(response
-        .get("result")
-        .cloned()
-        .unwrap_or_else(|| json!([])))
+    Ok(response.get("result").cloned().unwrap_or_else(|| json!([])))
 }
-

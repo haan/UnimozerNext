@@ -1,8 +1,10 @@
 use serde::Serialize;
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::{
     fs,
     io::{BufRead, BufReader, Read},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
         atomic::{AtomicU64, Ordering as AtomicOrdering},
@@ -10,8 +12,6 @@ use std::{
     },
     time::Duration,
 };
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use tauri::{Emitter, State};
 
 use crate::java_tools::{
@@ -19,9 +19,9 @@ use crate::java_tools::{
     resolve_project_classpath, resolve_project_src_root, resolve_resource,
 };
 use crate::shared_types::SourceOverride;
-use crate::{RUN_OUTPUT_CHUNK_SIZE_BYTES, RUN_OUTPUT_MAX_EMIT_BYTES, RUN_POLL_INTERVAL_MS};
 #[cfg(target_os = "windows")]
 use crate::CREATE_NO_WINDOW;
+use crate::{RUN_OUTPUT_CHUNK_SIZE_BYTES, RUN_OUTPUT_MAX_EMIT_BYTES, RUN_POLL_INTERVAL_MS};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -77,6 +77,11 @@ impl RunState {
     }
 }
 
+fn source_argument_path(file: &Path, root_path: &Path) -> String {
+    let path = file.strip_prefix(root_path).unwrap_or(file);
+    path.to_string_lossy().replace('\\', "/")
+}
+
 #[tauri::command]
 pub fn compile_project(
     app: tauri::AppHandle,
@@ -103,11 +108,12 @@ pub fn compile_project(
     fs::create_dir_all(&out_dir).map_err(crate::command_error::to_command_error)?;
 
     let mut java_files = Vec::new();
-    collect_java_files(&src_root_path, &mut java_files).map_err(crate::command_error::to_command_error)?;
+    collect_java_files(&src_root_path, &mut java_files)
+        .map_err(crate::command_error::to_command_error)?;
 
     let mut sources_list = String::new();
     for file in java_files {
-        let mut path = file.to_string_lossy().replace('\\', "/");
+        let mut path = source_argument_path(&file, &root_path);
         if path.contains(' ') || path.contains('\t') {
             path = format!("\"{}\"", path.replace('"', "\\\""));
         }
@@ -133,6 +139,7 @@ pub fn compile_project(
             vec!["-cp".to_string(), classpath.clone()]
         })
         .arg(format!("@{}", sources_file.display()))
+        .current_dir(&root_path)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
@@ -141,7 +148,9 @@ pub fn compile_project(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let mut child = command.spawn().map_err(crate::command_error::to_command_error)?;
+    let mut child = command
+        .spawn()
+        .map_err(crate::command_error::to_command_error)?;
     let stdout_pipe = child
         .stdout
         .take()
@@ -164,7 +173,9 @@ pub fn compile_project(
         buffer
     });
 
-    let status = child.wait().map_err(crate::command_error::to_command_error)?;
+    let status = child
+        .wait()
+        .map_err(crate::command_error::to_command_error)?;
     let stdout = stdout_reader.join().unwrap_or_default();
     let stderr = stderr_reader.join().unwrap_or_default();
 
@@ -225,7 +236,9 @@ pub fn run_main(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let mut child = command.spawn().map_err(crate::command_error::to_command_error)?;
+    let mut child = command
+        .spawn()
+        .map_err(crate::command_error::to_command_error)?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
 
@@ -235,8 +248,10 @@ pub fn run_main(
 
     let _ = app.emit("run-start", RunStartEvent { run_id });
 
-    let mut stdout_handle = stdout.map(|pipe| spawn_output_reader(app.clone(), pipe, run_id, "stdout"));
-    let mut stderr_handle = stderr.map(|pipe| spawn_output_reader(app.clone(), pipe, run_id, "stderr"));
+    let mut stdout_handle =
+        stdout.map(|pipe| spawn_output_reader(app.clone(), pipe, run_id, "stdout"));
+    let mut stderr_handle =
+        stderr.map(|pipe| spawn_output_reader(app.clone(), pipe, run_id, "stderr"));
 
     let current_slot = state.current.clone();
     let app_handle = app.clone();
@@ -267,7 +282,11 @@ pub fn run_main(
             }
 
             if let Ok(mut guard) = current_slot.lock() {
-                if guard.as_ref().map(|handle| handle.id == run_id).unwrap_or(false) {
+                if guard
+                    .as_ref()
+                    .map(|handle| handle.id == run_id)
+                    .unwrap_or(false)
+                {
                     *guard = None;
                 }
             }
@@ -293,7 +312,10 @@ pub fn cancel_run(state: State<RunState>) -> Result<(), String> {
         .lock()
         .map_err(|_| "Failed to lock run state".to_string())?;
     if let Some(handle) = guard.as_mut() {
-        handle.child.kill().map_err(crate::command_error::to_command_error)?;
+        handle
+            .child
+            .kill()
+            .map_err(crate::command_error::to_command_error)?;
         let _ = handle.child.wait();
     }
     Ok(())
@@ -374,4 +396,3 @@ fn spawn_output_reader<R: std::io::Read + Send + 'static>(
         }
     })
 }
-

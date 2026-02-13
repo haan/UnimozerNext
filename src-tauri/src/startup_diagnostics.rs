@@ -1,7 +1,7 @@
 use tauri::Manager;
 
 use crate::java_tools::{
-    java_executable_name, javac_executable_name, jdtls_config_relative_dir, jdk_relative_dir,
+    java_executable_name, javac_executable_name, jdk_relative_dir, jdtls_config_relative_dir,
     resolve_resource, resource_candidates,
 };
 use crate::launch_io::{append_startup_logs, collect_startup_umz_paths};
@@ -17,7 +17,9 @@ pub(crate) fn log_startup_diagnostics(app: &tauri::AppHandle) {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|duration| duration.as_secs())
         .unwrap_or_default();
-    push(format!("[startup] Unimozer Next diagnostics (debug logging enabled)"));
+    push(format!(
+        "[startup] Unimozer Next diagnostics (debug logging enabled)"
+    ));
     push(format!("[startup] timestamp_unix: {}", now));
     push(format!(
         "[startup] version: {}",

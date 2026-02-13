@@ -2,8 +2,8 @@ use tauri::{AppHandle, Manager};
 
 use crate::compile_run::{shutdown_run_process, RunState};
 use crate::jshell_io::{shutdown_jshell, JshellState};
-use crate::parser_io::{shutdown_parser_bridge, ParserBridgeState};
 use crate::ls;
+use crate::parser_io::{shutdown_parser_bridge, ParserBridgeState};
 
 pub(crate) fn shutdown_background_processes(app: &AppHandle) {
     let run_state = app.state::<RunState>();

@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::{
     fs,
     io::{BufRead, BufReader, Write},
@@ -6,8 +8,6 @@ use std::{
     process::{Command, Stdio},
     sync::{Arc, Mutex},
 };
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use tauri::State;
 
 use crate::java_tools::{java_executable_name, resolve_resource};
@@ -128,7 +128,8 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
         }
         String::new()
     };
-    let payload = serde_json::to_string(&request).map_err(crate::command_error::to_command_error)?;
+    let payload =
+        serde_json::to_string(&request).map_err(crate::command_error::to_command_error)?;
     session
         .stdin
         .write_all(payload.as_bytes())
@@ -171,8 +172,7 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
         }
 
         let decoded = String::from_utf8_lossy(&response);
-        let trimmed =
-            decoded.trim_end_matches(|character| character == '\r' || character == '\n');
+        let trimmed = decoded.trim_end_matches(|character| character == '\r' || character == '\n');
         if trimmed.is_empty() {
             continue;
         }
@@ -217,9 +217,7 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
     if parsed.is_none() && command_name == "eval" {
         if let Some(candidate) = legacy_candidate.take() {
             if let Some(candidate_line) = legacy_candidate_line {
-                if let Some(position) = noise_lines
-                    .iter()
-                    .rposition(|line| line == &candidate_line)
+                if let Some(position) = noise_lines.iter().rposition(|line| line == &candidate_line)
                 {
                     noise_lines.remove(position);
                 }
@@ -306,7 +304,9 @@ pub fn jshell_start(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let mut child = command.spawn().map_err(crate::command_error::to_command_error)?;
+    let mut child = command
+        .spawn()
+        .map_err(crate::command_error::to_command_error)?;
     let stderr_lines = Arc::new(Mutex::new(Vec::new()));
     let stdin = child
         .stdin
@@ -323,7 +323,12 @@ pub fn jshell_start(
             let mut line = String::new();
             loop {
                 line.clear();
-                if reader.read_line(&mut line).ok().filter(|n| *n > 0).is_none() {
+                if reader
+                    .read_line(&mut line)
+                    .ok()
+                    .filter(|n| *n > 0)
+                    .is_none()
+                {
                     break;
                 }
                 let trimmed = line.trim_end().to_string();
@@ -424,4 +429,3 @@ pub fn shutdown_jshell(state: &JshellState) {
         }
     }
 }
-

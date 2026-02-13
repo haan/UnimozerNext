@@ -225,7 +225,11 @@ pub(crate) fn resolve_project_classpath(root: &Path, key: &str) -> Vec<PathBuf> 
 }
 
 pub(crate) fn join_classpath(entries: &[PathBuf]) -> String {
-    let separator = if cfg!(target_os = "windows") { ";" } else { ":" };
+    let separator = if cfg!(target_os = "windows") {
+        ";"
+    } else {
+        ":"
+    };
     entries
         .iter()
         .map(|entry| entry.to_string_lossy().to_string())

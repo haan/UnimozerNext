@@ -8,15 +8,15 @@ mod compile_run;
 mod fs_io;
 mod java_tools;
 mod jshell_io;
+mod launch_io;
 mod lifecycle;
 mod ls;
-mod launch_io;
 mod parser_io;
 mod project_archive;
 mod project_io;
 mod settings_io;
-mod startup_diagnostics;
 mod shared_types;
+mod startup_diagnostics;
 mod workspace_session;
 
 use app_bootstrap::{handle_run_event, setup_startup};

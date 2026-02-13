@@ -193,6 +193,8 @@ mod tests {
             "file:///C:/Users/Student/C%20D.umz".to_string(),
         ]);
         assert_eq!(paths.len(), 2);
-        assert!(paths.iter().all(|item| item.to_ascii_lowercase().ends_with(".umz")));
+        assert!(paths
+            .iter()
+            .all(|item| item.to_ascii_lowercase().ends_with(".umz")));
     }
 }

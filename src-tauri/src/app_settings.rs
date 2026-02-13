@@ -8,8 +8,6 @@ struct UmlSettings {
     show_packages: bool,
     #[serde(default = "default_true")]
     show_swing_attributes: bool,
-    #[serde(default)]
-    panel_background: Option<String>,
     #[serde(default = "default_true")]
     code_highlight: bool,
 }
@@ -19,12 +17,15 @@ struct UmlSettings {
 struct GeneralSettings {
     #[serde(default = "default_font_size")]
     font_size: u32,
+    #[serde(default = "default_false")]
+    dark_mode: bool,
 }
 
 impl Default for GeneralSettings {
     fn default() -> Self {
         Self {
             font_size: default_font_size(),
+            dark_mode: default_false(),
         }
     }
 }
@@ -178,12 +179,12 @@ impl Default for AppSettings {
         Self {
             general: GeneralSettings {
                 font_size: default_font_size(),
+                dark_mode: default_false(),
             },
             uml: UmlSettings {
                 show_dependencies: true,
                 show_packages: default_true(),
                 show_swing_attributes: default_true(),
-                panel_background: None,
                 code_highlight: default_true(),
             },
             object_bench: ObjectBenchSettings {

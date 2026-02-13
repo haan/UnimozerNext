@@ -15,7 +15,6 @@ type ObjectBenchSectionProps = {
   graph: UmlGraph | null;
   diagram: DiagramState | null;
   compiled: boolean;
-  backgroundColor?: string | null;
   showPackages?: boolean;
   fontSize: number;
   structogramColorsEnabled?: boolean;
@@ -58,7 +57,6 @@ export const ObjectBenchSection = ({
   graph,
   diagram,
   compiled,
-  backgroundColor,
   showPackages,
   fontSize,
   structogramColorsEnabled,
@@ -103,7 +101,6 @@ export const ObjectBenchSection = ({
           graph={graph}
           diagram={diagram}
           compiled={compiled}
-          backgroundColor={backgroundColor}
           showPackages={showPackages}
           fontSize={fontSize}
           structogramColorsEnabled={structogramColorsEnabled}
@@ -133,14 +130,14 @@ export const ObjectBenchSection = ({
         />
       </div>
       <div
-        className="absolute left-0 z-10 h-3 w-full -translate-y-1.5 cursor-row-resize transition hover:bg-border/40"
+        className="editor-separator-handle absolute left-0 z-10 h-2.5 w-full -translate-y-1/2 cursor-row-resize"
         style={{ top: `${objectBenchSplitRatio * 100}%` }}
         role="separator"
         aria-orientation="horizontal"
         aria-label="Resize object bench panel"
         onPointerDown={startBenchResize}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border/60" />
+        <div className="editor-separator-line pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2" />
       </div>
       <div
         className="flex-1 overflow-hidden"

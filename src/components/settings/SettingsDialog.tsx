@@ -153,7 +153,28 @@ export const SettingsDialog = ({
 
             {activeGroup === "General" ? (
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Dark mode</p>
+                    <p className="text-xs text-muted-foreground">
+                      Use a dark color scheme for app panels and controls.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.general.darkMode}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        general: {
+                          ...settings.general,
+                          darkMode: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Font size</p>
                     <p className="text-xs text-muted-foreground">
@@ -184,7 +205,7 @@ export const SettingsDialog = ({
               </div>
             ) : activeGroup === "UML" ? (
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show dependencies</p>
                     <p className="text-xs text-muted-foreground">
@@ -205,7 +226,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show packages</p>
                     <p className="text-xs text-muted-foreground">
@@ -226,7 +247,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show javax.swing fields</p>
                     <p className="text-xs text-muted-foreground">
@@ -246,7 +267,7 @@ export const SettingsDialog = ({
                     }
                   />
                 </div>
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Jump to code</p>
                     <p className="text-xs text-muted-foreground">
@@ -269,7 +290,7 @@ export const SettingsDialog = ({
               </div>
             ) : activeGroup === "Object Bench" ? (
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Use object dropdowns in method calls</p>
                     <p className="text-xs text-muted-foreground">
@@ -290,7 +311,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show private fields</p>
                     <p className="text-xs text-muted-foreground">
@@ -311,7 +332,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show inherited fields</p>
                     <p className="text-xs text-muted-foreground">
@@ -332,7 +353,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Show static fields</p>
                     <p className="text-xs text-muted-foreground">
@@ -355,7 +376,7 @@ export const SettingsDialog = ({
               </div>
             ) : activeGroup === "Editor" ? (
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Editor theme</p>
                     <p className="text-xs text-muted-foreground">
@@ -389,7 +410,7 @@ export const SettingsDialog = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Auto format on save</p>
                     <p className="text-xs text-muted-foreground">
@@ -410,7 +431,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Tab size</p>
                     <p className="text-xs text-muted-foreground">
@@ -435,7 +456,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Insert spaces</p>
                     <p className="text-xs text-muted-foreground">
@@ -456,7 +477,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Auto close brackets</p>
                     <p className="text-xs text-muted-foreground">
@@ -477,7 +498,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Auto close quotes</p>
                     <p className="text-xs text-muted-foreground">
@@ -498,7 +519,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Auto close comments</p>
                     <p className="text-xs text-muted-foreground">
@@ -519,7 +540,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Word wrap</p>
                     <p className="text-xs text-muted-foreground">
@@ -540,7 +561,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Code highlighting</p>
                     <p className="text-xs text-muted-foreground">
@@ -563,7 +584,7 @@ export const SettingsDialog = ({
               </div>
             ) : activeGroup === "Structogram" ? (
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Use colors</p>
                     <p className="text-xs text-muted-foreground">
@@ -584,7 +605,7 @@ export const SettingsDialog = ({
                   />
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Loop header color</p>
                     <p className="text-xs text-muted-foreground">
@@ -612,7 +633,7 @@ export const SettingsDialog = ({
                   </Popover>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">If header color</p>
                     <p className="text-xs text-muted-foreground">
@@ -640,7 +661,7 @@ export const SettingsDialog = ({
                   </Popover>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Switch header color</p>
                     <p className="text-xs text-muted-foreground">
@@ -668,7 +689,7 @@ export const SettingsDialog = ({
                   </Popover>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Try wrapper color</p>
                     <p className="text-xs text-muted-foreground">
@@ -696,7 +717,7 @@ export const SettingsDialog = ({
                   </Popover>
                 </div>
 
-                <div className="flex justify-end rounded-lg bg-background px-4 py-3">
+                <div className="flex justify-end rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <button
                     type="button"
                     className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
@@ -709,7 +730,7 @@ export const SettingsDialog = ({
               </div>
             ) : activeGroup === "Advanced" ? (
               <div className="mt-4 grid gap-2">
-                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Debug logging</p>
                     <p className="text-xs text-muted-foreground">
@@ -741,3 +762,5 @@ export const SettingsDialog = ({
     </Dialog>
   );
 };
+
+

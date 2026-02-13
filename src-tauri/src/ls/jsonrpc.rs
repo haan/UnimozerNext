@@ -31,7 +31,12 @@ impl<R: Read> JsonRpcReader<R> {
 
         let len = match content_length {
             Some(len) => len,
-            None => return Err(io::Error::new(io::ErrorKind::InvalidData, "Missing Content-Length")),
+            None => {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Missing Content-Length",
+                ))
+            }
         };
 
         let mut buffer = vec![0u8; len];
@@ -55,7 +60,12 @@ impl<W: Write> JsonRpcWriter<W> {
     pub fn write_message(&mut self, value: &Value) -> io::Result<()> {
         let body = serde_json::to_string(value)
             .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
-        write!(self.writer, "Content-Length: {}\r\n\r\n{}", body.len(), body)?;
+        write!(
+            self.writer,
+            "Content-Length: {}\r\n\r\n{}",
+            body.len(),
+            body
+        )?;
         self.writer.flush()
     }
 }

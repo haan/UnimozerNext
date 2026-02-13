@@ -77,6 +77,7 @@ const UML_FONT_FAMILY =
   "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
 let measureCanvas: HTMLCanvasElement | null = null;
 const EXPORT_CSS_VARIABLES = [
+  "--background",
   "--foreground",
   "--accent-foreground",
   "--uml-font",
@@ -231,7 +232,6 @@ export type UmlDiagramProps = {
   compiled?: boolean;
   showPackages?: boolean;
   fontSize?: number;
-  backgroundColor?: string | null;
   exportDefaultPath?: string | null;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onViewportChange?: (viewport: DiagramViewport, commit: boolean) => void;
@@ -298,7 +298,6 @@ export const UmlDiagram = ({
   compiled,
   showPackages,
   fontSize,
-  backgroundColor,
   exportDefaultPath,
   onNodePositionChange,
   onViewportChange,
@@ -691,7 +690,8 @@ export const UmlDiagram = ({
         clone.setAttribute("style", exportStyleOverrides.trim());
       }
 
-      const background = backgroundColor ?? "#ffffff";
+      const backgroundToken = getVar("--background");
+      const background = backgroundToken ? `hsl(${backgroundToken})` : "#ffffff";
       const backgroundRect = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "rect"
@@ -705,7 +705,7 @@ export const UmlDiagram = ({
 
       return { svg: clone, width, height };
     },
-    [backgroundColor]
+    []
   );
 
   const renderSvgToCanvas = useCallback(
@@ -1028,7 +1028,7 @@ export const UmlDiagram = ({
         >
           <path
             d="M 0 0 L 18 9 L 0 18 z"
-            fill="white"
+            fill="hsl(var(--background))"
             stroke="hsl(var(--foreground) / 0.4)"
             strokeWidth={1.8}
           />

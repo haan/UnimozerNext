@@ -1,6 +1,5 @@
 export type UmlSettings = {
   showDependencies: boolean;
-  panelBackground: string | null;
   codeHighlight: boolean;
   showPackages: boolean;
   showSwingAttributes: boolean;
@@ -32,6 +31,7 @@ export type StructogramSettings = {
 
 export type GeneralSettings = {
   fontSize: number;
+  darkMode: boolean;
 };
 
 export type ObjectBenchSettings = {

@@ -29,9 +29,7 @@ pub struct OpenScratchProjectResponse {
     project_name: String,
 }
 
-fn read_single_top_level_project_name(
-    archive: &mut ZipArchive<fs::File>,
-) -> CommandResult<String> {
+fn read_single_top_level_project_name(archive: &mut ZipArchive<fs::File>) -> CommandResult<String> {
     let mut top_level: Option<String> = None;
     for index in 0..archive.len() {
         let entry = archive.by_index(index).map_err(to_command_error)?;
@@ -202,7 +200,9 @@ pub fn reload_packed_project_in_place(
     let canonical_allowed_workspace_root =
         fs::canonicalize(&allowed_workspace_root).map_err(to_command_error)?;
     if !canonical_workspace_dir.starts_with(&canonical_allowed_workspace_root) {
-        return Err("Current project workspace is outside the packed session workspace".to_string());
+        return Err(
+            "Current project workspace is outside the packed session workspace".to_string(),
+        );
     }
     prepare_fixed_workspace_dir(&workspace_dir)?;
     extract_archive_to_workspace(&mut archive, &workspace_dir)?;
@@ -297,7 +297,10 @@ mod tests {
         assert!(project_dir.join("build.xml").is_file());
         assert!(project_dir.join("manifest.mf").is_file());
         assert!(project_dir.join("nbproject").join("project.xml").is_file());
-        assert!(project_dir.join("nbproject").join("project.properties").is_file());
+        assert!(project_dir
+            .join("nbproject")
+            .join("project.properties")
+            .is_file());
         assert!(project_dir.join("src").is_dir());
 
         let _ = fs::remove_dir_all(&temp_root);
@@ -352,14 +355,16 @@ mod tests {
         extract_archive_to_workspace(&mut archive, &workspace_dir).expect("extract archive");
 
         assert!(workspace_dir.join("DemoProject").is_dir());
-        assert!(workspace_dir.join("DemoProject").join("src").join("Main.java").is_file());
-        assert!(
-            workspace_dir
-                .join("DemoProject")
-                .join("nbproject")
-                .join("project.xml")
-                .is_file()
-        );
+        assert!(workspace_dir
+            .join("DemoProject")
+            .join("src")
+            .join("Main.java")
+            .is_file());
+        assert!(workspace_dir
+            .join("DemoProject")
+            .join("nbproject")
+            .join("project.xml")
+            .is_file());
 
         let _ = fs::remove_dir_all(&temp_root);
     }
@@ -371,8 +376,11 @@ mod tests {
         fs::create_dir_all(project_root.join("src")).expect("create src");
         fs::create_dir_all(project_root.join("nbproject")).expect("create nbproject");
         fs::write(project_root.join("src").join("Main.java"), "class Main {}").expect("write java");
-        fs::write(project_root.join("nbproject").join("project.xml"), "<project/>")
-            .expect("write project xml");
+        fs::write(
+            project_root.join("nbproject").join("project.xml"),
+            "<project/>",
+        )
+        .expect("write project xml");
 
         let archive_path = temp_root.join("Lesson1.umz");
         save_packed_project(
@@ -416,4 +424,3 @@ mod tests {
         let _ = fs::remove_dir_all(&temp_root);
     }
 }
-

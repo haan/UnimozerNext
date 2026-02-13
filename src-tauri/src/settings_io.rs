@@ -32,10 +32,7 @@ pub fn write_settings(app: AppHandle, settings: AppSettings) -> CommandResult<()
 }
 
 pub fn settings_path(app: &AppHandle) -> CommandResult<PathBuf> {
-    let config_dir = app
-        .path()
-        .app_config_dir()
-        .map_err(to_command_error)?;
+    let config_dir = app.path().app_config_dir().map_err(to_command_error)?;
     Ok(config_dir.join("settings.json"))
 }
 
@@ -51,4 +48,3 @@ pub fn load_startup_settings(app: &AppHandle) -> AppSettings {
     };
     serde_json::from_str::<AppSettings>(&contents).unwrap_or_default()
 }
-

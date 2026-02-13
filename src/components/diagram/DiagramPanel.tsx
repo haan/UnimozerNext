@@ -25,7 +25,6 @@ export type DiagramPanelProps = {
   graph: UmlGraph | null;
   diagram: DiagramState | null;
   compiled?: boolean;
-  backgroundColor?: string | null;
   showPackages?: boolean;
   fontSize?: number;
   structogramColorsEnabled?: boolean;
@@ -85,7 +84,6 @@ export const DiagramPanel = ({
   graph,
   diagram,
   compiled,
-  backgroundColor,
   showPackages,
   fontSize,
   structogramColorsEnabled,
@@ -193,10 +191,7 @@ export const DiagramPanel = ({
     <ContextMenu>
       <ContextMenuTrigger asChild>
         <div className="flex h-full min-w-0 flex-col overflow-hidden">
-          <div
-            className="flex-1 min-w-0 overflow-hidden bg-white"
-            style={backgroundColor ? { backgroundColor } : undefined}
-          >
+          <div className="flex-1 min-w-0 overflow-hidden bg-background">
             {viewMode === "uml" && graph && diagram ? (
               <UmlDiagram
                 graph={graph}
@@ -204,7 +199,6 @@ export const DiagramPanel = ({
                 compiled={compiled}
                 showPackages={showPackages}
                 fontSize={fontSize}
-                backgroundColor={backgroundColor}
                 exportDefaultPath={exportDefaultPath}
                 onExportStatus={onExportStatus}
                 onNodePositionChange={onNodePositionChange}

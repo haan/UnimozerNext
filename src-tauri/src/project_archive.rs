@@ -144,10 +144,7 @@ pub fn sanitize_project_name(name: &str) -> String {
 }
 
 pub fn packed_workspace_dir(app: &AppHandle, archive_path: &Path) -> CommandResult<PathBuf> {
-    let local_data = app
-        .path()
-        .app_local_data_dir()
-        .map_err(to_command_error)?;
+    let local_data = app.path().app_local_data_dir().map_err(to_command_error)?;
     let workspace_root = local_data
         .join("packed-workspaces")
         .join(workspace_session_id(app));
@@ -163,10 +160,7 @@ pub fn packed_workspace_dir(app: &AppHandle, archive_path: &Path) -> CommandResu
 }
 
 pub fn packed_workspace_session_root(app: &AppHandle) -> CommandResult<PathBuf> {
-    let local_data = app
-        .path()
-        .app_local_data_dir()
-        .map_err(to_command_error)?;
+    let local_data = app.path().app_local_data_dir().map_err(to_command_error)?;
     let workspace_root = local_data
         .join("packed-workspaces")
         .join(workspace_session_id(app));
@@ -175,10 +169,7 @@ pub fn packed_workspace_session_root(app: &AppHandle) -> CommandResult<PathBuf> 
 }
 
 pub fn scratch_workspace_root(app: &AppHandle) -> CommandResult<PathBuf> {
-    let local_data = app
-        .path()
-        .app_local_data_dir()
-        .map_err(to_command_error)?;
+    let local_data = app.path().app_local_data_dir().map_err(to_command_error)?;
     let workspace_root = local_data
         .join("scratch-workspaces")
         .join(workspace_session_id(app));
@@ -221,7 +212,12 @@ pub fn prepare_workspace_dir(base_workspace: &Path) -> CommandResult<PathBuf> {
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(to_command_error)?
             .as_millis();
-        let candidate = parent.join(format!("{}-session-{}-{}", base_name, timestamp, attempt + 1));
+        let candidate = parent.join(format!(
+            "{}-session-{}-{}",
+            base_name,
+            timestamp,
+            attempt + 1
+        ));
         if candidate.exists() {
             continue;
         }
@@ -287,7 +283,11 @@ fn normalize_for_compare(path: &Path) -> String {
     }
 }
 
-fn collect_pack_paths(base_parent: &Path, current: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
+fn collect_pack_paths(
+    base_parent: &Path,
+    current: &Path,
+    out: &mut Vec<PathBuf>,
+) -> io::Result<()> {
     let relative = current.strip_prefix(base_parent).unwrap_or(current);
     if should_skip_packed_relative(relative) {
         return Ok(());
@@ -299,7 +299,8 @@ fn collect_pack_paths(base_parent: &Path, current: &Path, out: &mut Vec<PathBuf>
         for entry in fs::read_dir(current)? {
             children.push(entry?.path());
         }
-        children.sort_by(|left, right| normalize_for_compare(left).cmp(&normalize_for_compare(right)));
+        children
+            .sort_by(|left, right| normalize_for_compare(left).cmp(&normalize_for_compare(right)));
         for child in children {
             collect_pack_paths(base_parent, &child, out)?;
         }
@@ -461,9 +462,15 @@ mod tests {
 
     #[test]
     fn should_skip_packed_relative_skips_build_artifacts_but_not_root() {
-        assert!(should_skip_packed_relative(Path::new("Project/target/classes")));
-        assert!(!should_skip_packed_relative(Path::new("Project/src/Main.java")));
-        assert!(!should_skip_packed_relative(Path::new("target/src/Main.java")));
+        assert!(should_skip_packed_relative(Path::new(
+            "Project/target/classes"
+        )));
+        assert!(!should_skip_packed_relative(Path::new(
+            "Project/src/Main.java"
+        )));
+        assert!(!should_skip_packed_relative(Path::new(
+            "target/src/Main.java"
+        )));
     }
 
     #[test]
@@ -524,4 +531,3 @@ mod tests {
         assert!(!is_stale_workspace_session(&fresh_session, now_ms));
     }
 }
-

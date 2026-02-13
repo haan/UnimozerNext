@@ -154,6 +154,7 @@ export default function AppContainer({
   const showDependencies = settings.uml.showDependencies;
   const showPackages = settings.uml.showPackages;
   const fontSize = settings.general.fontSize;
+  const darkMode = settings.general.darkMode;
   const showPrivateObjectFields =
     settings.objectBench.showPrivateObjectFields;
   const showInheritedObjectFields =
@@ -347,6 +348,7 @@ export default function AppContainer({
     projectPath,
     projectStorageMode,
     packedArchivePath,
+    darkMode,
     editorTheme: settings.editor.theme,
     structogramLoopHeaderColor,
     structogramIfHeaderColor,
@@ -845,7 +847,6 @@ export default function AppContainer({
           graph: visibleGraph,
           diagram: diagramState,
           compiled: compileStatus === "success",
-          backgroundColor: settings.uml.panelBackground,
           showPackages,
           fontSize,
           structogramColorsEnabled,
@@ -885,6 +886,7 @@ export default function AppContainer({
           fileUri: openFilePath ? toFileUri(openFilePath) : null,
           content,
           dirty,
+          darkMode,
           fontSize,
           theme: settings.editor.theme,
           tabSize: settings.editor.tabSize,

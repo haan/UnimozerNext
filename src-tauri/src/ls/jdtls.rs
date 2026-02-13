@@ -178,7 +178,10 @@ pub fn spawn_jdtls(
         .arg("-Dosgi.bundles.defaultStartLevel=4")
         .arg("-Declipse.product=org.eclipse.jdt.ls.core.product")
         .arg("-Dlog.level=ALL")
-        .arg(format!("-Dorg.eclipse.jdt.ls.log.file={}", log_file.display()))
+        .arg(format!(
+            "-Dorg.eclipse.jdt.ls.log.file={}",
+            log_file.display()
+        ))
         .arg("-Xmx1G")
         .arg("--add-modules=ALL-SYSTEM")
         .arg("--add-opens")
@@ -200,7 +203,8 @@ pub fn spawn_jdtls(
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let child = command.spawn().map_err(crate::command_error::to_command_error)?;
+    let child = command
+        .spawn()
+        .map_err(crate::command_error::to_command_error)?;
     Ok((child, log_file))
 }
-

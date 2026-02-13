@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::{
     io::{BufRead, BufReader, Write},
     process::{Command, Stdio},
     sync::{Arc, Mutex},
 };
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
 use tauri::State;
 
 use crate::java_tools::{java_executable_name, resolve_resource};
@@ -314,7 +314,9 @@ fn spawn_parser_bridge(app: &tauri::AppHandle) -> Result<ParserBridgeSession, St
         command.creation_flags(CREATE_NO_WINDOW);
     }
 
-    let mut child = command.spawn().map_err(crate::command_error::to_command_error)?;
+    let mut child = command
+        .spawn()
+        .map_err(crate::command_error::to_command_error)?;
     let stderr_lines = Arc::new(Mutex::new(Vec::new()));
     let stdin = child
         .stdin
@@ -331,7 +333,12 @@ fn spawn_parser_bridge(app: &tauri::AppHandle) -> Result<ParserBridgeSession, St
             let mut line = String::new();
             loop {
                 line.clear();
-                if reader.read_line(&mut line).ok().filter(|n| *n > 0).is_none() {
+                if reader
+                    .read_line(&mut line)
+                    .ok()
+                    .filter(|n| *n > 0)
+                    .is_none()
+                {
                     break;
                 }
                 let trimmed = line.trim_end().to_string();
@@ -387,7 +394,8 @@ fn parser_send_raw(
     state: &State<ParserBridgeState>,
     request: serde_json::Value,
 ) -> Result<String, String> {
-    let payload = serde_json::to_string(&request).map_err(crate::command_error::to_command_error)?;
+    let payload =
+        serde_json::to_string(&request).map_err(crate::command_error::to_command_error)?;
     let mut last_error = String::new();
 
     for attempt in 0..PARSER_SEND_MAX_ATTEMPTS {
@@ -449,7 +457,8 @@ pub fn parse_uml_graph(
         overrides,
         include_structogram_ir,
     };
-    let request_value = serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
+    let request_value =
+        serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
     let raw = parser_send_raw(&app, &state, request_value)?;
     let graph = serde_json::from_str(&raw).map_err(crate::command_error::to_command_error)?;
     Ok(ParseUmlGraphResponse { graph, raw })
@@ -461,12 +470,15 @@ pub fn add_field_to_class(
     state: State<ParserBridgeState>,
     request: AddFieldRequest,
 ) -> Result<String, String> {
-    let request_value = serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
+    let request_value =
+        serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
     let raw = parser_send_raw(&app, &state, request_value)?;
     let response: AddFieldResponse =
         serde_json::from_str(&raw).map_err(crate::command_error::to_command_error)?;
     if !response.ok {
-        return Err(response.error.unwrap_or_else(|| "Failed to add field".to_string()));
+        return Err(response
+            .error
+            .unwrap_or_else(|| "Failed to add field".to_string()));
     }
     response
         .content
@@ -479,16 +491,15 @@ pub fn add_constructor_to_class(
     state: State<ParserBridgeState>,
     request: AddConstructorRequest,
 ) -> Result<String, String> {
-    let request_value = serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
+    let request_value =
+        serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
     let raw = parser_send_raw(&app, &state, request_value)?;
     let response: AddConstructorResponse =
         serde_json::from_str(&raw).map_err(crate::command_error::to_command_error)?;
     if !response.ok {
-        return Err(
-            response
-                .error
-                .unwrap_or_else(|| "Failed to add constructor".to_string()),
-        );
+        return Err(response
+            .error
+            .unwrap_or_else(|| "Failed to add constructor".to_string()));
     }
     response
         .content
@@ -501,12 +512,15 @@ pub fn add_method_to_class(
     state: State<ParserBridgeState>,
     request: AddMethodRequest,
 ) -> Result<String, String> {
-    let request_value = serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
+    let request_value =
+        serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
     let raw = parser_send_raw(&app, &state, request_value)?;
     let response: AddMethodResponse =
         serde_json::from_str(&raw).map_err(crate::command_error::to_command_error)?;
     if !response.ok {
-        return Err(response.error.unwrap_or_else(|| "Failed to add method".to_string()));
+        return Err(response
+            .error
+            .unwrap_or_else(|| "Failed to add method".to_string()));
     }
     response
         .content
@@ -526,4 +540,3 @@ pub fn shutdown_parser_bridge(state: &ParserBridgeState) {
         }
     }
 }
-

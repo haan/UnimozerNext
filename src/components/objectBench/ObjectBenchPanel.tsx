@@ -94,7 +94,7 @@ export const ObjectBenchPanel = ({
 }: ObjectBenchPanelProps) => {
   return (
     <div
-      className="flex h-full flex-col bg-muted/30"
+      className="flex h-full flex-col bg-background"
       style={{ fontSize }}
     >
       <div className="flex-1 overflow-auto">

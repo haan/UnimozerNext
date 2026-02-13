@@ -1,12 +1,10 @@
-use crate::launch_io::{
-    collect_startup_umz_paths, queue_launch_open_paths,
-};
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+use crate::launch_io::parse_launch_umz_arg;
+use crate::launch_io::{collect_startup_umz_paths, queue_launch_open_paths};
 use crate::lifecycle::shutdown_background_processes;
 use crate::project_archive::cleanup_stale_workspace_sessions_async;
 use crate::settings_io::load_startup_settings;
 use crate::startup_diagnostics::log_startup_diagnostics;
-#[cfg(any(target_os = "macos", target_os = "ios"))]
-use crate::launch_io::parse_launch_umz_arg;
 
 pub(crate) fn setup_startup(app: &tauri::AppHandle) {
     let settings = load_startup_settings(app);
@@ -18,8 +16,16 @@ pub(crate) fn setup_startup(app: &tauri::AppHandle) {
     }
 }
 
-pub(crate) fn handle_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent, cleaned_up: &mut bool) {
-    if !*cleaned_up && matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit)
+pub(crate) fn handle_run_event(
+    app: &tauri::AppHandle,
+    event: &tauri::RunEvent,
+    cleaned_up: &mut bool,
+) {
+    if !*cleaned_up
+        && matches!(
+            event,
+            tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+        )
     {
         shutdown_background_processes(app);
         *cleaned_up = true;

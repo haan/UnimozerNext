@@ -69,9 +69,9 @@ export const registerMonacoThemes = async (
   registeredThemes.add(themeId);
 };
 
-export const resolveMonacoTheme = (theme: string | undefined) => {
+export const resolveMonacoTheme = (theme: string | undefined, darkMode: boolean) => {
   if (!theme || theme === "default") {
-    return "vs";
+    return darkMode ? "vs-dark" : "vs";
   }
   return theme;
 };

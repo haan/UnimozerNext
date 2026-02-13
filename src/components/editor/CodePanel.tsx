@@ -15,6 +15,7 @@ export type CodePanelProps = {
   fileUri: string | null;
   content: string;
   dirty: boolean;
+  darkMode: boolean;
   fontSize: number;
   theme: string;
   tabSize: number;
@@ -450,6 +451,7 @@ export const CodePanel = memo(
     openFile,
     fileUri,
     content,
+    darkMode,
     fontSize,
     theme,
     tabSize,
@@ -473,7 +475,7 @@ export const CodePanel = memo(
     const scopeRefreshFrameRef = useRef<number | null>(null);
     const selectionRefreshFrameRef = useRef<number | null>(null);
     const lastEditorValueRef = useRef<string | null>(null);
-    const resolvedTheme = resolveMonacoTheme(theme);
+    const resolvedTheme = resolveMonacoTheme(theme, darkMode);
     const debugEnabled = Boolean(debugLogging && onDebugLog);
 
     const logEvent = useCallback(

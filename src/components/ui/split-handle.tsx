@@ -14,21 +14,21 @@ export const SplitHandle = ({
   if (orientation === "vertical") {
     return (
       <div
-        className="absolute top-0 h-full w-3 -translate-x-1.5 cursor-col-resize transition hover:bg-border/80"
+        className="editor-separator-handle absolute top-0 z-10 h-full w-2.5 -translate-x-1/2 cursor-col-resize"
         style={{ left: `${positionPercent}%` }}
         role="separator"
         aria-orientation="vertical"
         aria-label={ariaLabel}
         onPointerDown={onPointerDown}
       >
-        <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60" />
+        <div className="editor-separator-line pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2" />
       </div>
     );
   }
 
   return (
     <div
-      className="editor-separator-handle absolute left-0 w-full h-3 -translate-y-1.5 cursor-row-resize"
+      className="editor-separator-handle absolute left-0 z-10 h-2.5 w-full -translate-y-1/2 cursor-row-resize"
       style={{ top: `${positionPercent}%` }}
       role="separator"
       aria-orientation="horizontal"
