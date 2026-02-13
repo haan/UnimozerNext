@@ -45,6 +45,7 @@ import { useAppDerivedState } from "./hooks/useAppDerivedState";
 import { useUmlParseDrafts } from "./hooks/useUmlParseDrafts";
 import { useWorkspaceUiControllers } from "./hooks/useWorkspaceUiControllers";
 import { useProjectDiskReload } from "./hooks/useProjectDiskReload";
+import { useWebviewGuard } from "./hooks/useWebviewGuard";
 import {
   CONSOLE_MIN_HEIGHT_PX,
   EDITOR_MIN_HEIGHT_PX,
@@ -71,6 +72,8 @@ export default function AppContainer({
   updateConsoleSplitRatioSetting,
   updateObjectBenchSplitRatioSetting
 }: AppContainerProps) {
+  useWebviewGuard();
+
   const {
     projectPath,
     projectStorageMode,
@@ -942,6 +945,10 @@ export default function AppContainer({
         callMethodObjectName={callMethodTarget?.name ?? ""}
         callMethodLabel={callMethodInfo?.signature ?? ""}
         callMethodParams={callMethodInfo?.params ?? []}
+        callMethodAvailableObjects={objectBench.map((object) => ({
+          name: object.name,
+          type: object.type
+        }))}
         removeClassOpen={removeClassOpen}
         onRemoveClassOpenChange={handleRemoveClassOpenChange}
         removeTargetName={removeTarget?.name ?? null}

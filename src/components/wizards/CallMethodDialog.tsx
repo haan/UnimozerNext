@@ -7,6 +7,11 @@ export type CallMethodForm = {
   paramValues: string[];
 };
 
+type AvailableObject = {
+  name: string;
+  type: string;
+};
+
 type MethodParam = {
   name: string;
   type: string;
@@ -18,8 +23,59 @@ type CallMethodDialogProps = {
   objectName: string;
   methodLabel: string;
   params: MethodParam[];
+  availableObjects: AvailableObject[];
   onSubmit: (form: CallMethodForm) => Promise<void> | void;
   busy?: boolean;
+};
+
+const PRIMITIVE_TYPES = new Set([
+  "byte",
+  "short",
+  "int",
+  "long",
+  "float",
+  "double",
+  "boolean",
+  "char"
+]);
+
+const normalizeTypeForMatch = (type: string) => {
+  let normalized = type.trim().replace(/\s+/g, "");
+  normalized = normalized.replace(/<.*>/g, "");
+  normalized = normalized.replace(/\.{3}$/, "[]");
+  while (normalized.endsWith("[]")) {
+    normalized = normalized.slice(0, -2);
+  }
+  return normalized;
+};
+
+const toSimpleTypeName = (type: string) => {
+  const normalized = normalizeTypeForMatch(type);
+  const lastDot = normalized.lastIndexOf(".");
+  return lastDot >= 0 ? normalized.slice(lastDot + 1) : normalized;
+};
+
+const isObjectParameterType = (type: string) => {
+  const normalized = normalizeTypeForMatch(type);
+  if (!normalized) {
+    return false;
+  }
+  if (PRIMITIVE_TYPES.has(normalized)) {
+    return false;
+  }
+  return toSimpleTypeName(normalized) !== "String";
+};
+
+const matchesParameterType = (objectType: string, paramType: string) => {
+  const objectNormalized = normalizeTypeForMatch(objectType);
+  const paramNormalized = normalizeTypeForMatch(paramType);
+  if (!objectNormalized || !paramNormalized) {
+    return false;
+  }
+  if (objectNormalized === paramNormalized) {
+    return true;
+  }
+  return toSimpleTypeName(objectNormalized) === toSimpleTypeName(paramNormalized);
 };
 
 export const CallMethodDialog = ({
@@ -28,6 +84,7 @@ export const CallMethodDialog = ({
   objectName,
   methodLabel,
   params,
+  availableObjects,
   onSubmit,
   busy
 }: CallMethodDialogProps) => {
@@ -51,8 +108,6 @@ export const CallMethodDialog = ({
     });
   };
 
-  const hasEmptyParams = params.some((_, index) => (paramValues[index] ?? "").trim().length === 0);
-
   const handleSubmit = async () => {
     if (busy || submitting || hasEmptyParams) return;
     setSubmitting(true);
@@ -68,6 +123,36 @@ export const CallMethodDialog = ({
     if (methodLabel) return methodLabel;
     return "method()";
   }, [methodLabel]);
+
+  const objectNamesByParamIndex = useMemo(
+    () =>
+      params.map((param) => {
+        if (!isObjectParameterType(param.type)) {
+          return [];
+        }
+        const names = new Set(
+          availableObjects
+            .filter((object) => matchesParameterType(object.type, param.type))
+            .map((object) => object.name)
+        );
+        return Array.from(names).sort((left, right) =>
+          left.localeCompare(right, undefined, { sensitivity: "base" })
+        );
+      }),
+    [availableObjects, params]
+  );
+
+  const hasEmptyParams = params.some((param, index) => {
+    const value = (paramValues[index] ?? "").trim();
+    if (value.length === 0) {
+      return true;
+    }
+    if (!isObjectParameterType(param.type)) {
+      return false;
+    }
+    const validObjects = objectNamesByParamIndex[index] ?? [];
+    return validObjects.length === 0 || !validObjects.includes(value);
+  });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -102,13 +187,40 @@ export const CallMethodDialog = ({
                     <label className="text-xs font-medium text-muted-foreground">
                       {param.name}: {param.type}
                     </label>
-                    <input
-                      className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
-                      value={paramValues[index] ?? ""}
-                      placeholder="Java expression"
-                      required
-                      onChange={(event) => updateParam(index, event.target.value)}
-                    />
+                    {isObjectParameterType(param.type) ? (
+                      (objectNamesByParamIndex[index] ?? []).length > 0 ? (
+                        <select
+                          className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                          value={paramValues[index] ?? ""}
+                          required
+                          onChange={(event) => updateParam(index, event.target.value)}
+                        >
+                          <option value="">Select object</option>
+                          {(objectNamesByParamIndex[index] ?? []).map((name) => (
+                            <option key={`${param.name}-${index}-${name}`} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <select
+                          className="h-8 w-full rounded border border-input bg-background px-2 text-sm text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
+                          value=""
+                          disabled
+                          required
+                        >
+                          <option value="">No valid object found</option>
+                        </select>
+                      )
+                    ) : (
+                      <input
+                        className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"
+                        value={paramValues[index] ?? ""}
+                        placeholder="Java expression"
+                        required
+                        onChange={(event) => updateParam(index, event.target.value)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>

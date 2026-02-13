@@ -53,6 +53,7 @@ type AppDialogsProps = {
   callMethodObjectName: string;
   callMethodLabel: string;
   callMethodParams: { name: string; type: string }[];
+  callMethodAvailableObjects: { name: string; type: string }[];
   removeClassOpen: boolean;
   onRemoveClassOpenChange: (open: boolean) => void;
   removeTargetName: string | null;
@@ -104,6 +105,7 @@ export const AppDialogs = ({
   callMethodObjectName,
   callMethodLabel,
   callMethodParams,
+  callMethodAvailableObjects,
   removeClassOpen,
   onRemoveClassOpenChange,
   removeTargetName,
@@ -172,6 +174,7 @@ export const AppDialogs = ({
       objectName={callMethodObjectName}
       methodLabel={callMethodLabel}
       params={callMethodParams}
+      availableObjects={callMethodAvailableObjects}
       busy={busy}
     />
     <AlertDialog open={removeClassOpen} onOpenChange={onRemoveClassOpenChange}>
