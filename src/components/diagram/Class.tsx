@@ -29,6 +29,8 @@ export type ClassProps = {
   fontSize: number;
   headerHeight: number;
   rowHeight: number;
+  rowTextBaselineOffset: number;
+  headerTextBaselineY: number;
   onHeaderPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
   onCompile?: () => void;
   onRunMain?: () => void;
@@ -50,6 +52,8 @@ export const Class = ({
   fontSize,
   headerHeight,
   rowHeight,
+  rowTextBaselineOffset,
+  headerTextBaselineY,
   onHeaderPointerDown,
   onCompile,
   onRunMain,
@@ -115,12 +119,12 @@ export const Class = ({
     );
     cursorY += SECTION_PADDING;
     fields.forEach((field, index) => {
-      const y = cursorY;
+      const baselineY = cursorY + rowTextBaselineOffset;
       content.push(
         <UmlAttribute
           key={`${node.id}-field-${field.signature}-${index}`}
           field={field}
-          y={y}
+          baselineY={baselineY}
           fontSize={fontSize}
           onSelect={onFieldSelect ? () => onFieldSelect(field, node) : undefined}
         />
@@ -146,12 +150,12 @@ export const Class = ({
     );
     cursorY = lineY + SECTION_PADDING;
     methods.forEach((method, index) => {
-      const y = cursorY;
+      const baselineY = cursorY + rowTextBaselineOffset;
       content.push(
         <UmlMethod
           key={`${node.id}-method-${method.signature}-${index}`}
           method={method}
-          y={y}
+          baselineY={baselineY}
           fontSize={fontSize}
           onSelect={onMethodSelect ? () => onMethodSelect(method, node) : undefined}
         />
@@ -192,9 +196,8 @@ export const Class = ({
           />
           <text
             x={node.width / 2}
-            y={headerHeight / 2 + 1}
+            y={headerTextBaselineY}
             textAnchor="middle"
-            dominantBaseline="middle"
             style={{
               fill: "hsl(var(--accent-foreground))",
               fontSize,

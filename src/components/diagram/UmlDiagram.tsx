@@ -32,6 +32,8 @@ import {
   DEFAULT_VIEW_Y,
   DRAG_MOVE_THRESHOLD_PX,
   FONT_MEASURE_FALLBACK_CHAR_WIDTH,
+  FONT_METRICS_FALLBACK_ASCENT_RATIO,
+  FONT_METRICS_FALLBACK_DESCENT_RATIO,
   HEADER_VERTICAL_PADDING,
   MAX_ZOOM_SCALE,
   MIN_ZOOM_SCALE,
@@ -76,6 +78,11 @@ const resolveExportDirectory = (path: string) => {
 const UML_FONT_FAMILY =
   "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
 let measureCanvas: HTMLCanvasElement | null = null;
+type FontMetrics = {
+  ascent: number;
+  descent: number;
+  height: number;
+};
 const EXPORT_CSS_VARIABLES = [
   "--background",
   "--foreground",
@@ -100,6 +107,34 @@ const measureTextWidth = (text: string, font: string) => {
   if (!ctx) return text.length * FONT_MEASURE_FALLBACK_CHAR_WIDTH;
   ctx.font = font;
   return ctx.measureText(text).width;
+};
+
+const measureFontMetrics = (font: string, fontSize: number): FontMetrics => {
+  if (!measureCanvas) {
+    measureCanvas = document.createElement("canvas");
+  }
+  const ctx = measureCanvas.getContext("2d");
+  if (ctx) {
+    ctx.font = font;
+    const textMetrics = ctx.measureText("Hg");
+    const ascent = textMetrics.actualBoundingBoxAscent;
+    const descent = textMetrics.actualBoundingBoxDescent;
+    if (ascent > 0 && descent >= 0) {
+      return {
+        ascent,
+        descent,
+        height: ascent + descent
+      };
+    }
+  }
+
+  const ascent = fontSize * FONT_METRICS_FALLBACK_ASCENT_RATIO;
+  const descent = fontSize * FONT_METRICS_FALLBACK_DESCENT_RATIO;
+  return {
+    ascent,
+    descent,
+    height: ascent + descent
+  };
 };
 
 const computeNodeWidth = (node: UmlNode, diagram: DiagramState, fontSize: number) => {
@@ -327,8 +362,27 @@ export const UmlDiagram = ({
   const viewRef = useRef(view);
   const [fontReady, setFontReady] = useState(false);
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
+  const bodyFontMetrics = useMemo(
+    () => measureFontMetrics(`${umlFontSize}px ${UML_FONT_FAMILY}`, umlFontSize),
+    [umlFontSize]
+  );
+  const headerFontMetrics = useMemo(
+    () => measureFontMetrics(`600 ${umlFontSize}px ${UML_FONT_FAMILY}`, umlFontSize),
+    [umlFontSize]
+  );
   const headerHeight = umlFontSize + 2 * HEADER_VERTICAL_PADDING;
-  const rowHeight = Math.round(umlFontSize * UML_LINE_HEIGHT);
+  const rowHeight = Math.max(
+    Math.round(umlFontSize * UML_LINE_HEIGHT),
+    Math.ceil(bodyFontMetrics.height + 4)
+  );
+  const rowTextBaselineOffset = useMemo(() => {
+    const rowInnerOffset = Math.max(0, (rowHeight - bodyFontMetrics.height) / 2);
+    return rowInnerOffset + bodyFontMetrics.ascent;
+  }, [bodyFontMetrics.ascent, bodyFontMetrics.height, rowHeight]);
+  const headerTextBaselineY = useMemo(
+    () => headerHeight / 2 + (headerFontMetrics.ascent - headerFontMetrics.descent) / 2,
+    [headerFontMetrics.ascent, headerFontMetrics.descent, headerHeight]
+  );
 
   const commitViewport = useCallback(
     (next: { x: number; y: number; scale: number }, commit: boolean) => {
@@ -1221,6 +1275,8 @@ export const UmlDiagram = ({
             fontSize={umlFontSize}
             headerHeight={headerHeight}
             rowHeight={rowHeight}
+            rowTextBaselineOffset={rowTextBaselineOffset}
+            headerTextBaselineY={headerTextBaselineY}
             onHeaderPointerDown={(event) => {
               if (event.button !== 0) return;
               event.preventDefault();

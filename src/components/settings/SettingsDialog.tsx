@@ -11,6 +11,7 @@ import {
   SelectValue
 } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
 import { ChromePicker, type ColorResult } from "react-color";
 import { loadEditorThemeOptions, type ThemeOption } from "../../services/monacoThemes";
@@ -123,6 +124,14 @@ export const SettingsDialog = ({
     );
   }, [defaultStructogramSettings, settings.structogram]);
 
+  const fontZoomModifier = useMemo(() => {
+    if (typeof navigator === "undefined") {
+      return "Ctrl";
+    }
+    const platformInfo = `${navigator.platform} ${navigator.userAgent}`.toLowerCase();
+    return platformInfo.includes("mac") ? "Cmd" : "Ctrl";
+  }, []);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-160 w-215 max-w-[90vw] overflow-hidden p-0">
@@ -181,26 +190,36 @@ export const SettingsDialog = ({
                       Adjust the font size used in the editor, console, and UML panels.
                     </p>
                   </div>
-                  <div className="flex w-44 items-center gap-3">
-                    <Slider
-                      value={[settings.general.fontSize]}
-                      min={8}
-                      max={40}
-                      step={1}
-                      onValueChange={(value) =>
-                        onChange({
-                          ...settings,
-                          general: {
-                            ...settings.general,
-                            fontSize: value[0] ?? 12
-                          }
-                        })
-                      }
-                    />
-                    <span className="w-8 text-right text-xs text-muted-foreground">
-                      {settings.general.fontSize}
-                    </span>
-                  </div>
+                  <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <div className="flex w-44 items-center gap-3">
+                          <Slider
+                            value={[settings.general.fontSize]}
+                            min={8}
+                            max={40}
+                            step={1}
+                            onValueChange={(value) =>
+                              onChange({
+                                ...settings,
+                                general: {
+                                  ...settings.general,
+                                  fontSize: value[0] ?? 12
+                                }
+                              })
+                            }
+                          />
+                          <span className="w-8 text-right text-xs text-muted-foreground">
+                            {settings.general.fontSize}
+                          </span>
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        Tip: Use {fontZoomModifier} + scroll wheel to adjust font size anywhere in
+                        the app.
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
             ) : activeGroup === "UML" ? (

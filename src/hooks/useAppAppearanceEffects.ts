@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
 
-import { getThemeColors } from "../services/monacoThemes";
 import { toDisplayPath } from "../services/paths";
 
 const STRUCTOGRAM_LIGHT_DEFAULTS = {
@@ -52,7 +51,6 @@ type UseAppAppearanceEffectsArgs = {
   projectStorageMode: "folder" | "packed" | "scratch" | null;
   packedArchivePath: string | null;
   darkMode: boolean;
-  editorTheme: string;
   structogramLoopHeaderColor: string;
   structogramIfHeaderColor: string;
   structogramSwitchHeaderColor: string;
@@ -67,7 +65,6 @@ export const useAppAppearanceEffects = ({
   projectStorageMode,
   packedArchivePath,
   darkMode,
-  editorTheme,
   structogramLoopHeaderColor,
   structogramIfHeaderColor,
   structogramSwitchHeaderColor,
@@ -108,36 +105,9 @@ export const useAppAppearanceEffects = ({
 
   useEffect(() => {
     const root = document.documentElement;
-    if (editorTheme === "default") {
-      root.style.removeProperty("--editor-separator-color");
-      root.style.removeProperty("--editor-separator-hover");
-      return;
-    }
-
-    let cancelled = false;
-    const applyTheme = async () => {
-      const colors = await getThemeColors(editorTheme);
-      if (cancelled) return;
-      if (!colors) {
-        root.style.removeProperty("--editor-separator-color");
-        root.style.removeProperty("--editor-separator-hover");
-        return;
-      }
-      const separatorColor =
-        colors.lineHighlightBorder ?? colors.lineHighlightBackground ?? null;
-      if (separatorColor) {
-        root.style.setProperty("--editor-separator-color", separatorColor);
-        root.style.setProperty("--editor-separator-hover", separatorColor);
-      } else {
-        root.style.removeProperty("--editor-separator-color");
-        root.style.removeProperty("--editor-separator-hover");
-      }
-    };
-    void applyTheme();
-    return () => {
-      cancelled = true;
-    };
-  }, [editorTheme]);
+    root.style.removeProperty("--editor-separator-color");
+    root.style.removeProperty("--editor-separator-hover");
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;

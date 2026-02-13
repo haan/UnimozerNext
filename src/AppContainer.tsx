@@ -349,7 +349,6 @@ export default function AppContainer({
     projectStorageMode,
     packedArchivePath,
     darkMode,
-    editorTheme: settings.editor.theme,
     structogramLoopHeaderColor,
     structogramIfHeaderColor,
     structogramSwitchHeaderColor,

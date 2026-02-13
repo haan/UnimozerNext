@@ -3,19 +3,18 @@ import { TEXT_PADDING } from "./constants";
 
 export type UmlMethodProps = {
   method: UmlMethodModel;
-  y: number;
+  baselineY: number;
   fontSize: number;
   onSelect?: () => void;
 };
 
-export const UmlMethod = ({ method, y, fontSize, onSelect }: UmlMethodProps) => {
+export const UmlMethod = ({ method, baselineY, fontSize, onSelect }: UmlMethodProps) => {
   const visibility = method.visibility ?? "";
   const signature = method.signature ?? "";
   return (
     <text
       x={TEXT_PADDING}
-      y={y}
-      dominantBaseline="text-before-edge"
+      y={baselineY}
       onPointerDown={(event) => {
         if (!onSelect) return;
         if (event.button !== 0) return;
