@@ -8,6 +8,7 @@ type ParameterListProps = {
   onAdd: () => void;
   onUpdate: (id: string, patch: Partial<ParameterRow>) => void;
   onRemove: (id: string) => void;
+  autoFocusNameInputId?: string | null;
   addLabel?: string;
   emptyLabel?: string;
   containerClassName?: string;
@@ -19,6 +20,7 @@ export const ParameterList = ({
   onAdd,
   onUpdate,
   onRemove,
+  autoFocusNameInputId,
   addLabel = "Add parameter",
   emptyLabel = "No parameters",
   containerClassName = "aspect-[21/9] w-full"
@@ -49,6 +51,7 @@ export const ParameterList = ({
                 placeholder="Parameter name"
                 value={param.name}
                 required
+                autoFocus={autoFocusNameInputId === param.id}
                 aria-invalid={isInvalid}
                 onChange={(event) => onUpdate(param.id, { name: event.target.value })}
               />

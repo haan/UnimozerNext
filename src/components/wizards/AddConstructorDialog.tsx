@@ -29,12 +29,14 @@ export const AddConstructorDialog = ({
   const [params, setParams] = useState<ParameterRow[]>([]);
   const [includeJavadoc, setIncludeJavadoc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
       setParams([]);
       setIncludeJavadoc(false);
       setSubmitting(false);
+      setAutoFocusParamId(null);
     }
   }, [open]);
 
@@ -45,7 +47,9 @@ export const AddConstructorDialog = ({
   };
 
   const addParam = () => {
-    setParams((prev) => [...prev, createParameterRow()]);
+    const row = createParameterRow();
+    setParams((prev) => [...prev, row]);
+    setAutoFocusParamId(row.id);
   };
 
   const removeParam = (id: string) => {
@@ -97,6 +101,7 @@ export const AddConstructorDialog = ({
               onAdd={addParam}
               onUpdate={updateParam}
               onRemove={removeParam}
+              autoFocusNameInputId={autoFocusParamId}
             />
             <fieldset className="rounded-md border border-border px-3 pb-3 pt-2">
               <legend className="px-1 text-xs font-medium text-muted-foreground">

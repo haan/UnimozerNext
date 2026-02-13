@@ -13,26 +13,20 @@ The original Unimozer focused on UML-first Java learning with BlueJ-like interac
 
 ## Current Feature Set
 
+- Project workflows for packed `.umz` archives and folder projects, including create/open/save/reload operations.
 - Java source-tree discovery/indexing for project operations and UML parsing, plus file editing with Monaco.
 - UML generation from Java source via `java-parser/parser-bridge.jar`.
-- Two-way model workflow:
-  - generate UML from source
-  - update source with wizards (add class/field/constructor/method).
-- Diagram interaction:
-  - drag class nodes
-  - zoom in/out/reset
-  - package display toggle
-  - class and diagram PNG export/copy (compiled and uncompiled styles).
-- Compile and run:
-  - compile with bundled `javac`
-  - run selected `main` classes
-  - stream output to the in-app console panel.
-- Object Bench (BlueJ-style) via JShell bridge:
-  - create objects
-  - inspect fields
-  - call methods.
-- Settings for UML/editor/object bench behavior, including debug logging.
-- Language Server integration (JDT LS) for diagnostics/formatting pipeline.
+- Two-way model workflow: generate UML from source and update source with wizards (add class/field/constructor/method).
+- Diagram interaction: drag class nodes, zoom in/out/reset, package/dependency display toggles.
+- Diagram PNG copy/export in both uncompiled and compiled visual styles.
+- Structogram (Nassi-Shneiderman) view for the method at the editor caret, with optional colorized headers and PNG copy/export.
+- Code navigation/highlighting features:
+  - Jump to code when selecting UML members.
+  - Optional BlueJ-style nested scope highlighting in the code editor.
+- Compile and run using bundled Java tools (`javac` / `java`) with streamed console output and run cancellation.
+- Object Bench (BlueJ-style) via JShell bridge: create objects, inspect fields, and call methods.
+- Language Server integration (JDT LS) for diagnostics and formatting (including optional auto-format on save).
+- Settings for UML, editor, structogram, object bench, layout, and debug logging behavior.
 
 ## Architecture
 
@@ -41,7 +35,7 @@ The original Unimozer focused on UML-first Java learning with BlueJ-like interac
 - Java helper modules:
   - `java-parser/` -> `parser-bridge.jar`
   - `jshell-bridge/` -> `jshell-bridge.jar`
-- Bundled resources (Windows packaging):
+- Bundled resources (dev/runtime packaging):
   - JDK
   - JDT LS
   - parser bridge
@@ -55,7 +49,7 @@ unimozer-next/
   src-tauri/            Rust backend (Tauri)
   java-parser/          Java parser + code-edit bridge
   jshell-bridge/        JShell JSON bridge
-  resources/            Bundled runtime resources
+  resources/            Bundled runtime resources (folder skeleton tracked)
   SPEC.md               Product/architecture specification
 ```
 
@@ -64,29 +58,31 @@ unimozer-next/
 - Node.js + npm
 - Rust toolchain (cargo)
 - JDK 17+ (to build Java bridge modules)
-- Gradle (or Gradle wrapper if added later)
+- Gradle (required for `java-parser` and `jshell-bridge` module builds)
 
-## External Resources (Required, Not Tracked in Git)
+## External Resources (Required Runtime Payloads)
 
-This repository intentionally does **not** commit large bundled runtime resources.
-They are excluded in `.gitignore`:
+This repository tracks only folder skeletons for some runtime resource paths (`.gitkeep`), but does **not** commit large runtime payloads.
+The following payloads are intentionally excluded in `.gitignore`:
 
-- `/resources/jdk/`
-- `/resources/jdtls/`
+- `/resources/jdk/**` (except tracked skeleton folders/files)
+- `/resources/jdtls/**` (except tracked skeleton folders/files)
 - `/resources/java-parser/*.jar`
 - `/resources/jshell-bridge/*.jar`
 
-You must populate these before running `npm run tauri dev` or `npm run tauri build`.
+You must populate these before running `npm run tauri dev` or local `npm run tauri build`.
 
-### 1) Prepare directory structure
+### 1) Verify tracked directory skeletons
 
-Create these directories if they do not exist:
+These folders are already tracked in git (`.gitkeep`). Verify they exist:
 
 ```powershell
-New-Item -ItemType Directory -Force -Path resources\jdk\win-x64 | Out-Null
-New-Item -ItemType Directory -Force -Path resources\jdtls | Out-Null
-New-Item -ItemType Directory -Force -Path resources\java-parser | Out-Null
-New-Item -ItemType Directory -Force -Path resources\jshell-bridge | Out-Null
+Test-Path resources\jdk\win-x64
+Test-Path resources\jdk\mac-x64
+Test-Path resources\jdk\mac-arm64
+Test-Path resources\jdtls
+Test-Path resources\java-parser
+Test-Path resources\jshell-bridge
 ```
 
 ### 2) Install bundled JDK files
@@ -97,8 +93,6 @@ Download a **Windows x64 JDK ZIP** (not an installer) and extract it so these fi
 - `resources/jdk/win-x64/bin/javac.exe`
 
 Important: If the archive extracts as a nested top folder (for example `jdk-xx/...`), move the folder **contents** into `resources/jdk/win-x64/` so `bin/` is directly under `win-x64`.
-
-Current project metadata references Temurin `25.0.1+8-LTS` in `resources/jdk/win-x64/release`, so that version is the safest match.
 
 Verify:
 
@@ -194,7 +188,16 @@ npm run tauri dev
 - Frontend build: `npm run build`
 - Desktop bundle: `npm run tauri build`
 
-Current Tauri bundle targets are Windows installers (`msi`, `nsis`) as configured in `src-tauri/tauri.conf.json`.
+Local default config (`src-tauri/tauri.conf.json`) targets Windows installers (`msi`, `nsis`).
+
+Manual target-specific examples:
+
+- Windows target config:
+  - `npx tauri build --config src-tauri/tauri.windows.conf.json`
+- macOS x64 dmg (run on macOS):
+  - `npx tauri build --target x86_64-apple-darwin --bundles dmg --config src-tauri/tauri.macos.x64.conf.json`
+- macOS arm64 dmg (run on macOS):
+  - `npx tauri build --target aarch64-apple-darwin --bundles dmg --config src-tauri/tauri.macos.arm64.conf.json`
 
 ## Useful Scripts
 

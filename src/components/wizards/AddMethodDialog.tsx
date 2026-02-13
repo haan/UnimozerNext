@@ -46,12 +46,14 @@ export const AddMethodDialog = ({
   const [form, setForm] = useState<AddMethodForm>(defaultForm);
   const [submitting, setSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) {
       setForm(defaultForm);
       setSubmitting(false);
       setAdvancedOpen(false);
+      setAutoFocusParamId(null);
     }
   }, [open]);
 
@@ -69,7 +71,9 @@ export const AddMethodDialog = ({
   };
 
   const addParam = () => {
-    setForm((prev) => ({ ...prev, params: [...prev.params, createParameterRow()] }));
+    const row = createParameterRow();
+    setForm((prev) => ({ ...prev, params: [...prev.params, row] }));
+    setAutoFocusParamId(row.id);
   };
 
   const removeParam = (id: string) => {
@@ -173,6 +177,7 @@ export const AddMethodDialog = ({
               onAdd={addParam}
               onUpdate={updateParam}
               onRemove={removeParam}
+              autoFocusNameInputId={autoFocusParamId}
             />
 
             <fieldset className="rounded-md border border-border px-3 pb-3 pt-2">
