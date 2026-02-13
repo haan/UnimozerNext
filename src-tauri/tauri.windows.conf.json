@@ -1,12 +1,12 @@
 {
   "bundle": {
-    "resources": [
-      "../resources/jdk/win-x64/**/*",
-      "../resources/java-parser/**/*",
-      "../resources/jshell-bridge/**/*",
-      "../resources/jdtls/plugins/**/*",
-      "../resources/jdtls/config_win/**/*",
-      "../resources/jdtls/features/**/*"
-    ]
+    "resources": {
+      "../resources/jdk/win-x64": "jdk/win-x64",
+      "../resources/java-parser/parser-bridge.jar": "java-parser/parser-bridge.jar",
+      "../resources/jshell-bridge/jshell-bridge.jar": "jshell-bridge/jshell-bridge.jar",
+      "../resources/jdtls/plugins": "jdtls/plugins",
+      "../resources/jdtls/config_win": "jdtls/config_win",
+      "../resources/jdtls/features": "jdtls/features"
+    }
   }
 }
