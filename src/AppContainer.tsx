@@ -106,6 +106,7 @@ export default function AppContainer({
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const fontSizeRef = useRef(settings.general.fontSize);
   const {
     addClassOpen,
@@ -787,6 +788,9 @@ export default function AppContainer({
   const handleOpenSettings = useCallback(() => {
     setSettingsOpen(true);
   }, [setSettingsOpen]);
+  const handleOpenAbout = useCallback(() => {
+    setAboutOpen(true);
+  }, []);
   const handleConfirmRemoveClass = useCallback(() => {
     void confirmRemoveClass();
   }, [confirmRemoveClass]);
@@ -801,6 +805,7 @@ export default function AppContainer({
         onSave={onSaveProject}
         onSaveAs={onSaveProjectAs}
         onOpenSettings={handleOpenSettings}
+        onOpenAbout={handleOpenAbout}
         onExit={onRequestExit}
         onUndo={() => triggerEditorAction("undo")}
         onRedo={() => triggerEditorAction("redo")}
@@ -917,6 +922,8 @@ export default function AppContainer({
       </footer>
 
       <AppDialogs
+        aboutOpen={aboutOpen}
+        onAboutOpenChange={setAboutOpen}
         settingsOpen={settingsOpen}
         onSettingsOpenChange={setSettingsOpen}
         settings={settings}

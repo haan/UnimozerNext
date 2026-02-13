@@ -8,6 +8,7 @@ import { AddMethodDialog, type AddMethodForm } from "../wizards/AddMethodDialog"
 import { CreateObjectDialog, type CreateObjectForm } from "../wizards/CreateObjectDialog";
 import { CallMethodDialog, type CallMethodForm } from "../wizards/CallMethodDialog";
 import { SettingsDialog } from "../settings/SettingsDialog";
+import { AboutDialog } from "./AboutDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,6 +23,8 @@ import {
 import type { AppSettings } from "../../models/settings";
 
 type AppDialogsProps = {
+  aboutOpen: boolean;
+  onAboutOpenChange: (open: boolean) => void;
   settingsOpen: boolean;
   onSettingsOpenChange: (open: boolean) => void;
   settings: AppSettings;
@@ -75,6 +78,8 @@ type AppDialogsProps = {
 };
 
 export const AppDialogs = ({
+  aboutOpen,
+  onAboutOpenChange,
   settingsOpen,
   onSettingsOpenChange,
   settings,
@@ -127,6 +132,7 @@ export const AppDialogs = ({
   busy
 }: AppDialogsProps) => (
   <>
+    <AboutDialog open={aboutOpen} onOpenChange={onAboutOpenChange} />
     <SettingsDialog
       open={settingsOpen}
       onOpenChange={onSettingsOpenChange}

@@ -45,6 +45,7 @@ type AppMenuProps = {
   onSave: () => void;
   onSaveAs: () => void;
   onOpenSettings: () => void;
+  onOpenAbout: () => void;
   onExit: () => void;
   onUndo: () => void;
   onRedo: () => void;
@@ -106,6 +107,7 @@ export const AppMenu = ({
   onSave,
   onSaveAs,
   onOpenSettings,
+  onOpenAbout,
   onExit,
   onUndo,
   onRedo,
@@ -509,6 +511,14 @@ export const AppMenu = ({
                 </svg>
                 Export structogram as PNG
               </span>
+            </MenubarItem>
+          </MenubarContent>
+        </MenubarMenu>
+        <MenubarMenu>
+          <MenubarTrigger>Help</MenubarTrigger>
+          <MenubarContent>
+            <MenubarItem onClick={onOpenAbout}>
+              About
             </MenubarItem>
           </MenubarContent>
         </MenubarMenu>
