@@ -23,6 +23,7 @@ type CallMethodDialogProps = {
   objectName: string;
   methodLabel: string;
   params: MethodParam[];
+  useObjectParameterDropdowns: boolean;
   availableObjects: AvailableObject[];
   onSubmit: (form: CallMethodForm) => Promise<void> | void;
   busy?: boolean;
@@ -84,6 +85,7 @@ export const CallMethodDialog = ({
   objectName,
   methodLabel,
   params,
+  useObjectParameterDropdowns,
   availableObjects,
   onSubmit,
   busy
@@ -147,7 +149,9 @@ export const CallMethodDialog = ({
     if (value.length === 0) {
       return true;
     }
-    if (!isObjectParameterType(param.type)) {
+    const useObjectSelect =
+      useObjectParameterDropdowns && isObjectParameterType(param.type);
+    if (!useObjectSelect) {
       return false;
     }
     const validObjects = objectNamesByParamIndex[index] ?? [];
@@ -187,7 +191,7 @@ export const CallMethodDialog = ({
                     <label className="text-xs font-medium text-muted-foreground">
                       {param.name}: {param.type}
                     </label>
-                    {isObjectParameterType(param.type) ? (
+                    {useObjectParameterDropdowns && isObjectParameterType(param.type) ? (
                       (objectNamesByParamIndex[index] ?? []).length > 0 ? (
                         <select
                           className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring"

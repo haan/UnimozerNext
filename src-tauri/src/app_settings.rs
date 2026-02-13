@@ -119,6 +119,8 @@ struct ObjectBenchSettings {
     show_inherited_object_fields: bool,
     #[serde(default = "default_true")]
     show_static_object_fields: bool,
+    #[serde(default = "default_true")]
+    use_object_parameter_dropdowns: bool,
 }
 
 impl Default for ObjectBenchSettings {
@@ -127,6 +129,7 @@ impl Default for ObjectBenchSettings {
             show_private_object_fields: default_true(),
             show_inherited_object_fields: default_true(),
             show_static_object_fields: default_true(),
+            use_object_parameter_dropdowns: default_true(),
         }
     }
 }
@@ -187,6 +190,7 @@ impl Default for AppSettings {
                 show_private_object_fields: default_true(),
                 show_inherited_object_fields: default_true(),
                 show_static_object_fields: default_true(),
+                use_object_parameter_dropdowns: default_true(),
             },
             editor: EditorSettings {
                 theme: default_editor_theme(),

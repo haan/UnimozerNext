@@ -11,6 +11,7 @@ import {
   MenubarSubTrigger,
   MenubarTrigger
 } from "../ui/menubar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import type { ExportStyle } from "../diagram/UmlDiagram";
 
 type AppMenuProps = {
@@ -138,7 +139,7 @@ export const AppMenu = ({
   const structogramActionsDisabled = !structogramMode;
 
   return (
-    <header className="relative flex items-center border-b border-border bg-card px-4 py-2">
+    <header className="relative z-20 flex items-center border-b border-border bg-card px-4 py-2 shadow-[0_2px_8px_rgba(15,23,42,0.08)]">
       <div className="flex items-center gap-2">
         <Menubar className="border-0 bg-transparent p-0 shadow-none">
         <MenubarMenu>
@@ -515,7 +516,19 @@ export const AppMenu = ({
       <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-sm font-medium text-foreground">
         <span className="max-w-[60vw] truncate">{projectName}</span>
         {hasUnsavedChanges ? (
-          <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+          <TooltipProvider delayDuration={100}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span
+                  aria-label="Unsaved changes"
+                  className="pointer-events-auto inline-block h-2 w-2 rounded-full bg-amber-500"
+                />
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                Shown when there are unsaved changes
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         ) : null}
       </div>
     ) : null}

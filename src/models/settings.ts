@@ -38,6 +38,7 @@ export type ObjectBenchSettings = {
   showPrivateObjectFields: boolean;
   showInheritedObjectFields: boolean;
   showStaticObjectFields: boolean;
+  useObjectParameterDropdowns: boolean;
 };
 
 export type AppSettings = {

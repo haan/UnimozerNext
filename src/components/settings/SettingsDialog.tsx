@@ -271,6 +271,27 @@ export const SettingsDialog = ({
               <div className="mt-4 grid gap-2">
                 <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
                   <div>
+                    <p className="text-sm font-medium">Use object dropdowns in method calls</p>
+                    <p className="text-xs text-muted-foreground">
+                      Show object selectors for non-primitive/non-String method parameters.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.objectBench.useObjectParameterDropdowns}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        objectBench: {
+                          ...settings.objectBench,
+                          useObjectParameterDropdowns: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-background px-4 py-3">
+                  <div>
                     <p className="text-sm font-medium">Show private fields</p>
                     <p className="text-xs text-muted-foreground">
                       Display private attributes in object cards.

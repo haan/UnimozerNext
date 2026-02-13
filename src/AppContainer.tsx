@@ -160,6 +160,8 @@ export default function AppContainer({
     settings.objectBench.showInheritedObjectFields;
   const showStaticObjectFields =
     settings.objectBench.showStaticObjectFields;
+  const useObjectParameterDropdowns =
+    settings.objectBench.useObjectParameterDropdowns;
   const showSwingAttributes = settings.uml.showSwingAttributes;
   const wordWrap = settings.editor.wordWrap;
   const scopeHighlighting = settings.editor.scopeHighlighting;
@@ -945,6 +947,7 @@ export default function AppContainer({
         callMethodObjectName={callMethodTarget?.name ?? ""}
         callMethodLabel={callMethodInfo?.signature ?? ""}
         callMethodParams={callMethodInfo?.params ?? []}
+        callMethodUseObjectParameterDropdowns={useObjectParameterDropdowns}
         callMethodAvailableObjects={objectBench.map((object) => ({
           name: object.name,
           type: object.type
