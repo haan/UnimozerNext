@@ -2,6 +2,7 @@
 @config "../tailwind.config.cjs";
 @source "../index.html";
 @source "./**/*.{ts,tsx}";
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 @font-face {
   font-family: "JetBrains Mono";

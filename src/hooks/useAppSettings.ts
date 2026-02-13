@@ -4,6 +4,16 @@ import type { Dispatch, SetStateAction } from "react";
 import type { AppSettings } from "../models/settings";
 import { readSettings, writeSettings } from "../services/settings";
 
+const DARK_MODE_STORAGE_KEY = "unimozer.darkMode";
+
+const persistDarkModeHint = (darkMode: boolean) => {
+  try {
+    localStorage.setItem(DARK_MODE_STORAGE_KEY, darkMode ? "1" : "0");
+  } catch {
+    // Ignore storage access failures.
+  }
+};
+
 type AppSettingsHook = {
   settings: AppSettings | null;
   setSettings: Dispatch<SetStateAction<AppSettings | null>>;
@@ -29,7 +39,9 @@ export const useAppSettings = (): AppSettingsHook => {
       try {
         const stored = await readSettings();
         if (!cancelled) {
-          setSettings(stored as AppSettings);
+          const parsed = stored as AppSettings;
+          setSettings(parsed);
+          persistDarkModeHint(parsed.general.darkMode);
           setSettingsError(null);
           setSettingsLoading(false);
         }
@@ -49,6 +61,7 @@ export const useAppSettings = (): AppSettingsHook => {
 
   const handleSettingsChange = useCallback((next: AppSettings) => {
     setSettings(next);
+    persistDarkModeHint(next.general.darkMode);
     void writeSettings(next);
   }, []);
 

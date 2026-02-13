@@ -18,6 +18,21 @@
       type="font/woff2"
       crossorigin
     />
+    <script>
+      (() => {
+        try {
+          const storedDarkMode = localStorage.getItem("unimozer.darkMode");
+          if (storedDarkMode !== "1" && storedDarkMode !== "0") {
+            return;
+          }
+          const darkMode = storedDarkMode === "1";
+          document.documentElement.dataset.theme = darkMode ? "dark" : "light";
+          document.documentElement.style.colorScheme = darkMode ? "dark" : "light";
+        } catch {
+          // Ignore storage access failures.
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
