@@ -39,7 +39,14 @@
         "ext": ["umz"],
         "name": "Unimozer Next Project",
         "description": "Unimozer Next Project File",
-        "mimeType": "application/x-unimozer-project"
+        "mimeType": "application/x-unimozer-project",
+        "role": "Editor",
+        "rank": "Owner",
+        "contentTypes": ["com.unimozer.next.project"],
+        "exportedType": {
+          "identifier": "com.unimozer.next.project",
+          "conformsTo": ["public.data"]
+        }
       }
     ],
     "windows": {
