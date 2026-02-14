@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
 import { Image as TauriImage } from "@tauri-apps/api/image";
+import { toast } from "sonner";
 
 import type { DiagramState, DiagramViewport } from "../../models/diagram";
 import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
@@ -977,21 +978,23 @@ export const UmlDiagram = ({
   );
 
   const copyPng = useCallback(
-    async (options: {
+    (options: {
       bounds: { minX: number; minY: number; width: number; height: number };
       nodeId?: string;
       style?: ExportStyle;
+      loadingLabel: string;
       successLabel: string;
+      errorPrefix: string;
     }) => {
-      try {
+      const copyTask = async () => {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
         if (document.fonts?.ready) {
           await document.fonts.ready;
         }
         await ensureEmbeddedFontCss();
         const payload = buildExportSvg(options.bounds, options.nodeId, options.style);
         if (!payload) {
-          reportExportStatus("UML diagram not ready for export.");
-          return;
+          throw new Error("UML diagram is not ready for copy.");
         }
         const canvas = await renderSvgToCanvas(
           payload.svg,
@@ -1000,8 +1003,7 @@ export const UmlDiagram = ({
         );
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          reportExportStatus("Failed to copy PNG: canvas unavailable.");
-          return;
+          throw new Error("Canvas is unavailable.");
         }
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const rgba = new Uint8Array(
@@ -1011,12 +1013,20 @@ export const UmlDiagram = ({
         );
         const image = await TauriImage.new(rgba, canvas.width, canvas.height);
         await writeImage(image);
-        reportExportStatus(options.successLabel);
-      } catch (error) {
-        reportExportStatus(`Failed to copy PNG: ${formatExportError(error)}`);
-      }
+      };
+
+      toast.promise(copyTask, {
+        loading: options.loadingLabel,
+        success: options.successLabel,
+        error: (error) => {
+          const reason = formatExportError(error);
+          return reason.toLowerCase().startsWith(options.errorPrefix.toLowerCase())
+            ? reason
+            : `${options.errorPrefix}${reason}`;
+        }
+      });
     },
-    [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas, reportExportStatus]
+    [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas]
   );
 
   const exportDiagramPng = useCallback(
@@ -1040,18 +1050,20 @@ export const UmlDiagram = ({
   );
 
   const copyDiagramPng = useCallback(
-    async (style?: ExportStyle) => {
+    (style?: ExportStyle) => {
       if (!diagramBounds) {
-        reportExportStatus("No UML diagram to copy.");
+        toast.error("No UML diagram to copy.");
         return;
       }
-      await copyPng({
+      copyPng({
         bounds: diagramBounds,
         style,
-        successLabel: "Copied diagram to clipboard."
+        loadingLabel: "Copying diagram to clipboard...",
+        successLabel: "Copied diagram to clipboard.",
+        errorPrefix: "Failed to copy diagram: "
       });
     },
-    [copyPng, diagramBounds, reportExportStatus]
+    [copyPng, diagramBounds]
   );
 
   const exportNodePng = useCallback(
@@ -1080,10 +1092,10 @@ export const UmlDiagram = ({
   );
 
   const copyNodePng = useCallback(
-    async (nodeId: string, style?: ExportStyle) => {
+    (nodeId: string, style?: ExportStyle) => {
       const target = nodesWithLayout.find((node) => node.id === nodeId);
       if (!target) {
-        reportExportStatus("Class not found for export.");
+        toast.error("Class not found for copy.");
         return;
       }
       const bounds = {
@@ -1092,14 +1104,16 @@ export const UmlDiagram = ({
         width: Math.max(1, target.width),
         height: Math.max(1, target.height)
       };
-      await copyPng({
+      copyPng({
         bounds,
         nodeId: target.id,
         style,
-        successLabel: `Copied ${target.name} PNG to clipboard.`
+        loadingLabel: `Copying ${target.name} to clipboard...`,
+        successLabel: `Copied ${target.name} to clipboard.`,
+        errorPrefix: `Failed to copy ${target.name}: `
       });
     },
-    [copyPng, nodesWithLayout, reportExportStatus]
+    [copyPng, nodesWithLayout]
   );
 
   useEffect(() => {

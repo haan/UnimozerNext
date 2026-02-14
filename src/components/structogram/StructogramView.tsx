@@ -3,6 +3,7 @@ import { Image as TauriImage } from "@tauri-apps/api/image";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { basename, joinPath } from "../../services/paths";
 import type { UmlMethod } from "../../models/uml";
@@ -420,22 +421,21 @@ export const StructogramView = ({
     reportExportStatus
   ]);
 
-  const copyStructogramPng = useCallback(async () => {
-    try {
+  const copyStructogramPng = useCallback(() => {
+    const copyTask = async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
       if (document.fonts?.ready) {
         await document.fonts.ready;
       }
       await ensureEmbeddedFontCss();
       const payload = buildExportSvg();
       if (!payload) {
-        reportExportStatus("Structogram is not ready for copy.");
-        return;
+        throw new Error("Structogram is not ready for copy.");
       }
       const canvas = await renderSvgToCanvas(payload.svg, payload.width, payload.height);
       const ctx = canvas.getContext("2d");
       if (!ctx) {
-        reportExportStatus("Failed to copy structogram PNG: canvas unavailable.");
-        return;
+        throw new Error("Canvas is unavailable.");
       }
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const rgba = new Uint8Array(
@@ -445,11 +445,19 @@ export const StructogramView = ({
       );
       const image = await TauriImage.new(rgba, canvas.width, canvas.height);
       await writeImage(image);
-      reportExportStatus("Copied structogram to clipboard.");
-    } catch (error) {
-      reportExportStatus(`Failed to copy structogram PNG: ${formatExportError(error)}`);
-    }
-  }, [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas, reportExportStatus]);
+    };
+
+    toast.promise(copyTask, {
+      loading: "Copying structogram to clipboard...",
+      success: "Copied structogram to clipboard.",
+      error: (error) => {
+        const reason = formatExportError(error);
+        return reason.toLowerCase().startsWith("failed to copy structogram")
+          ? reason
+          : `Failed to copy structogram: ${reason}`;
+      }
+    });
+  }, [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas]);
 
   useEffect(() => {
     if (!onRegisterExport) return;
