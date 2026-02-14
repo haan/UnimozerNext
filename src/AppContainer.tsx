@@ -978,7 +978,7 @@ export default function AppContainer({
         methodReturnValue={methodReturnValue}
         busy={busy}
       />
-      <Toaster />
+      <Toaster theme={darkMode ? "dark" : "light"} />
     </div>
   );
 }
