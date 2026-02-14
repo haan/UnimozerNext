@@ -175,21 +175,28 @@ export const AppMenu = ({
                 {recentProjects.length === 0 ? (
                   <MenubarItem disabled>No recent projects</MenubarItem>
                 ) : (
-                  recentProjects.map((entry) => (
-                    <MenubarItem
-                      key={`${entry.kind}:${entry.path}`}
-                      title={toDisplayPath(entry.path)}
-                      disabled={busy}
-                      onClick={() => onRequestOpenRecentProject(entry)}
-                    >
-                      <span className="flex w-full items-center justify-between gap-4">
-                        <span className="max-w-[240px] truncate">{basename(entry.path)}</span>
-                        <span className="text-[10px] uppercase text-muted-foreground">
-                          {entry.kind === "packed" ? "UMZ" : "Folder"}
-                        </span>
-                      </span>
-                    </MenubarItem>
-                  ))
+                  <TooltipProvider delayDuration={220} disableHoverableContent>
+                    {recentProjects.map((entry) => (
+                      <Tooltip key={`${entry.kind}:${entry.path}`}>
+                        <TooltipTrigger asChild>
+                          <MenubarItem
+                            disabled={busy}
+                            onClick={() => onRequestOpenRecentProject(entry)}
+                          >
+                            <span className="flex w-full items-center justify-between gap-4">
+                              <span className="max-w-[240px] truncate">{basename(entry.path)}</span>
+                              <span className="text-[10px] uppercase text-muted-foreground">
+                                {entry.kind === "packed" ? "UMZ" : "Folder"}
+                              </span>
+                            </span>
+                          </MenubarItem>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" align="center" className="max-w-[520px] break-all text-xs">
+                          {toDisplayPath(entry.path)}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </TooltipProvider>
                 )}
                 <MenubarSeparator />
                 <MenubarItem
