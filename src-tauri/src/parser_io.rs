@@ -374,10 +374,10 @@ fn parser_send_once(session: &mut ParserBridgeSession, payload: &str) -> Result<
         .flush()
         .map_err(|error| format!("{}{}", error, session.stderr_snapshot()))?;
 
-    let mut response = String::new();
+    let mut response_bytes = Vec::new();
     let bytes = session
         .stdout
-        .read_line(&mut response)
+        .read_until(b'\n', &mut response_bytes)
         .map_err(|error| format!("{}{}", error, session.stderr_snapshot()))?;
     if bytes == 0 {
         return Err(format!(
@@ -385,6 +385,15 @@ fn parser_send_once(session: &mut ParserBridgeSession, payload: &str) -> Result<
             session.stderr_snapshot()
         ));
     }
+
+    let response = match String::from_utf8(response_bytes) {
+        Ok(value) => value,
+        Err(error) => {
+            // Keep parsing the JSON envelope even if bridge output encoding is wrong.
+            let bytes = error.into_bytes();
+            String::from_utf8_lossy(&bytes).into_owned()
+        }
+    };
 
     Ok(response)
 }

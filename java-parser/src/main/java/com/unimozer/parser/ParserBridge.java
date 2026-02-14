@@ -49,6 +49,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -267,8 +268,12 @@ public class ParserBridge {
   }
 
   private static void runPersistent(ObjectMapper mapper) throws IOException {
-    BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
-    BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(System.out));
+    BufferedReader reader = new BufferedReader(
+      new InputStreamReader(System.in, StandardCharsets.UTF_8)
+    );
+    BufferedWriter writer = new BufferedWriter(
+      new OutputStreamWriter(System.out, StandardCharsets.UTF_8)
+    );
     String line;
     while ((line = reader.readLine()) != null) {
       if (line.isBlank()) continue;
@@ -327,8 +332,7 @@ public class ParserBridge {
       }
     }
 
-    ParserConfiguration config = new ParserConfiguration();
-    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    ParserConfiguration config = createParserConfiguration();
     JavaParser parser = new JavaParser(config);
 
     List<Path> javaFiles = Files.walk(srcRoot)
@@ -390,8 +394,7 @@ public class ParserBridge {
       return response;
     }
 
-    ParserConfiguration config = new ParserConfiguration();
-    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    ParserConfiguration config = createParserConfiguration();
     JavaParser parser = new JavaParser(config);
 
     ParseResult<CompilationUnit> parseResult = parser.parse(
@@ -556,8 +559,7 @@ public class ParserBridge {
       return response;
     }
 
-    ParserConfiguration config = new ParserConfiguration();
-    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    ParserConfiguration config = createParserConfiguration();
     JavaParser parser = new JavaParser(config);
 
     ParseResult<CompilationUnit> parseResult = parser.parse(
@@ -692,8 +694,7 @@ public class ParserBridge {
       return response;
     }
 
-    ParserConfiguration config = new ParserConfiguration();
-    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    ParserConfiguration config = createParserConfiguration();
     JavaParser parser = new JavaParser(config);
 
     ParseResult<CompilationUnit> parseResult = parser.parse(
@@ -873,6 +874,13 @@ public class ParserBridge {
     if (name == null || name.isBlank()) return "";
     if (name.length() == 1) return name.toUpperCase();
     return name.substring(0, 1).toUpperCase() + name.substring(1);
+  }
+
+  static ParserConfiguration createParserConfiguration() {
+    ParserConfiguration config = new ParserConfiguration();
+    config.setLanguageLevel(ParserConfiguration.LanguageLevel.BLEEDING_EDGE);
+    config.setCharacterEncoding(StandardCharsets.UTF_8);
+    return config;
   }
 
   static Path resolveSrcRoot(Path root, String srcRoot) {
