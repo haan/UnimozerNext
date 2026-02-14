@@ -82,6 +82,16 @@ fn source_argument_path(file: &Path, root_path: &Path) -> String {
     path.to_string_lossy().replace('\\', "/")
 }
 
+fn decode_process_output(bytes: Vec<u8>) -> String {
+    match String::from_utf8(bytes) {
+        Ok(text) => text,
+        Err(error) => {
+            let raw = error.into_bytes();
+            String::from_utf8_lossy(&raw).into_owned()
+        }
+    }
+}
+
 #[tauri::command]
 pub fn compile_project(
     app: tauri::AppHandle,
@@ -129,6 +139,9 @@ pub fn compile_project(
 
     let mut command = Command::new(javac_path);
     command
+        .arg("-J-Dfile.encoding=UTF-8")
+        .arg("-J-Dstdout.encoding=UTF-8")
+        .arg("-J-Dstderr.encoding=UTF-8")
         .arg("-encoding")
         .arg("UTF-8")
         .arg("-d")
@@ -162,22 +175,22 @@ pub fn compile_project(
 
     let stdout_reader = std::thread::spawn(move || {
         let mut reader = BufReader::new(stdout_pipe);
-        let mut buffer = String::new();
-        let _ = reader.read_to_string(&mut buffer);
+        let mut buffer = Vec::new();
+        let _ = reader.read_to_end(&mut buffer);
         buffer
     });
     let stderr_reader = std::thread::spawn(move || {
         let mut reader = BufReader::new(stderr_pipe);
-        let mut buffer = String::new();
-        let _ = reader.read_to_string(&mut buffer);
+        let mut buffer = Vec::new();
+        let _ = reader.read_to_end(&mut buffer);
         buffer
     });
 
     let status = child
         .wait()
         .map_err(crate::command_error::to_command_error)?;
-    let stdout = stdout_reader.join().unwrap_or_default();
-    let stderr = stderr_reader.join().unwrap_or_default();
+    let stdout = decode_process_output(stdout_reader.join().unwrap_or_default());
+    let stderr = decode_process_output(stderr_reader.join().unwrap_or_default());
 
     Ok(CompileResult {
         ok: status.success(),
@@ -224,6 +237,11 @@ pub fn run_main(
 
     let mut command = Command::new(java_path);
     command
+        .arg("-Dfile.encoding=UTF-8")
+        .arg("-Dstdout.encoding=UTF-8")
+        .arg("-Dstderr.encoding=UTF-8")
+        .arg("-Dsun.stdout.encoding=UTF-8")
+        .arg("-Dsun.stderr.encoding=UTF-8")
         .arg("-cp")
         .arg(&classpath)
         .arg(&main_class)

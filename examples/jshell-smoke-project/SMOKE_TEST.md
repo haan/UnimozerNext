@@ -25,5 +25,5 @@ Validate constructor calls, method calls, `main` execution, stdout/stderr handli
 - `[PASS] Run all class main methods`
 
 ## Notes
-- Seeing replacement characters for some unicode symbols can happen on Windows console encoding and does not fail the smoke test by itself.
+- Unicode output should render correctly (for example `äöü 漢字 😀` in `unicodeAndEscapes`). Replacement characters indicate a regression.
 - If output appears truncated, scroll to the end first and verify the summary lines.

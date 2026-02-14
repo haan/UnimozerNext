@@ -116,7 +116,7 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
     request: serde_json::Value,
 ) -> Result<T, String> {
     const BRIDGE_RESPONSE_SCAN_LIMIT: usize = 512;
-    const BRIDGE_EVAL_RESPONSE_SCAN_LIMIT: usize = 50_000;
+    const BRIDGE_NOISE_ERROR_PREVIEW_LINES: usize = 200;
     const BRIDGE_RESPONSE_PREFIX: &str = "__UNIMOZER_BRIDGE__:";
 
     let stderr_snapshot = || {
@@ -153,12 +153,18 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
         .and_then(serde_json::Value::as_str)
         .unwrap_or_default();
     let scan_limit = if command_name == "eval" {
-        BRIDGE_EVAL_RESPONSE_SCAN_LIMIT
+        None
     } else {
-        BRIDGE_RESPONSE_SCAN_LIMIT
+        Some(BRIDGE_RESPONSE_SCAN_LIMIT)
     };
-
-    for _ in 0..scan_limit {
+    let mut scanned_lines = 0usize;
+    loop {
+        if let Some(limit) = scan_limit {
+            if scanned_lines >= limit {
+                break;
+            }
+        }
+        scanned_lines += 1;
         response.clear();
         let bytes = session
             .stdout
@@ -227,6 +233,19 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
     }
 
     let mut value = parsed.ok_or_else(|| {
+        let preview_lines = noise_lines
+            .iter()
+            .take(BRIDGE_NOISE_ERROR_PREVIEW_LINES)
+            .cloned()
+            .collect::<Vec<_>>();
+        let omitted = noise_lines.len().saturating_sub(preview_lines.len());
+        let preview_text = if preview_lines.is_empty() {
+            String::new()
+        } else if omitted > 0 {
+            format!("{} | ... ({} more lines)", preview_lines.join(" | "), omitted)
+        } else {
+            preview_lines.join(" | ")
+        };
         if noise_lines.is_empty() {
             format!(
                 "JShell bridge did not return a JSON response{}",
@@ -235,7 +254,7 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
         } else {
             format!(
                 "JShell bridge returned non-JSON output: {}{}",
-                noise_lines.join(" | "),
+                preview_text,
                 stderr_snapshot()
             )
         }
