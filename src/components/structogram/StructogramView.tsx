@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Image as TauriImage } from "@tauri-apps/api/image";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { basename, joinPath } from "../../services/paths";
 import type { UmlMethod } from "../../models/uml";
@@ -50,6 +50,86 @@ const EXPORT_CSS_VARIABLES = [
   "--uml-font"
 ];
 
+const STRUCTOGRAM_FONT_FAMILY_FALLBACK =
+  "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
+let measureCanvas: HTMLCanvasElement | null = null;
+
+const measureTextWidth = (text: string, font: string) => {
+  if (typeof document === "undefined") {
+    return text.length * STRUCTOGRAM_CHAR_WIDTH;
+  }
+  if (!measureCanvas) {
+    measureCanvas = document.createElement("canvas");
+  }
+  const ctx = measureCanvas.getContext("2d");
+  if (!ctx) {
+    return text.length * STRUCTOGRAM_CHAR_WIDTH;
+  }
+  ctx.font = font;
+  return ctx.measureText(text).width;
+};
+
+const resolveMeasureFont = () => {
+  if (typeof document === "undefined") {
+    return `${STRUCTOGRAM_FONT_SIZE}px ${STRUCTOGRAM_FONT_FAMILY_FALLBACK}`;
+  }
+  const rootStyles = getComputedStyle(document.documentElement);
+  const umlFont = rootStyles.getPropertyValue("--uml-font").trim();
+  const fontFamily = umlFont.length > 0 ? umlFont : STRUCTOGRAM_FONT_FAMILY_FALLBACK;
+  return `${STRUCTOGRAM_FONT_SIZE}px ${fontFamily}`;
+};
+
+const resolveUmlFontFamily = () => {
+  if (typeof document === "undefined") {
+    return STRUCTOGRAM_FONT_FAMILY_FALLBACK;
+  }
+  const rootStyles = getComputedStyle(document.documentElement);
+  const umlFont = rootStyles.getPropertyValue("--uml-font").trim();
+  return umlFont.length > 0 ? umlFont : STRUCTOGRAM_FONT_FAMILY_FALLBACK;
+};
+
+const STRUCTOGRAM_EMBEDDED_FONT_VARIANTS = [
+  { file: "/fonts/JetBrainsMono-Regular.woff2", weight: 400, style: "normal" },
+  { file: "/fonts/JetBrainsMono-SemiBold.woff2", weight: 600, style: "normal" }
+] as const;
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
+const resolvePublicAssetUrl = (path: string) =>
+  new URL(path.startsWith("/") ? path : `/${path}`, window.location.href).toString();
+
+const buildEmbeddedStructogramFontCss = async () => {
+  if (typeof window === "undefined" || typeof fetch === "undefined" || typeof btoa === "undefined") {
+    return "";
+  }
+  try {
+    const rules: string[] = [];
+    for (const variant of STRUCTOGRAM_EMBEDDED_FONT_VARIANTS) {
+      const response = await fetch(resolvePublicAssetUrl(variant.file));
+      if (!response.ok) {
+        return "";
+      }
+      const bytes = await response.arrayBuffer();
+      const base64 = arrayBufferToBase64(bytes);
+      rules.push(
+        `@font-face { font-family: "JetBrains Mono"; src: url("data:font/woff2;base64,${base64}") format("woff2"); font-weight: ${variant.weight}; font-style: ${variant.style}; font-display: block; }`
+      );
+    }
+    return rules.join("\n");
+  } catch {
+    return "";
+  }
+};
+
 const sanitizeFileName = (value: string) =>
   value
     .trim()
@@ -86,7 +166,36 @@ export const StructogramView = ({
   onRegisterExport
 }: StructogramViewProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
-  const layout = useMemo(() => buildStructogramLayout(method.controlTree), [method.controlTree]);
+  const embeddedFontCssRef = useRef("");
+  const embeddedFontCssLoadRef = useRef<Promise<string> | null>(null);
+  const [measureFont, setMeasureFont] = useState(() => resolveMeasureFont());
+  const ensureEmbeddedFontCss = useCallback(async () => {
+    if (embeddedFontCssRef.current.length > 0) {
+      return embeddedFontCssRef.current;
+    }
+    if (!embeddedFontCssLoadRef.current) {
+      embeddedFontCssLoadRef.current = buildEmbeddedStructogramFontCss()
+        .then((css) => {
+          embeddedFontCssRef.current = css;
+          return css;
+        })
+        .finally(() => {
+          embeddedFontCssLoadRef.current = null;
+        });
+    }
+    return embeddedFontCssLoadRef.current;
+  }, []);
+  const estimateRawTextWidth = useCallback(
+    (value: string) => measureTextWidth(value, measureFont),
+    [measureFont]
+  );
+  const layout = useMemo(
+    () =>
+      buildStructogramLayout(method.controlTree, {
+        estimateTextWidth: estimateRawTextWidth
+      }),
+    [estimateRawTextWidth, method.controlTree]
+  );
   const declaration = useMemo(() => toMethodDeclaration(method), [method]);
   const palette = colorsEnabled ? STRUCTOGRAM_COLORS : STRUCTOGRAM_MONOCHROME_COLORS;
   const resolvedFontSize =
@@ -96,8 +205,7 @@ export const StructogramView = ({
   const fontScale = resolvedFontSize / STRUCTOGRAM_FONT_SIZE;
   const renderMetrics = useMemo(() => {
     if (!layout) return null;
-    const signatureWidthEstimate =
-      declaration.length * STRUCTOGRAM_CHAR_WIDTH + STRUCTOGRAM_TEXT_PADDING_X * 2;
+    const signatureWidthEstimate = estimateRawTextWidth(declaration) + STRUCTOGRAM_TEXT_PADDING_X * 2;
     const contentWidth = Math.max(layout.width, Math.ceil(signatureWidthEstimate));
     const signatureRowHeight =
       STRUCTOGRAM_HEADER_TOP_PADDING + STRUCTOGRAM_FONT_SIZE + STRUCTOGRAM_HEADER_BOTTOM_PADDING;
@@ -113,7 +221,33 @@ export const StructogramView = ({
       svgWidth,
       svgHeight
     };
-  }, [declaration, layout]);
+  }, [declaration, estimateRawTextWidth, layout]);
+
+  useEffect(() => {
+    if (typeof document === "undefined" || !document.fonts) {
+      return;
+    }
+    let cancelled = false;
+    const refreshAfterFontsReady = async () => {
+      try {
+        await document.fonts.load(`400 ${STRUCTOGRAM_FONT_SIZE}px "JetBrains Mono"`);
+        await document.fonts.ready;
+      } catch {
+        // Use fallback metrics when font loading is unavailable.
+      }
+      if (!cancelled) {
+        setMeasureFont(resolveMeasureFont());
+      }
+    };
+    void refreshAfterFontsReady();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    void ensureEmbeddedFontCss();
+  }, [ensureEmbeddedFontCss]);
 
   const reportExportStatus = useCallback(
     (message: string) => {
@@ -151,6 +285,20 @@ export const StructogramView = ({
     clone.removeAttribute("class");
 
     const rootStyles = getComputedStyle(document.documentElement);
+    const exportFontFamily = resolveUmlFontFamily();
+    const embeddedFontCss = embeddedFontCssRef.current;
+    if (embeddedFontCss.length > 0) {
+      const styleElement = document.createElementNS("http://www.w3.org/2000/svg", "style");
+      styleElement.setAttribute("type", "text/css");
+      styleElement.textContent = `${embeddedFontCss}\nsvg, text { font-family: ${exportFontFamily}; }`;
+      clone.insertBefore(styleElement, clone.firstChild);
+    }
+    clone.setAttribute("font-family", exportFontFamily);
+    clone.querySelectorAll("text").forEach((element) => {
+      if (!element.getAttribute("font-family")) {
+        element.setAttribute("font-family", exportFontFamily);
+      }
+    });
     const variableStyles = EXPORT_CSS_VARIABLES.map((name) => {
       const value = rootStyles.getPropertyValue(name).trim();
       return value ? `${name}: ${value};` : "";
@@ -229,6 +377,7 @@ export const StructogramView = ({
       if (document.fonts?.ready) {
         await document.fonts.ready;
       }
+      await ensureEmbeddedFontCss();
       const payload = buildExportSvg();
       if (!payload) {
         reportExportStatus("Structogram is not ready for export.");
@@ -264,6 +413,7 @@ export const StructogramView = ({
     buildDefaultPath,
     buildExportSvg,
     exportDefaultPath,
+    ensureEmbeddedFontCss,
     formatExportError,
     methodFileNamePart,
     renderSvgToCanvas,
@@ -275,6 +425,7 @@ export const StructogramView = ({
       if (document.fonts?.ready) {
         await document.fonts.ready;
       }
+      await ensureEmbeddedFontCss();
       const payload = buildExportSvg();
       if (!payload) {
         reportExportStatus("Structogram is not ready for copy.");
@@ -287,14 +438,18 @@ export const StructogramView = ({
         return;
       }
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const rgba = new Uint8Array(imageData.data);
+      const rgba = new Uint8Array(
+        imageData.data.buffer,
+        imageData.data.byteOffset,
+        imageData.data.byteLength
+      );
       const image = await TauriImage.new(rgba, canvas.width, canvas.height);
       await writeImage(image);
-      reportExportStatus("Copied structogram PNG to clipboard.");
+      reportExportStatus("Copied structogram to clipboard.");
     } catch (error) {
       reportExportStatus(`Failed to copy structogram PNG: ${formatExportError(error)}`);
     }
-  }, [buildExportSvg, formatExportError, renderSvgToCanvas, reportExportStatus]);
+  }, [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas, reportExportStatus]);
 
   useEffect(() => {
     if (!onRegisterExport) return;

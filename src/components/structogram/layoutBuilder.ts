@@ -83,26 +83,22 @@ export type LayoutNode =
   | SwitchLayoutNode
   | TryLayoutNode;
 
+type TextWidthEstimator = (value: string) => number;
+
+type LayoutEstimators = {
+  estimatedTextWidth: (value: string) => number;
+  estimatedInlineTextWidth: (value: string) => number;
+  createStatement: (text: string) => StatementLayoutNode;
+};
+
+type BuildStructogramLayoutOptions = {
+  estimateTextWidth?: TextWidthEstimator;
+};
+
 const normalizeLabel = (value: string | null | undefined, fallback: string) => {
   const normalized = (value ?? "").replace(/\s+/g, " ").trim();
   return normalized && normalized.length > 0 ? normalized : fallback;
 };
-
-const estimatedTextWidth = (value: string) =>
-  Math.max(
-    STRUCTOGRAM_MIN_CONTENT_WIDTH,
-    value.length * STRUCTOGRAM_CHAR_WIDTH + STRUCTOGRAM_TEXT_PADDING_X * 2
-  );
-
-const estimatedInlineTextWidth = (value: string) =>
-  value.length * STRUCTOGRAM_CHAR_WIDTH + STRUCTOGRAM_TEXT_PADDING_X * 2;
-
-const createStatement = (text: string): StatementLayoutNode => ({
-  kind: "statement",
-  text,
-  width: estimatedTextWidth(text),
-  height: STRUCTOGRAM_ROW_HEIGHT
-});
 
 const normalizeStatementText = (value: string | null | undefined): string | null => {
   const normalized = (value ?? "").replace(/\s+/g, " ").trim();
@@ -181,17 +177,19 @@ export const toMethodDeclaration = (method: UmlMethod): string => {
 
 const toSequence = (
   nodes: UmlStructogramNode[] | undefined,
+  estimators: LayoutEstimators,
   emptyLabel: string = STRUCTOGRAM_EMPTY_BODY_LABEL
 ): SequenceLayoutNode => {
   const children = (nodes ?? [])
-    .map((entry) => toLayoutNode(entry))
+    .map((entry) => toLayoutNode(entry, estimators))
     .filter((item): item is LayoutNode => Boolean(item));
   if (children.length === 0) {
+    const emptyStatement = estimators.createStatement(emptyLabel);
     return {
       kind: "sequence",
-      children: [createStatement(emptyLabel)],
-      width: estimatedTextWidth(emptyLabel),
-      height: STRUCTOGRAM_ROW_HEIGHT
+      children: [emptyStatement],
+      width: emptyStatement.width,
+      height: emptyStatement.height
     };
   }
   const width = Math.max(...children.map((child) => child.width));
@@ -308,7 +306,8 @@ const caseHasExplicitTerminator = (nodes: UmlStructogramNode[] | undefined): boo
 };
 
 const toSwitchCases = (
-  cases: UmlStructogramSwitchCase[] | undefined
+  cases: UmlStructogramSwitchCase[] | undefined,
+  estimators: LayoutEstimators
 ): Array<{ label: string; body: LayoutNode }> => {
   type MergedCaseGroup = {
     labels: string[];
@@ -356,7 +355,7 @@ const toSwitchCases = (
   }
 
   if (groups.length === 0) {
-    return [{ label: "default", body: createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL) }];
+    return [{ label: "default", body: estimators.createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL) }];
   }
 
   const propagatedBodies: Array<UmlStructogramNode[] | undefined> = new Array(groups.length);
@@ -374,64 +373,68 @@ const toSwitchCases = (
     return {
       label: group.labels.join(", "),
       body: hasRenderableSwitchBody(nodes)
-        ? toSequence(nodes)
-        : createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL)
+        ? toSequence(nodes, estimators)
+        : estimators.createStatement(STRUCTOGRAM_EMPTY_BODY_LABEL)
     };
   });
 };
 
 const toCatchLayouts = (
-  catches: UmlStructogramCatchClause[] | undefined
+  catches: UmlStructogramCatchClause[] | undefined,
+  estimators: LayoutEstimators
 ): Array<{ exception: string; body: LayoutNode }> =>
   catches?.map((item) => ({
     exception: normalizeLabel(item.exception, "catch"),
-    body: toSequence(item.body)
+    body: toSequence(item.body, estimators)
   })) ?? [];
 
-const toLayoutNode = (node: UmlStructogramNode | null | undefined): LayoutNode | null => {
+const toLayoutNode = (
+  node: UmlStructogramNode | null | undefined,
+  estimators: LayoutEstimators
+): LayoutNode | null => {
   if (!node) {
     return null;
   }
 
   if (node.kind === "statement") {
     const statementText = normalizeStatementText(node.text);
-    return statementText ? createStatement(statementText) : null;
+    return statementText ? estimators.createStatement(statementText) : null;
   }
 
   if (node.kind === "sequence") {
-    return toSequence(node.children);
+    return toSequence(node.children, estimators);
   }
 
   if (node.kind === "if") {
     const condition = normalizeLabel(node.condition, "condition");
-    const thenBranch = toSequence(node.thenBranch, STRUCTOGRAM_EMPTY_ELSE_LABEL);
+    const thenBranch = toSequence(node.thenBranch, estimators, STRUCTOGRAM_EMPTY_ELSE_LABEL);
     const hasElseBranch = (node.elseBranch ?? []).length > 0;
     const elseBranch =
       hasElseBranch
-        ? toSequence(node.elseBranch, STRUCTOGRAM_EMPTY_ELSE_LABEL)
-        : createStatement(STRUCTOGRAM_EMPTY_ELSE_LABEL);
+        ? toSequence(node.elseBranch, estimators, STRUCTOGRAM_EMPTY_ELSE_LABEL)
+        : estimators.createStatement(STRUCTOGRAM_EMPTY_ELSE_LABEL);
     return buildIfLayout({
       condition,
       thenBranch,
       elseBranch,
-      estimatedInlineTextWidth
+      estimatedInlineTextWidth: estimators.estimatedInlineTextWidth
     });
   }
 
   if (node.kind === "loop") {
-    const body = toSequence(node.children);
+    const body = toSequence(node.children, estimators);
     const condition = normalizeLabel(node.condition, "condition");
     return buildLoopLayout({
       loopKind: node.loopKind,
       condition,
       body,
-      estimatedTextWidth
+      estimatedTextWidth: estimators.estimatedTextWidth
     });
   }
 
   if (node.kind === "switch") {
     const expression = normalizeLabel(node.condition, "selector");
-    const cases = toSwitchCases(node.switchCases);
+    const cases = toSwitchCases(node.switchCases, estimators);
     const branchHeight = Math.max(STRUCTOGRAM_ROW_HEIGHT, ...cases.map((entry) => entry.body.height));
     return buildSwitchLayout({
       expression,
@@ -441,27 +444,49 @@ const toLayoutNode = (node: UmlStructogramNode | null | undefined): LayoutNode |
         minWidth: entry.body.width
       })),
       branchHeight,
-      estimatedTextWidth,
-      estimatedInlineTextWidth
+      estimatedTextWidth: estimators.estimatedTextWidth,
+      estimatedInlineTextWidth: estimators.estimatedInlineTextWidth
     });
   }
 
   if (node.kind === "try") {
-    const body = toSequence(node.children);
-    const catches = toCatchLayouts(node.catches);
+    const body = toSequence(node.children, estimators);
+    const catches = toCatchLayouts(node.catches, estimators);
     const finallyBranch =
-      node.finallyBranch && node.finallyBranch.length > 0 ? toSequence(node.finallyBranch) : null;
+      node.finallyBranch && node.finallyBranch.length > 0
+        ? toSequence(node.finallyBranch, estimators)
+        : null;
     return buildTryLayout({
       body,
       catches,
       finallyBranch,
-      estimatedTextWidth
+      estimatedTextWidth: estimators.estimatedTextWidth
     });
   }
 
-  return createStatement(normalizeLabel(node.text, node.kind));
+  return estimators.createStatement(normalizeLabel(node.text, node.kind));
 };
 
 export const buildStructogramLayout = (
-  controlTree: UmlStructogramNode | null | undefined
-): LayoutNode | null => toLayoutNode(controlTree);
+  controlTree: UmlStructogramNode | null | undefined,
+  options: BuildStructogramLayoutOptions = {}
+): LayoutNode | null => {
+  const estimateRawTextWidth: TextWidthEstimator =
+    options.estimateTextWidth ?? ((value: string) => value.length * STRUCTOGRAM_CHAR_WIDTH);
+  const estimatedInlineTextWidth = (value: string) =>
+    Math.ceil(estimateRawTextWidth(value) + STRUCTOGRAM_TEXT_PADDING_X * 2);
+  const estimatedTextWidth = (value: string) =>
+    Math.max(STRUCTOGRAM_MIN_CONTENT_WIDTH, estimatedInlineTextWidth(value));
+  const createStatement = (text: string): StatementLayoutNode => ({
+    kind: "statement",
+    text,
+    width: estimatedTextWidth(text),
+    height: STRUCTOGRAM_ROW_HEIGHT
+  });
+
+  return toLayoutNode(controlTree, {
+    estimatedTextWidth,
+    estimatedInlineTextWidth,
+    createStatement
+  });
+};

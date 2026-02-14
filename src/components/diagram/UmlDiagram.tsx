@@ -78,6 +78,12 @@ const resolveExportDirectory = (path: string) => {
 const UML_FONT_FAMILY =
   "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
 let measureCanvas: HTMLCanvasElement | null = null;
+const UML_EMBEDDED_FONT_VARIANTS = [
+  { file: "/fonts/JetBrainsMono-Regular.woff2", weight: 400, style: "normal" },
+  { file: "/fonts/JetBrainsMono-SemiBold.woff2", weight: 600, style: "normal" },
+  { file: "/fonts/JetBrainsMono-Italic.woff2", weight: 400, style: "italic" },
+  { file: "/fonts/JetBrainsMono-SemiBoldItalic.woff2", weight: 600, style: "italic" }
+] as const;
 type FontMetrics = {
   ascent: number;
   descent: number;
@@ -107,6 +113,52 @@ const measureTextWidth = (text: string, font: string) => {
   if (!ctx) return text.length * FONT_MEASURE_FALLBACK_CHAR_WIDTH;
   ctx.font = font;
   return ctx.measureText(text).width;
+};
+
+const arrayBufferToBase64 = (buffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
+const resolvePublicAssetUrl = (path: string) =>
+  new URL(path.startsWith("/") ? path : `/${path}`, window.location.href).toString();
+
+const resolveUmlFontFamily = () => {
+  if (typeof document === "undefined") {
+    return UML_FONT_FAMILY;
+  }
+  const rootStyles = getComputedStyle(document.documentElement);
+  const umlFont = rootStyles.getPropertyValue("--uml-font").trim();
+  return umlFont.length > 0 ? umlFont : UML_FONT_FAMILY;
+};
+
+const buildEmbeddedUmlFontCss = async () => {
+  if (typeof window === "undefined" || typeof fetch === "undefined" || typeof btoa === "undefined") {
+    return "";
+  }
+  try {
+    const rules: string[] = [];
+    for (const variant of UML_EMBEDDED_FONT_VARIANTS) {
+      const response = await fetch(resolvePublicAssetUrl(variant.file));
+      if (!response.ok) {
+        return "";
+      }
+      const bytes = await response.arrayBuffer();
+      const base64 = arrayBufferToBase64(bytes);
+      rules.push(
+        `@font-face { font-family: "JetBrains Mono"; src: url("data:font/woff2;base64,${base64}") format("woff2"); font-weight: ${variant.weight}; font-style: ${variant.style}; font-display: block; }`
+      );
+    }
+    return rules.join("\n");
+  } catch {
+    return "";
+  }
 };
 
 const measureFontMetrics = (font: string, fontSize: number): FontMetrics => {
@@ -351,6 +403,8 @@ export const UmlDiagram = ({
   onExportStatus
 }: UmlDiagramProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
+  const embeddedFontCssRef = useRef("");
+  const embeddedFontCssLoadRef = useRef<Promise<string> | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [draggingPackage, setDraggingPackage] = useState<PackageDragState | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
@@ -383,6 +437,23 @@ export const UmlDiagram = ({
     () => headerHeight / 2 + (headerFontMetrics.ascent - headerFontMetrics.descent) / 2,
     [headerFontMetrics.ascent, headerFontMetrics.descent, headerHeight]
   );
+
+  const ensureEmbeddedFontCss = useCallback(async () => {
+    if (embeddedFontCssRef.current.length > 0) {
+      return embeddedFontCssRef.current;
+    }
+    if (!embeddedFontCssLoadRef.current) {
+      embeddedFontCssLoadRef.current = buildEmbeddedUmlFontCss()
+        .then((css) => {
+          embeddedFontCssRef.current = css;
+          return css;
+        })
+        .finally(() => {
+          embeddedFontCssLoadRef.current = null;
+        });
+    }
+    return embeddedFontCssLoadRef.current;
+  }, []);
 
   const commitViewport = useCallback(
     (next: { x: number; y: number; scale: number }, commit: boolean) => {
@@ -474,6 +545,10 @@ export const UmlDiagram = ({
       cancelled = true;
     };
   }, [umlFontSize]);
+
+  useEffect(() => {
+    void ensureEmbeddedFontCss();
+  }, [ensureEmbeddedFontCss]);
 
   useEffect(() => {
     if (!onRegisterZoom) return;
@@ -714,6 +789,20 @@ export const UmlDiagram = ({
       clone.setAttribute("height", `${height}`);
 
       const rootStyles = getComputedStyle(document.documentElement);
+      const exportFontFamily = resolveUmlFontFamily();
+      const embeddedFontCss = embeddedFontCssRef.current;
+      if (embeddedFontCss.length > 0) {
+        const styleElement = document.createElementNS("http://www.w3.org/2000/svg", "style");
+        styleElement.setAttribute("type", "text/css");
+        styleElement.textContent = `${embeddedFontCss}\nsvg, text, tspan { font-family: ${exportFontFamily}; }`;
+        clone.insertBefore(styleElement, clone.firstChild);
+      }
+      clone.setAttribute("font-family", exportFontFamily);
+      clone.querySelectorAll("text, tspan").forEach((element) => {
+        if (!element.getAttribute("font-family")) {
+          element.setAttribute("font-family", exportFontFamily);
+        }
+      });
       const getVar = (name: string) => rootStyles.getPropertyValue(name).trim();
       const variableStyles = EXPORT_CSS_VARIABLES.map((name) => {
         const value = getVar(name);
@@ -843,6 +932,7 @@ export const UmlDiagram = ({
         if (document.fonts?.ready) {
           await document.fonts.ready;
         }
+        await ensureEmbeddedFontCss();
         const payload = buildExportSvg(options.bounds, options.nodeId, options.style);
         if (!payload) {
           reportExportStatus("UML diagram not ready for export.");
@@ -878,6 +968,7 @@ export const UmlDiagram = ({
     [
       buildDefaultPath,
       buildExportSvg,
+      ensureEmbeddedFontCss,
       formatExportError,
       normalizePngPath,
       renderSvgToPngDataUrl,
@@ -896,6 +987,7 @@ export const UmlDiagram = ({
         if (document.fonts?.ready) {
           await document.fonts.ready;
         }
+        await ensureEmbeddedFontCss();
         const payload = buildExportSvg(options.bounds, options.nodeId, options.style);
         if (!payload) {
           reportExportStatus("UML diagram not ready for export.");
@@ -912,7 +1004,11 @@ export const UmlDiagram = ({
           return;
         }
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const rgba = new Uint8Array(imageData.data);
+        const rgba = new Uint8Array(
+          imageData.data.buffer,
+          imageData.data.byteOffset,
+          imageData.data.byteLength
+        );
         const image = await TauriImage.new(rgba, canvas.width, canvas.height);
         await writeImage(image);
         reportExportStatus(options.successLabel);
@@ -920,7 +1016,7 @@ export const UmlDiagram = ({
         reportExportStatus(`Failed to copy PNG: ${formatExportError(error)}`);
       }
     },
-    [buildExportSvg, formatExportError, renderSvgToCanvas, reportExportStatus]
+    [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas, reportExportStatus]
   );
 
   const exportDiagramPng = useCallback(
@@ -952,7 +1048,7 @@ export const UmlDiagram = ({
       await copyPng({
         bounds: diagramBounds,
         style,
-        successLabel: "Copied diagram PNG to clipboard."
+        successLabel: "Copied diagram to clipboard."
       });
     },
     [copyPng, diagramBounds, reportExportStatus]

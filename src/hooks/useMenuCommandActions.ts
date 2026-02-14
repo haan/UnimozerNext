@@ -5,11 +5,24 @@ import type { MutableRefObject } from "react";
 import type { UmlNode } from "../models/uml";
 import type { ExportStyle, ExportControls } from "../components/diagram/UmlDiagram";
 import type { StructogramExportControls } from "../components/structogram/StructogramView";
+import { basename } from "../services/paths";
+import { trimStatusText } from "../services/status";
 
 type ZoomControls = {
   zoomIn: () => void;
   zoomOut: () => void;
   resetZoom: () => void;
+};
+
+const EXPORT_WITH_PATH_PATTERN = /^(Exported .+ to )(.+)$/i;
+const TOAST_MESSAGE_MAX_CHARS = 140;
+
+const toExportToastMessage = (message: string) => {
+  const matched = message.match(EXPORT_WITH_PATH_PATTERN);
+  const compact = matched
+    ? `${matched[1]}${basename(matched[2].trim())}`
+    : message;
+  return trimStatusText(compact, TOAST_MESSAGE_MAX_CHARS);
 };
 
 type UseMenuCommandActionsArgs = {
@@ -95,10 +108,11 @@ export const useMenuCommandActions = ({
     (message: string) => {
       setStatus(message);
       const lowered = message.toLowerCase();
+      const toastMessage = toExportToastMessage(message);
       if (lowered.startsWith("failed") || lowered.includes("failed")) {
-        toast.error(message);
+        toast.error(toastMessage);
       } else {
-        toast.success(message);
+        toast.success(toastMessage);
       }
     },
     [setStatus]
