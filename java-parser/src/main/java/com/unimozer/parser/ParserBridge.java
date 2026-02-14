@@ -57,6 +57,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -335,9 +336,12 @@ public class ParserBridge {
     ParserConfiguration config = createParserConfiguration();
     JavaParser parser = new JavaParser(config);
 
-    List<Path> javaFiles = Files.walk(srcRoot)
-      .filter(path -> path.toString().endsWith(".java"))
-      .collect(Collectors.toList());
+    List<Path> javaFiles;
+    try (var stream = Files.walk(srcRoot)) {
+      javaFiles = stream
+        .filter(ParserBridge::isJavaSourcePath)
+        .collect(Collectors.toList());
+    }
 
     List<ParsedType> parsedTypes = new ArrayList<>();
     List<String> failedFiles = new ArrayList<>();
@@ -898,6 +902,13 @@ public class ParserBridge {
     return Paths.get(input).toAbsolutePath().normalize();
   }
 
+  static boolean isJavaSourcePath(Path path) {
+    if (path == null) return false;
+    Path fileName = path.getFileName();
+    String value = fileName == null ? path.toString() : fileName.toString();
+    return value.toLowerCase(Locale.ROOT).endsWith(".java");
+  }
+
   static CompilationUnit parseCompilationUnit(
     JavaParser parser,
     Path file,
@@ -924,6 +935,9 @@ public class ParserBridge {
       }
       return result.getResult().orElse(null);
     } catch (IOException ex) {
+      failedFiles.add(file.toString());
+      return null;
+    } catch (RuntimeException ex) {
       failedFiles.add(file.toString());
       return null;
     }

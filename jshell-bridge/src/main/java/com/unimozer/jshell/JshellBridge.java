@@ -24,14 +24,12 @@ import java.util.Locale;
 public final class JshellBridge {
     private static final String RESPONSE_PREFIX = "__UNIMOZER_BRIDGE__:";
     private final ObjectMapper mapper = new ObjectMapper();
-    private final JShell jshell;
+    private final String classpath;
+    private JShell jshell;
 
     private JshellBridge(String classpath) {
-        this.jshell = JShell.builder().build();
-        addBridgeClasspath();
-        if (classpath != null && !classpath.isBlank()) {
-            jshell.addToClasspath(classpath);
-        }
+        this.classpath = classpath;
+        this.jshell = createShell(classpath);
     }
 
     public static void main(String[] args) throws Exception {
@@ -50,10 +48,19 @@ public final class JshellBridge {
         bridge.run();
     }
 
-    private void addBridgeClasspath() {
+    private JShell createShell(String classpath) {
+        JShell shell = JShell.builder().build();
+        addBridgeClasspath(shell);
+        if (classpath != null && !classpath.isBlank()) {
+            shell.addToClasspath(classpath);
+        }
+        return shell;
+    }
+
+    private void addBridgeClasspath(JShell shell) {
         try {
             Path path = Path.of(JshellBridge.class.getProtectionDomain().getCodeSource().getLocation().toURI());
-            jshell.addToClasspath(path.toString());
+            shell.addToClasspath(path.toString());
         } catch (Exception ignored) {
             // If we cannot resolve the bridge path, Inspector may not be available.
         }
@@ -103,6 +110,9 @@ public final class JshellBridge {
     private ObjectNode handleInspect(String varName) {
         if (varName == null || varName.isBlank()) {
             return errorResponse("Missing variable name");
+        }
+        if (!isValidJavaIdentifier(varName)) {
+            return errorResponse("Invalid variable name");
         }
         Path tempFile;
         try {
@@ -171,8 +181,13 @@ public final class JshellBridge {
     }
 
     private ObjectNode handleReset() {
-        jshell.close();
-        return mapper.createObjectNode().put("ok", true);
+        try {
+            jshell.close();
+            jshell = createShell(classpath);
+            return mapper.createObjectNode().put("ok", true);
+        } catch (Exception error) {
+            return errorResponse(error.getMessage());
+        }
     }
 
     private EvalResult evaluate(String code) {
@@ -227,6 +242,17 @@ public final class JshellBridge {
     private String escapeJavaString(String input) {
         if (input == null) return "";
         return input.replace("\\", "\\\\").replace("\"", "\\\"");
+    }
+
+    private boolean isValidJavaIdentifier(String value) {
+        if (value == null || value.isBlank()) return false;
+        if (!Character.isJavaIdentifierStart(value.charAt(0))) return false;
+        for (int i = 1; i < value.length(); i++) {
+            if (!Character.isJavaIdentifierPart(value.charAt(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static final class EvalResult {

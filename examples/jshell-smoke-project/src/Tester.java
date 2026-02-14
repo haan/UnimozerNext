@@ -4,8 +4,10 @@ public class Tester {
 
     public static void main(String[] args) {
         int largeOutputLines = parseLargeOutputLines(args);
+        int protocolFloodLines = parseProtocolFloodLines(args);
         System.out.println("=== Unimozer Smoke Tester ===");
         System.out.println("largeOutput lines: " + largeOutputLines);
+        System.out.println("protocolFlood lines: " + protocolFloodLines);
 
         runTest("AppSmokeMain constructor + sum", () -> {
             AppSmokeMain app = new AppSmokeMain("SmokeFromTester", 3);
@@ -39,6 +41,15 @@ public class Tester {
             edgeCases.unicodeAndEscapes();
         });
 
+        runTest("JshellEdgeCases unicode stress", () -> {
+            JshellEdgeCases edgeCases = new JshellEdgeCases("unicode-stress");
+            edgeCases.unicodeStress();
+        });
+
+        runTest("JshellEdgeCases constructor flood", () -> {
+            new JshellEdgeCases("ctor-flood", 250);
+        });
+
         runTest("JshellEdgeCases JSON-like output", () -> {
             JshellEdgeCases edgeCases = new JshellEdgeCases("json");
             edgeCases.jsonLikeOutput();
@@ -47,6 +58,16 @@ public class Tester {
         runTest("JshellEdgeCases large output", () -> {
             JshellEdgeCases edgeCases = new JshellEdgeCases("bulk");
             edgeCases.largeOutput(largeOutputLines);
+        });
+
+        runTest("JshellEdgeCases protocol flood", () -> {
+            JshellEdgeCases edgeCases = new JshellEdgeCases("protocol");
+            edgeCases.protocolFlood(protocolFloodLines);
+        });
+
+        runTest("JshellEdgeCases protocol flood unicode", () -> {
+            JshellEdgeCases edgeCases = new JshellEdgeCases("protocol-unicode");
+            edgeCases.protocolFloodUnicode(Math.max(500, protocolFloodLines / 2));
         });
 
         runTest("JshellEdgeCases stderr output", () -> {
@@ -72,13 +93,21 @@ public class Tester {
     }
 
     private static int parseLargeOutputLines(String[] args) {
-        if (args.length == 0) {
-            return 2000;
+        return parseIntArgOrDefault(args, 0, 2000);
+    }
+
+    private static int parseProtocolFloodLines(String[] args) {
+        return parseIntArgOrDefault(args, 1, 6000);
+    }
+
+    private static int parseIntArgOrDefault(String[] args, int index, int fallback) {
+        if (args.length <= index) {
+            return fallback;
         }
         try {
-            return Integer.parseInt(args[0]);
+            return Integer.parseInt(args[index]);
         } catch (NumberFormatException ignored) {
-            return 2000;
+            return fallback;
         }
     }
 

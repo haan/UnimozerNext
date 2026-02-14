@@ -309,6 +309,11 @@ pub fn jshell_start(
     let out_dir = fs::canonicalize(&classpath).unwrap_or_else(|_| PathBuf::from(&classpath));
     let mut command = Command::new(java_path);
     command
+        .arg("-Dfile.encoding=UTF-8")
+        .arg("-Dstdout.encoding=UTF-8")
+        .arg("-Dstderr.encoding=UTF-8")
+        .arg("-Dsun.stdout.encoding=UTF-8")
+        .arg("-Dsun.stderr.encoding=UTF-8")
         .arg("-jar")
         .arg(jar_path)
         .arg("--classpath")

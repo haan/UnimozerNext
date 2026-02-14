@@ -8,6 +8,7 @@ This folder contains 5 Java classes to stress-test:
 - `main` execution
 - large stdout/stderr output
 - unicode/escape handling
+- higher-volume protocol-like flood output methods
 - inheritance behavior
 
 Open `examples/jshell-smoke-project` as a folder project in the app.
