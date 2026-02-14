@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type ProjectAction = "open" | "openFolder" | "new" | "exit";
+export type ProjectAction = "open" | "openFolder" | "openRecent" | "new" | "exit";
 
 type UseProjectActionFlowArgs = {
   busy: boolean;
@@ -8,6 +8,7 @@ type UseProjectActionFlowArgs = {
   hasPendingProjectChanges: boolean;
   onOpenProject: () => void;
   onOpenFolderProject: () => void;
+  onOpenRecentProject: () => void;
   onNewProject: () => void;
   onExit: () => void;
   onSave: () => void;
@@ -30,6 +31,7 @@ export const useProjectActionFlow = ({
   hasPendingProjectChanges,
   onOpenProject,
   onOpenFolderProject,
+  onOpenRecentProject,
   onNewProject,
   onExit,
   onSave,
@@ -46,13 +48,15 @@ export const useProjectActionFlow = ({
         onOpenProject();
       } else if (action === "openFolder") {
         onOpenFolderProject();
+      } else if (action === "openRecent") {
+        onOpenRecentProject();
       } else if (action === "exit") {
         onExit();
       } else {
         onNewProject();
       }
     },
-    [onExit, onNewProject, onOpenFolderProject, onOpenProject]
+    [onExit, onNewProject, onOpenFolderProject, onOpenProject, onOpenRecentProject]
   );
 
   const requestProjectAction = useCallback(

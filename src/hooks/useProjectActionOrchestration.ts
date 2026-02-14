@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 
+import type { RecentProjectEntry } from "../models/settings";
 import { useProjectActionFlow, type ProjectAction } from "./useProjectActionFlow";
 import { useWindowCloseGuard } from "./useWindowCloseGuard";
 
@@ -10,6 +11,7 @@ type UseProjectActionOrchestrationArgs = {
   awaitBeforeExit: () => Promise<void>;
   handleOpenProject: () => Promise<void>;
   handleOpenFolderProject: () => Promise<void>;
+  handleOpenRecentProject: (entry: RecentProjectEntry) => Promise<void>;
   handleNewProject: () => Promise<void>;
   handleSave: () => Promise<void>;
   handleSaveAs: () => Promise<void>;
@@ -26,6 +28,7 @@ type UseProjectActionOrchestrationResult = {
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onRequestOpenFolderProject: () => void;
+  onRequestOpenRecentProject: (entry: RecentProjectEntry) => void;
   onRequestExit: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -38,6 +41,7 @@ export const useProjectActionOrchestration = ({
   awaitBeforeExit,
   handleOpenProject,
   handleOpenFolderProject,
+  handleOpenRecentProject,
   handleNewProject,
   handleSave,
   handleSaveAs,
@@ -46,6 +50,7 @@ export const useProjectActionOrchestration = ({
   handleZoomReset
 }: UseProjectActionOrchestrationArgs): UseProjectActionOrchestrationResult => {
   const requestProjectActionRef = useRef<(action: ProjectAction) => void>(() => undefined);
+  const pendingRecentProjectRef = useRef<RecentProjectEntry | null>(null);
 
   const guardedExit = useWindowCloseGuard({
     awaitBeforeExit,
@@ -67,6 +72,13 @@ export const useProjectActionOrchestration = ({
     },
     onOpenFolderProject: () => {
       void handleOpenFolderProject();
+    },
+    onOpenRecentProject: () => {
+      const entry = pendingRecentProjectRef.current;
+      pendingRecentProjectRef.current = null;
+      if (entry) {
+        void handleOpenRecentProject(entry);
+      }
     },
     onNewProject: () => {
       void handleNewProject();
@@ -96,6 +108,24 @@ export const useProjectActionOrchestration = ({
     requestProjectAction("openFolder");
   }, [requestProjectAction]);
 
+  const onRequestOpenRecentProject = useCallback(
+    (entry: RecentProjectEntry) => {
+      pendingRecentProjectRef.current = entry;
+      requestProjectAction("openRecent");
+    },
+    [requestProjectAction]
+  );
+
+  const handleConfirmProjectActionOpenChange = useCallback(
+    (open: boolean) => {
+      onConfirmProjectActionOpenChange(open);
+      if (!open) {
+        pendingRecentProjectRef.current = null;
+      }
+    },
+    [onConfirmProjectActionOpenChange]
+  );
+
   const onRequestExit = useCallback(() => {
     requestProjectAction("exit");
   }, [requestProjectAction]);
@@ -112,10 +142,11 @@ export const useProjectActionOrchestration = ({
     confirmProjectActionOpen,
     pendingProjectAction,
     confirmProjectAction,
-    onConfirmProjectActionOpenChange,
+    onConfirmProjectActionOpenChange: handleConfirmProjectActionOpenChange,
     onRequestNewProject,
     onRequestOpenProject,
     onRequestOpenFolderProject,
+    onRequestOpenRecentProject,
     onRequestExit,
     onSave,
     onSaveAs

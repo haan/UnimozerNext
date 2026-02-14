@@ -41,6 +41,13 @@ export type ObjectBenchSettings = {
   useObjectParameterDropdowns: boolean;
 };
 
+export type RecentProjectKind = "packed" | "folder";
+
+export type RecentProjectEntry = {
+  path: string;
+  kind: RecentProjectKind;
+};
+
 export type AppSettings = {
   general: GeneralSettings;
   uml: UmlSettings;
@@ -48,6 +55,7 @@ export type AppSettings = {
   editor: EditorSettings;
   advanced: AdvancedSettings;
   structogram: StructogramSettings;
+  recentProjects: RecentProjectEntry[];
   layout: {
     umlSplitRatio: number;
     consoleSplitRatio: number;

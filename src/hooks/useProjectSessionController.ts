@@ -5,6 +5,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { DiagramState } from "../models/diagram";
 import type { FileDraft } from "../models/drafts";
 import type { FileNode } from "../models/files";
+import type { RecentProjectEntry } from "../models/settings";
 import type { ObjectInstance } from "../models/objectBench";
 import type { OpenFile } from "../models/openFile";
 import type { UmlGraph } from "../models/uml";
@@ -43,6 +44,8 @@ type UseProjectSessionControllerArgs = {
   clearPackedArchiveSyncError: () => void;
   setObjectBench: Dispatch<SetStateAction<ObjectInstance[]>>;
   setJshellReady: Dispatch<SetStateAction<boolean>>;
+  recordRecentProject: (entry: RecentProjectEntry) => void;
+  removeRecentProject: (entry: RecentProjectEntry) => void;
 };
 
 export const useProjectSessionController = ({
@@ -76,7 +79,9 @@ export const useProjectSessionController = ({
   awaitPackedArchiveSync,
   clearPackedArchiveSyncError,
   setObjectBench,
-  setJshellReady
+  setJshellReady,
+  recordRecentProject,
+  removeRecentProject
 }: UseProjectSessionControllerArgs) => {
   const beforeProjectSwitch = useCallback(async () => {
     await awaitPackedArchiveSync();
@@ -89,6 +94,7 @@ export const useProjectSessionController = ({
     handleOpenProject,
     handleOpenFolderProject,
     handleOpenPackedProjectPath,
+    handleOpenRecentProject,
     handleNewProject,
     openFileByPath,
     handleSave: saveProject,
@@ -122,7 +128,9 @@ export const useProjectSessionController = ({
     notifyLsOpen,
     updateDraftForPath,
     formatAndSaveUmlFiles,
-    formatStatus
+    formatStatus,
+    recordRecentProject,
+    removeRecentProject
   });
 
   const handleSave = useCallback(async () => {
@@ -158,6 +166,7 @@ export const useProjectSessionController = ({
     handleOpenProject,
     handleOpenFolderProject,
     handleOpenPackedProjectPath,
+    handleOpenRecentProject,
     handleNewProject,
     openFileByPath,
     loadDiagramState,

@@ -13,7 +13,7 @@ import type { FileNode } from "./models/files";
 import type { UmlGraph } from "./models/uml";
 import type { ObjectInstance } from "./models/objectBench";
 import type { OpenFile } from "./models/openFile";
-import type { AppSettings } from "./models/settings";
+import type { AppSettings, RecentProjectEntry } from "./models/settings";
 import { useSplitRatios } from "./hooks/useSplitRatios";
 import { useVerticalSplit } from "./hooks/useVerticalSplit";
 import { useRunConsole } from "./hooks/useRunConsole";
@@ -52,11 +52,16 @@ import {
   UML_DIAGRAM_MIN_HEIGHT_PX
 } from "./constants/layout";
 import { formatStatusText as formatStatus, trimStatusText as trimStatus } from "./services/status";
+import {
+  removeRecentProject as removeRecentProjectFromList,
+  upsertRecentProject
+} from "./services/recentProjects";
 
 export type AppContainerProps = {
   settings: AppSettings;
   settingsOpen: boolean;
   setSettingsOpen: Dispatch<SetStateAction<boolean>>;
+  updateSettings: (updater: (prev: AppSettings) => AppSettings) => void;
   handleSettingsChange: (next: AppSettings) => void;
   updateUmlSplitRatioSetting: (ratio: number) => void;
   updateConsoleSplitRatioSetting: (ratio: number) => void;
@@ -67,6 +72,7 @@ export default function AppContainer({
   settings,
   settingsOpen,
   setSettingsOpen,
+  updateSettings,
   handleSettingsChange,
   updateUmlSplitRatioSetting,
   updateConsoleSplitRatioSetting,
@@ -390,10 +396,38 @@ export default function AppContainer({
     trimStatus
   });
 
+  const recordRecentProject = useCallback(
+    (entry: RecentProjectEntry) => {
+      updateSettings((prev) => ({
+        ...prev,
+        recentProjects: upsertRecentProject(prev.recentProjects ?? [], entry, 10)
+      }));
+    },
+    [updateSettings]
+  );
+
+  const removeRecentProject = useCallback(
+    (entry: RecentProjectEntry) => {
+      updateSettings((prev) => ({
+        ...prev,
+        recentProjects: removeRecentProjectFromList(prev.recentProjects ?? [], entry)
+      }));
+    },
+    [updateSettings]
+  );
+
+  const clearRecentProjects = useCallback(() => {
+    updateSettings((prev) => ({
+      ...prev,
+      recentProjects: []
+    }));
+  }, [updateSettings]);
+
   const {
     handleOpenProject,
     handleOpenFolderProject,
     handleOpenPackedProjectPath,
+    handleOpenRecentProject,
     handleNewProject,
     openFileByPath,
     loadDiagramState,
@@ -431,7 +465,9 @@ export default function AppContainer({
     awaitPackedArchiveSync,
     clearPackedArchiveSyncError,
     setObjectBench,
-    setJshellReady
+    setJshellReady,
+    recordRecentProject,
+    removeRecentProject
   });
 
   useLaunchBootstrap({
@@ -662,6 +698,7 @@ export default function AppContainer({
     onRequestNewProject,
     onRequestOpenProject,
     onRequestOpenFolderProject,
+    onRequestOpenRecentProject,
     onRequestExit,
     onSave: onSaveProject,
     onSaveAs: onSaveProjectAs
@@ -672,6 +709,7 @@ export default function AppContainer({
     awaitBeforeExit: awaitPackedArchiveSync,
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenRecentProject,
     handleNewProject,
     handleSave: handleSaveAndRefreshDiskSnapshot,
     handleSaveAs: handleSaveAsAndRefreshDiskSnapshot,
@@ -802,6 +840,9 @@ export default function AppContainer({
         onRequestNewProject={onRequestNewProject}
         onRequestOpenProject={onRequestOpenProject}
         onRequestOpenFolderProject={onRequestOpenFolderProject}
+        recentProjects={settings.recentProjects}
+        onRequestOpenRecentProject={onRequestOpenRecentProject}
+        onClearRecentProjects={clearRecentProjects}
         onSave={onSaveProject}
         onSaveAs={onSaveProjectAs}
         onOpenSettings={handleOpenSettings}

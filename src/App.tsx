@@ -7,6 +7,7 @@ type LoadedAppSettings = {
   settings: AppSettings;
   settingsOpen: boolean;
   setSettingsOpen: Dispatch<SetStateAction<boolean>>;
+  updateSettings: (updater: (prev: AppSettings) => AppSettings) => void;
   handleSettingsChange: (next: AppSettings) => void;
   updateUmlSplitRatioSetting: (ratio: number) => void;
   updateConsoleSplitRatioSetting: (ratio: number) => void;
@@ -34,6 +35,7 @@ export default function App() {
     settings,
     settingsOpen,
     setSettingsOpen,
+    updateSettings,
     handleSettingsChange,
     updateUmlSplitRatioSetting,
     updateConsoleSplitRatioSetting,
@@ -45,6 +47,7 @@ export default function App() {
       settings={settings}
       settingsOpen={settingsOpen}
       setSettingsOpen={setSettingsOpen}
+      updateSettings={updateSettings}
       handleSettingsChange={handleSettingsChange}
       updateUmlSplitRatioSetting={updateUmlSplitRatioSetting}
       updateConsoleSplitRatioSetting={updateConsoleSplitRatioSetting}

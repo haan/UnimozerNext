@@ -156,6 +156,20 @@ impl Default for LayoutSettings {
     }
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum RecentProjectKind {
+    Packed,
+    Folder,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct RecentProjectEntry {
+    path: String,
+    kind: RecentProjectKind,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct AppSettings {
@@ -170,6 +184,8 @@ pub(crate) struct AppSettings {
     advanced: AdvancedSettings,
     #[serde(default)]
     structogram: StructogramSettings,
+    #[serde(default)]
+    recent_projects: Vec<RecentProjectEntry>,
     #[serde(default)]
     layout: LayoutSettings,
 }
@@ -214,6 +230,7 @@ impl Default for AppSettings {
                 switch_header_color: default_structogram_switch_header_color(),
                 try_wrapper_color: default_structogram_try_wrapper_color(),
             },
+            recent_projects: Vec::new(),
             layout: LayoutSettings {
                 uml_split_ratio: default_split_ratio(),
                 console_split_ratio: default_console_split_ratio(),

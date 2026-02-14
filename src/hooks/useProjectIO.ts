@@ -8,6 +8,7 @@ import type { FileNode } from "../models/files";
 import type { UmlGraph } from "../models/uml";
 import type { FileDraft } from "../models/drafts";
 import type { OpenFile } from "../models/openFile";
+import type { RecentProjectEntry } from "../models/settings";
 import {
   createDefaultDiagramState,
   mergeDiagramState,
@@ -62,13 +63,23 @@ type UseProjectIOArgs = {
   updateDraftForPath: (path: string, content: string, savedOverride?: string) => void;
   formatAndSaveUmlFiles: (setStatusMessage: boolean) => Promise<number>;
   formatStatus: (input: unknown) => string;
+  recordRecentProject: (entry: RecentProjectEntry) => void;
+  removeRecentProject: (entry: RecentProjectEntry) => void;
 };
 
 type UseProjectIOResult = {
   handleOpenProject: () => Promise<void>;
   handleOpenFolderProject: () => Promise<void>;
+  handleOpenFolderProjectPath: (
+    path: string,
+    options?: { clearConsole?: boolean }
+  ) => Promise<void>;
   handleOpenPackedProjectPath: (
     archivePath: string,
+    options?: { clearConsole?: boolean }
+  ) => Promise<void>;
+  handleOpenRecentProject: (
+    entry: RecentProjectEntry,
     options?: { clearConsole?: boolean }
   ) => Promise<void>;
   handleNewProject: (options?: { clearConsole?: boolean }) => Promise<void>;
@@ -109,7 +120,9 @@ export const useProjectIO = ({
   notifyLsOpen,
   updateDraftForPath,
   formatAndSaveUmlFiles,
-  formatStatus
+  formatStatus,
+  recordRecentProject,
+  removeRecentProject
 }: UseProjectIOArgs): UseProjectIOResult => {
   const ensureUmzPath = useCallback((path: string) => {
     const extension = `.${PACKED_PROJECT_EXTENSION}`;
@@ -293,6 +306,10 @@ export const useProjectIO = ({
         setPackedArchivePath(response.archivePath);
         resetProjectSession();
         await restartLsIfSameProjectRoot(response.projectRoot);
+        recordRecentProject({
+          path: response.archivePath,
+          kind: "packed"
+        });
         return response.projectRoot;
       } finally {
         setBusy(false);
@@ -303,6 +320,7 @@ export const useProjectIO = ({
       prepareProjectSwitch,
       refreshTree,
       resetProjectSession,
+      recordRecentProject,
       restartLsIfSameProjectRoot,
       setBusy,
       setPackedArchivePath,
@@ -332,6 +350,43 @@ export const useProjectIO = ({
     ]
   );
 
+  const openFolderProjectByPath = useCallback(
+    async (dir: string, options?: { clearConsole?: boolean }) => {
+      const shouldClearConsole = options?.clearConsole ?? true;
+      if (shouldClearConsole) {
+        clearConsole();
+      }
+      await prepareProjectSwitch();
+      setBusy(true);
+      try {
+        await refreshTree(dir);
+        setProjectPath(dir);
+        setProjectStorageMode("folder");
+        setPackedArchivePath(null);
+        resetProjectSession();
+        await restartLsIfSameProjectRoot(dir);
+        recordRecentProject({
+          path: dir,
+          kind: "folder"
+        });
+      } finally {
+        setBusy(false);
+      }
+    },
+    [
+      clearConsole,
+      prepareProjectSwitch,
+      refreshTree,
+      resetProjectSession,
+      recordRecentProject,
+      restartLsIfSameProjectRoot,
+      setBusy,
+      setPackedArchivePath,
+      setProjectPath,
+      setProjectStorageMode
+    ]
+  );
+
   const handleOpenProject = useCallback(async () => {
     setStatus("Opening project...");
     const selection = await open({
@@ -355,6 +410,19 @@ export const useProjectIO = ({
     await handleOpenPackedProjectPath(filePath);
   }, [handleOpenPackedProjectPath, setStatus]);
 
+  const handleOpenFolderProjectPath = useCallback(
+    async (path: string, options?: { clearConsole?: boolean }) => {
+      setStatus("Opening folder project...");
+      try {
+        await openFolderProjectByPath(path, options);
+        setStatus(`Project loaded: ${toDisplayPath(path)}`);
+      } catch (error) {
+        setStatus(`Failed to open folder project: ${formatStatus(error)}`);
+      }
+    },
+    [formatStatus, openFolderProjectByPath, setStatus]
+  );
+
   const handleOpenFolderProject = useCallback(async () => {
     setStatus("Opening folder project...");
     const selection = await open({
@@ -369,35 +437,35 @@ export const useProjectIO = ({
       return;
     }
 
-    setBusy(true);
-    clearConsole();
-    await prepareProjectSwitch();
-    try {
-      await refreshTree(dir);
-      setProjectPath(dir);
-      setProjectStorageMode("folder");
-      setPackedArchivePath(null);
-      resetProjectSession();
-      await restartLsIfSameProjectRoot(dir);
-      setStatus(`Project loaded: ${toDisplayPath(dir)}`);
-    } catch (error) {
-      setStatus(`Failed to open folder project: ${formatStatus(error)}`);
-    } finally {
-      setBusy(false);
-    }
-  }, [
-    clearConsole,
-    formatStatus,
-    prepareProjectSwitch,
-    refreshTree,
-    resetProjectSession,
-    restartLsIfSameProjectRoot,
-    setBusy,
-    setPackedArchivePath,
-    setProjectPath,
-    setProjectStorageMode,
-    setStatus
-  ]);
+    await handleOpenFolderProjectPath(dir);
+  }, [handleOpenFolderProjectPath, setStatus]);
+
+  const handleOpenRecentProject = useCallback(
+    async (entry: RecentProjectEntry, options?: { clearConsole?: boolean }) => {
+      try {
+        const token = await invoke<string>("file_change_token", { path: entry.path });
+        if (token === "missing") {
+          removeRecentProject(entry);
+          setStatus(`Recent project is missing and was removed: ${toDisplayPath(entry.path)}`);
+          return;
+        }
+      } catch {
+        // Proceed with open flow if token lookup fails unexpectedly.
+      }
+
+      if (entry.kind === "packed") {
+        await handleOpenPackedProjectPath(entry.path, options);
+        return;
+      }
+      await handleOpenFolderProjectPath(entry.path, options);
+    },
+    [
+      handleOpenFolderProjectPath,
+      handleOpenPackedProjectPath,
+      removeRecentProject,
+      setStatus
+    ]
+  );
 
   const handleNewProject = useCallback(async (options?: { clearConsole?: boolean }) => {
     const shouldClearConsole = options?.clearConsole ?? true;
@@ -492,6 +560,10 @@ export const useProjectIO = ({
           projectRoot: projectPath,
           archivePath: packedArchivePath
         });
+        recordRecentProject({
+          path: packedArchivePath,
+          kind: "packed"
+        });
         setStatus(`Project saved: ${toDisplayPath(packedArchivePath)}`);
       }
       return true;
@@ -508,6 +580,7 @@ export const useProjectIO = ({
     packedArchivePath,
     projectPath,
     projectStorageMode,
+    recordRecentProject,
     setBusy,
     setStatus,
     switchToPackedArchive
@@ -662,7 +735,9 @@ export const useProjectIO = ({
   return {
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenFolderProjectPath,
     handleOpenPackedProjectPath,
+    handleOpenRecentProject,
     handleNewProject,
     openFileByPath,
     handleSave,

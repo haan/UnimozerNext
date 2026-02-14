@@ -13,6 +13,8 @@ import {
 } from "../ui/menubar";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import type { ExportStyle } from "../diagram/UmlDiagram";
+import type { RecentProjectEntry } from "../../models/settings";
+import { basename, toDisplayPath } from "../../services/paths";
 
 type AppMenuProps = {
   busy: boolean;
@@ -42,6 +44,9 @@ type AppMenuProps = {
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onRequestOpenFolderProject: () => void;
+  recentProjects: RecentProjectEntry[];
+  onRequestOpenRecentProject: (entry: RecentProjectEntry) => void;
+  onClearRecentProjects: () => void;
   onSave: () => void;
   onSaveAs: () => void;
   onOpenSettings: () => void;
@@ -104,6 +109,9 @@ export const AppMenu = ({
   onRequestNewProject,
   onRequestOpenProject,
   onRequestOpenFolderProject,
+  recentProjects,
+  onRequestOpenRecentProject,
+  onClearRecentProjects,
   onSave,
   onSaveAs,
   onOpenSettings,
@@ -161,6 +169,37 @@ export const AppMenu = ({
             <MenubarItem onClick={onRequestOpenFolderProject} disabled={busy}>
               Open Folder Project
             </MenubarItem>
+            <MenubarSub>
+              <MenubarSubTrigger disabled={busy}>Open Recent</MenubarSubTrigger>
+              <MenubarSubContent>
+                {recentProjects.length === 0 ? (
+                  <MenubarItem disabled>No recent projects</MenubarItem>
+                ) : (
+                  recentProjects.map((entry) => (
+                    <MenubarItem
+                      key={`${entry.kind}:${entry.path}`}
+                      title={toDisplayPath(entry.path)}
+                      disabled={busy}
+                      onClick={() => onRequestOpenRecentProject(entry)}
+                    >
+                      <span className="flex w-full items-center justify-between gap-4">
+                        <span className="max-w-[240px] truncate">{basename(entry.path)}</span>
+                        <span className="text-[10px] uppercase text-muted-foreground">
+                          {entry.kind === "packed" ? "UMZ" : "Folder"}
+                        </span>
+                      </span>
+                    </MenubarItem>
+                  ))
+                )}
+                <MenubarSeparator />
+                <MenubarItem
+                  onClick={onClearRecentProjects}
+                  disabled={busy || recentProjects.length === 0}
+                >
+                  Clear Recent Projects
+                </MenubarItem>
+              </MenubarSubContent>
+            </MenubarSub>
             <MenubarItem onClick={onSave} disabled={busy || !projectName}>
               Save
               <MenubarShortcut>{isMac ? "⌘S" : "Ctrl+S"}</MenubarShortcut>

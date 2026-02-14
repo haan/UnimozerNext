@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
-import type { AppSettings } from "../models/settings";
+import type { AppSettings, RecentProjectEntry } from "../models/settings";
 import { readSettings, writeSettings } from "../services/settings";
 
 const DARK_MODE_STORAGE_KEY = "unimozer.darkMode";
@@ -21,10 +22,31 @@ type AppSettingsHook = {
   settingsError: string | null;
   settingsOpen: boolean;
   setSettingsOpen: Dispatch<SetStateAction<boolean>>;
+  updateSettings: (updater: (prev: AppSettings) => AppSettings) => void;
   handleSettingsChange: (next: AppSettings) => void;
   updateUmlSplitRatioSetting: (ratio: number) => void;
   updateConsoleSplitRatioSetting: (ratio: number) => void;
   updateObjectBenchSplitRatioSetting: (ratio: number) => void;
+};
+
+const isRecentProjectKind = (value: unknown): value is RecentProjectEntry["kind"] =>
+  value === "packed" || value === "folder";
+
+const isRecentProjectEntry = (value: unknown): value is RecentProjectEntry => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as { path?: unknown; kind?: unknown };
+  return typeof candidate.path === "string" && isRecentProjectKind(candidate.kind);
+};
+
+const areRecentProjectsEqual = (a: RecentProjectEntry[], b: RecentProjectEntry[]) => {
+  if (a.length !== b.length) {
+    return false;
+  }
+  return a.every(
+    (entry, index) => entry.path === b[index].path && entry.kind === b[index].kind
+  );
 };
 
 export const useAppSettings = (): AppSettingsHook => {
@@ -38,10 +60,41 @@ export const useAppSettings = (): AppSettingsHook => {
     const loadSettings = async () => {
       try {
         const stored = await readSettings();
+        const parsed = stored as AppSettings;
+        const recentProjects = Array.isArray(parsed.recentProjects)
+          ? parsed.recentProjects.filter(isRecentProjectEntry)
+          : [];
+        const existingRecents = recentProjects;
+        const prunedRecents: RecentProjectEntry[] = [];
+        for (const entry of existingRecents) {
+          try {
+            const token = await invoke<string>("file_change_token", { path: entry.path });
+            if (token !== "missing") {
+              prunedRecents.push(entry);
+            }
+          } catch {
+            prunedRecents.push(entry);
+          }
+        }
+        const nextSettings: AppSettings = areRecentProjectsEqual(existingRecents, prunedRecents)
+          ? {
+              ...parsed,
+              recentProjects: existingRecents
+            }
+          : {
+              ...parsed,
+              recentProjects: prunedRecents
+            };
+        if (!areRecentProjectsEqual(existingRecents, prunedRecents)) {
+          try {
+            await writeSettings(nextSettings);
+          } catch {
+            // Ignore prune persistence failures and continue with loaded settings.
+          }
+        }
         if (!cancelled) {
-          const parsed = stored as AppSettings;
-          setSettings(parsed);
-          persistDarkModeHint(parsed.general.darkMode);
+          setSettings(nextSettings);
+          persistDarkModeHint(nextSettings.general.darkMode);
           setSettingsError(null);
           setSettingsLoading(false);
         }
@@ -59,62 +112,51 @@ export const useAppSettings = (): AppSettingsHook => {
     };
   }, []);
 
-  const handleSettingsChange = useCallback((next: AppSettings) => {
-    setSettings(next);
-    persistDarkModeHint(next.general.darkMode);
-    void writeSettings(next);
+  const updateSettings = useCallback((updater: (prev: AppSettings) => AppSettings) => {
+    setSettings((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const next = updater(prev);
+      persistDarkModeHint(next.general.darkMode);
+      void writeSettings(next);
+      return next;
+    });
   }, []);
+
+  const handleSettingsChange = useCallback((next: AppSettings) => {
+    updateSettings(() => next);
+  }, [updateSettings]);
 
   const updateUmlSplitRatioSetting = useCallback((ratio: number) => {
-    setSettings((prev) => {
-      if (!prev) {
-        return prev;
+    updateSettings((prev) => ({
+      ...prev,
+      layout: {
+        ...prev.layout,
+        umlSplitRatio: ratio
       }
-      const next = {
-        ...prev,
-        layout: {
-          ...prev.layout,
-          umlSplitRatio: ratio
-        }
-      };
-      void writeSettings(next);
-      return next;
-    });
-  }, []);
+    }));
+  }, [updateSettings]);
 
   const updateConsoleSplitRatioSetting = useCallback((ratio: number) => {
-    setSettings((prev) => {
-      if (!prev) {
-        return prev;
+    updateSettings((prev) => ({
+      ...prev,
+      layout: {
+        ...prev.layout,
+        consoleSplitRatio: ratio
       }
-      const next = {
-        ...prev,
-        layout: {
-          ...prev.layout,
-          consoleSplitRatio: ratio
-        }
-      };
-      void writeSettings(next);
-      return next;
-    });
-  }, []);
+    }));
+  }, [updateSettings]);
 
   const updateObjectBenchSplitRatioSetting = useCallback((ratio: number) => {
-    setSettings((prev) => {
-      if (!prev) {
-        return prev;
+    updateSettings((prev) => ({
+      ...prev,
+      layout: {
+        ...prev.layout,
+        objectBenchSplitRatio: ratio
       }
-      const next = {
-        ...prev,
-        layout: {
-          ...prev.layout,
-          objectBenchSplitRatio: ratio
-        }
-      };
-      void writeSettings(next);
-      return next;
-    });
-  }, []);
+    }));
+  }, [updateSettings]);
 
   return {
     settings,
@@ -123,6 +165,7 @@ export const useAppSettings = (): AppSettingsHook => {
     settingsError,
     settingsOpen,
     setSettingsOpen,
+    updateSettings,
     handleSettingsChange,
     updateUmlSplitRatioSetting,
     updateConsoleSplitRatioSetting,
