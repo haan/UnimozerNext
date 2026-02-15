@@ -1005,7 +1005,8 @@ export default function AppContainer({
         callMethodUseObjectParameterDropdowns={useObjectParameterDropdowns}
         callMethodAvailableObjects={objectBench.map((object) => ({
           name: object.name,
-          type: object.type
+          type: object.type,
+          compatibleTypes: object.compatibleTypes
         }))}
         removeClassOpen={removeClassOpen}
         onRemoveClassOpenChange={handleRemoveClassOpenChange}

@@ -24,6 +24,7 @@ export type ObjectInheritedMethodGroup = {
 export type ObjectInstance = {
   name: string;
   type: string;
+  compatibleTypes?: string[];
   fields: ObjectField[];
   inheritedMethods?: ObjectInheritedMethodGroup[];
 };

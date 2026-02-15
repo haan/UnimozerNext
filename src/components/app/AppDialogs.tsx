@@ -57,7 +57,7 @@ type AppDialogsProps = {
   callMethodLabel: string;
   callMethodParams: { name: string; type: string }[];
   callMethodUseObjectParameterDropdowns: boolean;
-  callMethodAvailableObjects: { name: string; type: string }[];
+  callMethodAvailableObjects: { name: string; type: string; compatibleTypes?: string[] }[];
   removeClassOpen: boolean;
   onRemoveClassOpenChange: (open: boolean) => void;
   removeTargetName: string | null;

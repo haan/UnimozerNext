@@ -45,6 +45,24 @@ const isBrokenPipe = (message: string) => {
   );
 };
 
+const collectCompatibleTypes = (candidates: Array<string | null | undefined>) => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const candidate of candidates) {
+    const normalized = (candidate ?? "").trim();
+    if (!normalized) {
+      continue;
+    }
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(normalized);
+  }
+  return result;
+};
+
 export const useJshellActions = ({
   projectPath,
   umlGraph,
@@ -147,6 +165,12 @@ export const useJshellActions = ({
         refreshed.push({
           name: obj.name,
           type: inspect.typeName || obj.type,
+          compatibleTypes: collectCompatibleTypes([
+            inspect.typeName,
+            obj.type,
+            ...(obj.compatibleTypes ?? []),
+            ...(inspect.inheritedMethods ?? []).map((group) => group.className)
+          ]),
           fields: (inspect.fields ?? []).map((field) => ({
             ...field,
             type: field.type ?? "",
@@ -254,6 +278,12 @@ export const useJshellActions = ({
         return {
           name: form.objectName,
           type: target.name || inspect.typeName || target.id,
+          compatibleTypes: collectCompatibleTypes([
+            target.name,
+            target.id,
+            inspect.typeName,
+            ...(inspect.inheritedMethods ?? []).map((group) => group.className)
+          ]),
           fields: (inspect.fields ?? []).map((field) => ({
             ...field,
             type: field.type ?? "",

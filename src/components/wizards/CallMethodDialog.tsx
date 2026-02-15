@@ -10,6 +10,7 @@ export type CallMethodForm = {
 type AvailableObject = {
   name: string;
   type: string;
+  compatibleTypes?: string[];
 };
 
 type MethodParam = {
@@ -67,8 +68,8 @@ const isObjectParameterType = (type: string) => {
   return toSimpleTypeName(normalized) !== "String";
 };
 
-const matchesParameterType = (objectType: string, paramType: string) => {
-  const objectNormalized = normalizeTypeForMatch(objectType);
+const matchesType = (candidateType: string, paramType: string) => {
+  const objectNormalized = normalizeTypeForMatch(candidateType);
   const paramNormalized = normalizeTypeForMatch(paramType);
   if (!objectNormalized || !paramNormalized) {
     return false;
@@ -77,6 +78,11 @@ const matchesParameterType = (objectType: string, paramType: string) => {
     return true;
   }
   return toSimpleTypeName(objectNormalized) === toSimpleTypeName(paramNormalized);
+};
+
+const matchesParameterType = (object: AvailableObject, paramType: string) => {
+  const candidateTypes = [object.type, ...(object.compatibleTypes ?? [])];
+  return candidateTypes.some((candidateType) => matchesType(candidateType, paramType));
 };
 
 export const CallMethodDialog = ({
@@ -134,7 +140,7 @@ export const CallMethodDialog = ({
         }
         const names = new Set(
           availableObjects
-            .filter((object) => matchesParameterType(object.type, param.type))
+            .filter((object) => matchesParameterType(object, param.type))
             .map((object) => object.name)
         );
         return Array.from(names).sort((left, right) =>
