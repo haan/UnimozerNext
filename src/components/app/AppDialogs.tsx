@@ -66,6 +66,9 @@ type AppDialogsProps = {
   onConfirmProjectActionOpenChange: (open: boolean) => void;
   canConfirmProjectAction: boolean;
   onConfirmProjectAction: () => void;
+  missingRecentProjectOpen: boolean;
+  missingRecentProjectPath: string | null;
+  onMissingRecentProjectOpenChange: (open: boolean) => void;
   reloadFromDiskDialogOpen: boolean;
   onReloadFromDiskDialogOpenChange: (open: boolean) => void;
   onConfirmReloadFromDisk: () => void;
@@ -121,6 +124,9 @@ export const AppDialogs = ({
   onConfirmProjectActionOpenChange,
   canConfirmProjectAction,
   onConfirmProjectAction,
+  missingRecentProjectOpen,
+  missingRecentProjectPath,
+  onMissingRecentProjectOpenChange,
   reloadFromDiskDialogOpen,
   onReloadFromDiskDialogOpenChange,
   onConfirmReloadFromDisk,
@@ -288,6 +294,27 @@ export const AppDialogs = ({
           >
             Reload
           </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog
+      open={missingRecentProjectOpen}
+      onOpenChange={onMissingRecentProjectOpenChange}
+    >
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Recent project not found</AlertDialogTitle>
+          <AlertDialogDescription className="text-center">
+            This path no longer exists.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {missingRecentProjectPath ? (
+          <div className="mt-3 rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs text-foreground break-all whitespace-pre-wrap">
+            {missingRecentProjectPath}
+          </div>
+        ) : null}
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogAction className="w-full">OK</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

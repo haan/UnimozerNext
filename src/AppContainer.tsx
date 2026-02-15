@@ -56,6 +56,7 @@ import {
   removeRecentProject as removeRecentProjectFromList,
   upsertRecentProject
 } from "./services/recentProjects";
+import { toDisplayPath } from "./services/paths";
 
 export type AppContainerProps = {
   settings: AppSettings;
@@ -149,7 +150,11 @@ export default function AppContainer({
     handleMethodReturnOpenChange,
     requestRemoveClass,
     handleRemoveClassOpenChange,
-    closeRemoveClassDialog
+    closeRemoveClassDialog,
+    missingRecentProjectOpen,
+    missingRecentProjectPath,
+    openMissingRecentProjectDialog,
+    handleMissingRecentProjectOpenChange
   } = useDialogState();
   const debugLogging = settings.advanced.debugLogging;
   const structogramColorsEnabled = settings.advanced.structogramColors;
@@ -467,7 +472,8 @@ export default function AppContainer({
     setObjectBench,
     setJshellReady,
     recordRecentProject,
-    removeRecentProject
+    removeRecentProject,
+    onMissingRecentProject: (path) => openMissingRecentProjectDialog(toDisplayPath(path))
   });
 
   useLaunchBootstrap({
@@ -1009,6 +1015,9 @@ export default function AppContainer({
         onConfirmProjectActionOpenChange={onConfirmProjectActionOpenChange}
         canConfirmProjectAction={Boolean(pendingProjectAction)}
         onConfirmProjectAction={confirmProjectAction}
+        missingRecentProjectOpen={missingRecentProjectOpen}
+        missingRecentProjectPath={missingRecentProjectPath}
+        onMissingRecentProjectOpenChange={handleMissingRecentProjectOpenChange}
         reloadFromDiskDialogOpen={reloadFromDiskDialogOpen}
         onReloadFromDiskDialogOpenChange={onReloadFromDiskDialogOpenChange}
         onConfirmReloadFromDisk={confirmReloadFromDisk}

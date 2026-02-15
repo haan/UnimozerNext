@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
-import { invoke } from "@tauri-apps/api/core";
 
 import type { AppSettings, RecentProjectEntry } from "../models/settings";
 import { readSettings, writeSettings } from "../services/settings";
@@ -40,15 +39,6 @@ const isRecentProjectEntry = (value: unknown): value is RecentProjectEntry => {
   return typeof candidate.path === "string" && isRecentProjectKind(candidate.kind);
 };
 
-const areRecentProjectsEqual = (a: RecentProjectEntry[], b: RecentProjectEntry[]) => {
-  if (a.length !== b.length) {
-    return false;
-  }
-  return a.every(
-    (entry, index) => entry.path === b[index].path && entry.kind === b[index].kind
-  );
-};
-
 export const useAppSettings = (): AppSettingsHook => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -64,34 +54,10 @@ export const useAppSettings = (): AppSettingsHook => {
         const recentProjects = Array.isArray(parsed.recentProjects)
           ? parsed.recentProjects.filter(isRecentProjectEntry)
           : [];
-        const existingRecents = recentProjects;
-        const prunedRecents: RecentProjectEntry[] = [];
-        for (const entry of existingRecents) {
-          try {
-            const token = await invoke<string>("file_change_token", { path: entry.path });
-            if (token !== "missing") {
-              prunedRecents.push(entry);
-            }
-          } catch {
-            prunedRecents.push(entry);
-          }
-        }
-        const nextSettings: AppSettings = areRecentProjectsEqual(existingRecents, prunedRecents)
-          ? {
-              ...parsed,
-              recentProjects: existingRecents
-            }
-          : {
-              ...parsed,
-              recentProjects: prunedRecents
-            };
-        if (!areRecentProjectsEqual(existingRecents, prunedRecents)) {
-          try {
-            await writeSettings(nextSettings);
-          } catch {
-            // Ignore prune persistence failures and continue with loaded settings.
-          }
-        }
+        const nextSettings: AppSettings = {
+          ...parsed,
+          recentProjects
+        };
         if (!cancelled) {
           setSettings(nextSettings);
           persistDarkModeHint(nextSettings.general.darkMode);

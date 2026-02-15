@@ -29,6 +29,8 @@ export const useDialogState = () => {
 
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
+  const [missingRecentProjectOpen, setMissingRecentProjectOpen] = useState(false);
+  const [missingRecentProjectPath, setMissingRecentProjectPath] = useState<string | null>(null);
 
   const openAddClassDialog = useCallback(() => {
     setAddClassOpen(true);
@@ -129,6 +131,18 @@ export const useDialogState = () => {
     setRemoveTarget(null);
   }, []);
 
+  const openMissingRecentProjectDialog = useCallback((path: string) => {
+    setMissingRecentProjectPath(path);
+    setMissingRecentProjectOpen(true);
+  }, []);
+
+  const handleMissingRecentProjectOpenChange = useCallback((open: boolean) => {
+    setMissingRecentProjectOpen(open);
+    if (!open) {
+      setMissingRecentProjectPath(null);
+    }
+  }, []);
+
   return {
     addClassOpen,
     setAddClassOpen,
@@ -146,6 +160,8 @@ export const useDialogState = () => {
     methodReturnLabel,
     removeClassOpen,
     removeTarget,
+    missingRecentProjectOpen,
+    missingRecentProjectPath,
     fieldTarget,
     constructorTarget,
     methodTarget,
@@ -164,7 +180,9 @@ export const useDialogState = () => {
     handleMethodReturnOpenChange,
     requestRemoveClass,
     handleRemoveClassOpenChange,
-    closeRemoveClassDialog
+    closeRemoveClassDialog,
+    openMissingRecentProjectDialog,
+    handleMissingRecentProjectOpenChange
   };
 };
 

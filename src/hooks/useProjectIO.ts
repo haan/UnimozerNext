@@ -65,6 +65,7 @@ type UseProjectIOArgs = {
   formatStatus: (input: unknown) => string;
   recordRecentProject: (entry: RecentProjectEntry) => void;
   removeRecentProject: (entry: RecentProjectEntry) => void;
+  onMissingRecentProject: (path: string) => void;
 };
 
 type UseProjectIOResult = {
@@ -122,7 +123,8 @@ export const useProjectIO = ({
   formatAndSaveUmlFiles,
   formatStatus,
   recordRecentProject,
-  removeRecentProject
+  removeRecentProject,
+  onMissingRecentProject
 }: UseProjectIOArgs): UseProjectIOResult => {
   const ensureUmzPath = useCallback((path: string) => {
     const extension = `.${PACKED_PROJECT_EXTENSION}`;
@@ -446,7 +448,8 @@ export const useProjectIO = ({
         const token = await invoke<string>("file_change_token", { path: entry.path });
         if (token === "missing") {
           removeRecentProject(entry);
-          setStatus(`Recent project is missing and was removed: ${toDisplayPath(entry.path)}`);
+          onMissingRecentProject(entry.path);
+          setStatus("Recent project no longer exists and was removed.");
           return;
         }
       } catch {
@@ -462,6 +465,7 @@ export const useProjectIO = ({
     [
       handleOpenFolderProjectPath,
       handleOpenPackedProjectPath,
+      onMissingRecentProject,
       removeRecentProject,
       setStatus
     ]

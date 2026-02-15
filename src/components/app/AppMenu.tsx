@@ -14,7 +14,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import type { ExportStyle } from "../diagram/UmlDiagram";
 import type { RecentProjectEntry } from "../../models/settings";
-import { basename, toDisplayPath } from "../../services/paths";
+import { toDisplayPath } from "../../services/paths";
 
 type AppMenuProps = {
   busy: boolean;
@@ -150,7 +150,7 @@ export const AppMenu = ({
 
   return (
     <header
-      className="relative z-20 flex items-center border-b border-border bg-card px-4 py-2"
+      className="relative z-20 flex items-center border-b border-border bg-card px-4 py-1.5"
       style={{ boxShadow: "var(--menu-bar-shadow)" }}
     >
       <div className="flex items-center gap-2">
@@ -175,28 +175,19 @@ export const AppMenu = ({
                 {recentProjects.length === 0 ? (
                   <MenubarItem disabled>No recent projects</MenubarItem>
                 ) : (
-                  <TooltipProvider delayDuration={220} disableHoverableContent>
+                  <>
                     {recentProjects.map((entry) => (
-                      <Tooltip key={`${entry.kind}:${entry.path}`}>
-                        <TooltipTrigger asChild>
-                          <MenubarItem
-                            disabled={busy}
-                            onClick={() => onRequestOpenRecentProject(entry)}
-                          >
-                            <span className="flex w-full items-center justify-between gap-4">
-                              <span className="max-w-[240px] truncate">{basename(entry.path)}</span>
-                              <span className="text-[10px] uppercase text-muted-foreground">
-                                {entry.kind === "packed" ? "UMZ" : "Folder"}
-                              </span>
-                            </span>
-                          </MenubarItem>
-                        </TooltipTrigger>
-                        <TooltipContent side="right" align="center" className="max-w-[520px] break-all text-xs">
+                      <MenubarItem
+                        key={`${entry.kind}:${entry.path}`}
+                        disabled={busy}
+                        onClick={() => onRequestOpenRecentProject(entry)}
+                      >
+                        <span className="max-w-[520px] break-all whitespace-normal">
                           {toDisplayPath(entry.path)}
-                        </TooltipContent>
-                      </Tooltip>
+                        </span>
+                      </MenubarItem>
                     ))}
-                  </TooltipProvider>
+                  </>
                 )}
                 <MenubarSeparator />
                 <MenubarItem
@@ -443,7 +434,7 @@ export const AppMenu = ({
                     width="15"
                     height="15"
                     fill="currentColor"
-                    viewBox="0 0 16 16"
+                    viewBox="0 0 17 17"
                   >
                     <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z" />
                     <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z" />
@@ -532,7 +523,7 @@ export const AppMenu = ({
                   width="15"
                   height="15"
                   fill="currentColor"
-                  viewBox="0 0 16 16"
+                  viewBox="0 0 17 17"
                 >
                   <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1z" />
                   <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0z" />
