@@ -67,6 +67,7 @@ type AppDialogsProps = {
   confirmProjectActionOpen: boolean;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
   canConfirmProjectAction: boolean;
+  projectActionConfirmBusy: boolean;
   onSaveBeforeProjectAction: () => void;
   onConfirmProjectAction: () => void;
   missingRecentProjectOpen: boolean;
@@ -132,6 +133,7 @@ export const AppDialogs = ({
   confirmProjectActionOpen,
   onConfirmProjectActionOpenChange,
   canConfirmProjectAction,
+  projectActionConfirmBusy,
   onSaveBeforeProjectAction,
   onConfirmProjectAction,
   missingRecentProjectOpen,
@@ -268,7 +270,7 @@ export const AppDialogs = ({
           <AlertDialogCancel
             variant="outline"
             className="w-full"
-            disabled={busy}
+            disabled={busy || projectActionConfirmBusy}
           >
             Cancel
           </AlertDialogCancel>
@@ -276,7 +278,7 @@ export const AppDialogs = ({
             type="button"
             size="sm"
             className="w-full"
-            disabled={busy || !canConfirmProjectAction}
+            disabled={busy || projectActionConfirmBusy || !canConfirmProjectAction}
             onClick={onSaveBeforeProjectAction}
           >
             Save
@@ -284,7 +286,7 @@ export const AppDialogs = ({
           <AlertDialogAction
             variant="outline"
             className="w-full"
-            disabled={busy || !canConfirmProjectAction}
+            disabled={busy || projectActionConfirmBusy || !canConfirmProjectAction}
             onClick={onConfirmProjectAction}
           >
             Continue

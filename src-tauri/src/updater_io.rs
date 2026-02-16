@@ -11,6 +11,10 @@ use crate::lifecycle::shutdown_background_processes;
 const STABLE_ENDPOINT_TEMPLATE: &str =
     "https://github.com/haan/UnimozerNext/releases/latest/download/latest-{target}.json";
 const PRERELEASE_ENDPOINT_TEMPLATE: &str = "https://github.com/haan/UnimozerNext/releases/download/updater-prerelease/latest-{target}.json";
+const MSI_UPDATER_DISABLED_MESSAGE: &str =
+    "Self-update is disabled for MSI installations. Use the NSIS installer to enable in-app updates.";
+const UNKNOWN_INSTALLER_UPDATER_DISABLED_MESSAGE: &str =
+    "Self-update is disabled because the installer type could not be detected.";
 
 #[derive(Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
@@ -89,6 +93,15 @@ pub async fn updater_check(
 ) -> CommandResult<UpdateCheckResult> {
     let installability = compute_installability()?;
     let target = resolve_updater_target()?;
+    if !installability.installable {
+        return Ok(UpdateCheckResult {
+            channel: channel.as_str().to_string(),
+            target,
+            update: None,
+            installability,
+        });
+    }
+
     let endpoint = channel.endpoint_for_target(&target);
 
     let endpoint_url = endpoint.parse().map_err(to_command_error)?;
@@ -190,6 +203,28 @@ fn normalize_arch(arch: &str) -> &str {
 fn compute_installability() -> CommandResult<UpdateInstallability> {
     let install_root = resolve_install_root()?;
     let install_path = install_root.to_string_lossy().to_string();
+
+    #[cfg(target_os = "windows")]
+    {
+        match detect_windows_installer_kind_value().as_str() {
+            "nsis" => {}
+            "msi" => {
+                return Ok(UpdateInstallability {
+                    installable: false,
+                    reason: Some(MSI_UPDATER_DISABLED_MESSAGE.to_string()),
+                    install_path,
+                })
+            }
+            _ => {
+                return Ok(UpdateInstallability {
+                    installable: false,
+                    reason: Some(UNKNOWN_INSTALLER_UPDATER_DISABLED_MESSAGE.to_string()),
+                    install_path,
+                })
+            }
+        }
+    }
+
     let probe_name = format!(
         ".unimozer-update-probe-{}-{}",
         std::process::id(),
@@ -265,7 +300,7 @@ fn detect_windows_installer_kind_value() -> String {
     if let Some(heuristic_kind) = read_uninstall_heuristic_kind(&install_root) {
         return heuristic_kind;
     }
-    "nsis".to_string()
+    "unknown".to_string()
 }
 
 #[cfg(not(target_os = "windows"))]

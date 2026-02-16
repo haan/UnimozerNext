@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 export type ProjectAction =
   | "open"
@@ -27,6 +27,7 @@ type UseProjectActionFlowArgs = {
 type UseProjectActionFlowResult = {
   confirmProjectActionOpen: boolean;
   pendingProjectAction: ProjectAction | null;
+  projectActionConfirmBusy: boolean;
   requestProjectAction: (action: ProjectAction) => void;
   saveAndConfirmProjectAction: () => void;
   confirmProjectAction: () => void;
@@ -50,6 +51,13 @@ export const useProjectActionFlow = ({
 }: UseProjectActionFlowArgs): UseProjectActionFlowResult => {
   const [confirmProjectActionOpen, setConfirmProjectActionOpen] = useState(false);
   const [pendingProjectAction, setPendingProjectAction] = useState<ProjectAction | null>(null);
+  const [projectActionConfirmBusy, setProjectActionConfirmBusy] = useState(false);
+  const projectActionConfirmBusyRef = useRef(false);
+
+  const setProjectActionConfirmBusyState = useCallback((busyState: boolean) => {
+    projectActionConfirmBusyRef.current = busyState;
+    setProjectActionConfirmBusy(busyState);
+  }, []);
 
   const runProjectAction = useCallback(
     (action: ProjectAction) => {
@@ -90,36 +98,48 @@ export const useProjectActionFlow = ({
   );
 
   const confirmProjectAction = useCallback(() => {
+    if (projectActionConfirmBusyRef.current) {
+      return;
+    }
     const action = pendingProjectAction;
+    setProjectActionConfirmBusyState(true);
     setConfirmProjectActionOpen(false);
     setPendingProjectAction(null);
     if (action) {
       runProjectAction(action);
     }
-  }, [pendingProjectAction, runProjectAction]);
+    setProjectActionConfirmBusyState(false);
+  }, [pendingProjectAction, runProjectAction, setProjectActionConfirmBusyState]);
 
   const saveAndConfirmProjectAction = useCallback(async () => {
+    if (projectActionConfirmBusyRef.current) {
+      return;
+    }
     const action = pendingProjectAction;
     if (!action) {
       return;
     }
 
+    setProjectActionConfirmBusyState(true);
     const saved = await onSave();
     if (!saved) {
+      setProjectActionConfirmBusyState(false);
       return;
     }
 
     setConfirmProjectActionOpen(false);
     setPendingProjectAction(null);
     runProjectAction(action);
-  }, [onSave, pendingProjectAction, runProjectAction]);
+    setProjectActionConfirmBusyState(false);
+  }, [onSave, pendingProjectAction, runProjectAction, setProjectActionConfirmBusyState]);
 
   const onConfirmProjectActionOpenChange = useCallback((open: boolean) => {
     setConfirmProjectActionOpen(open);
     if (!open) {
       setPendingProjectAction(null);
+      setProjectActionConfirmBusyState(false);
     }
-  }, []);
+  }, [setProjectActionConfirmBusyState]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -169,6 +189,7 @@ export const useProjectActionFlow = ({
   return {
     confirmProjectActionOpen,
     pendingProjectAction,
+    projectActionConfirmBusy,
     requestProjectAction,
     saveAndConfirmProjectAction,
     confirmProjectAction,

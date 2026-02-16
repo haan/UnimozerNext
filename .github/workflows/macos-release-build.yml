@@ -239,45 +239,10 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --ci --target ${{ matrix.rust_target }} --bundles "app,dmg" --config ${{ matrix.tauri_config }}
 
-      - name: Resolve release metadata
-        id: release_meta
-        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_GH_RELEASE == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && (github.event.inputs.release_channel == 'prerelease' || github.event.inputs.release_tag != '')) }}
+      - name: Prepare release assets
         shell: bash
         run: |
           set -euo pipefail
-          event_name="${{ github.event_name }}"
-          channel="${{ github.event.inputs.release_channel }}"
-          release_tag="${{ github.event.inputs.release_tag }}"
-
-          if [[ "$event_name" == "workflow_dispatch" ]]; then
-            if [[ "$channel" == "prerelease" ]]; then
-              tag_name="updater-prerelease"
-              is_prerelease="true"
-            else
-              if [[ -z "$release_tag" ]]; then
-                echo "release_tag is required for stable channel publishing." >&2
-                exit 1
-              fi
-              tag_name="$release_tag"
-              is_prerelease="false"
-            fi
-          else
-            tag_name="${{ github.ref_name }}"
-            is_prerelease="false"
-          fi
-
-          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
-          echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
-
-      - name: Generate updater manifest
-        if: ${{ steps.release_meta.outputs.tag_name != '' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          release_tag="${{ steps.release_meta.outputs.tag_name }}"
-          release_base="https://github.com/${{ github.repository }}/releases/download/$release_tag"
-          updater_target="${{ matrix.updater_target }}"
 
           app_tarball="$(find "src-tauri/target/${{ matrix.rust_target }}/release/bundle" -type f -name '*.app.tar.gz' | head -n 1)"
           if [[ -z "$app_tarball" ]]; then
@@ -295,7 +260,7 @@ jobs:
             exit 1
           fi
 
-          version="$(awk -F '\"' '/^version[[:space:]]*=/{print $2; exit}' src-tauri/Cargo.toml | tr -d '\r')"
+          version="$(awk -F '\"' '/^[[:space:]]*version[[:space:]]*=/{print $2; exit}' src-tauri/Cargo.toml | tr -d '\r')"
           if [[ -z "$version" ]]; then
             echo "Could not resolve app version from src-tauri/Cargo.toml" >&2
             exit 1
@@ -309,6 +274,66 @@ jobs:
           cp "$app_tarball" "$release_asset_dir/$app_release_name"
           cp "$app_sig" "$release_asset_dir/$app_release_name.sig"
           cp "$dmg_file" "$release_asset_dir/$dmg_release_name"
+
+      - name: Resolve release metadata
+        id: release_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          event_name="${{ github.event_name }}"
+          publish_input="${{ github.event.inputs.publish_release }}"
+          channel="${{ github.event.inputs.release_channel }}"
+          release_tag="${{ github.event.inputs.release_tag }}"
+          publish_release="false"
+          tag_name=""
+          is_prerelease="false"
+
+          if [[ "$event_name" == "push" ]]; then
+            if [[ "${{ github.ref }}" == refs/tags/* && "${{ vars.PUBLISH_GH_RELEASE }}" == "true" ]]; then
+              publish_release="true"
+              tag_name="${{ github.ref_name }}"
+            fi
+          elif [[ "$event_name" == "workflow_dispatch" && "$publish_input" == "true" ]]; then
+            if [[ "$channel" == "prerelease" ]]; then
+              publish_release="true"
+              tag_name="updater-prerelease"
+              is_prerelease="true"
+            elif [[ -n "$release_tag" ]]; then
+              publish_release="true"
+              tag_name="$release_tag"
+            fi
+          fi
+
+          echo "publish_release=$publish_release" >> "$GITHUB_OUTPUT"
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Generate updater manifest
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_tag="${{ steps.release_meta.outputs.tag_name }}"
+          release_base="https://github.com/${{ github.repository }}/releases/download/$release_tag"
+          updater_target="${{ matrix.updater_target }}"
+
+          app_release_path="$(find "release-assets" -maxdepth 1 -type f -name "UnimozerNext_*_${{ matrix.arch }}.app.tar.gz" | head -n 1)"
+          if [[ -z "$app_release_path" ]]; then
+            echo "Prepared updater app tarball not found." >&2
+            exit 1
+          fi
+          app_sig="$app_release_path.sig"
+          if [[ ! -f "$app_sig" ]]; then
+            echo "Prepared updater signature not found for $app_release_path" >&2
+            exit 1
+          fi
+          app_release_name="$(basename "$app_release_path")"
+          version="$(echo "$app_release_name" | sed -E 's/^UnimozerNext_(.+)_${{ matrix.arch }}\.app\.tar\.gz$/\1/')"
+          if [[ -z "$version" ]]; then
+            echo "Could not resolve app version from release asset filename: $app_release_name" >&2
+            exit 1
+          fi
 
           signature="$(tr -d '\n\r' < "$app_sig")"
           app_name_encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$app_release_name")"
@@ -338,7 +363,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: ${{ steps.release_meta.outputs.tag_name != '' }}
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
@@ -351,7 +376,7 @@ jobs:
             updater-manifests/latest-${{ matrix.updater_target }}.json
 
       - name: Prune stale prerelease macOS assets
-        if: ${{ steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
         uses: actions/github-script@v7
         env:
           ARCH_SUFFIX: ${{ matrix.arch }}

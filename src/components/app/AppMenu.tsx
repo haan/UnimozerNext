@@ -80,7 +80,7 @@ type AppMenuProps = {
   onCopyStructogramPng: () => void;
   onExportStructogramPng: () => void;
   showUpdateMenuItem: boolean;
-  updateMenuState: "default" | "checking" | "available";
+  updateMenuState: "default" | "checking" | "available" | "installing";
   onCheckForUpdates: () => void;
   onOpenUpdateDialog: () => void;
 };
@@ -566,6 +566,8 @@ export const AppMenu = ({
               <>
                 {updateMenuState === "checking" ? (
                   <MenubarItem disabled>Checking for updates...</MenubarItem>
+                ) : updateMenuState === "installing" ? (
+                  <MenubarItem disabled>Installing update...</MenubarItem>
                 ) : updateMenuState === "available" ? (
                   <MenubarItem onClick={onOpenUpdateDialog}>
                     Update is available

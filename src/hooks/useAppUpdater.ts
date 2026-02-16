@@ -10,7 +10,7 @@ type UseAppUpdaterArgs = {
   setStatus: (status: string) => void;
 };
 
-type UpdateMenuState = "default" | "checking" | "available";
+type UpdateMenuState = "default" | "checking" | "available" | "installing";
 
 type UseAppUpdaterResult = {
   showUpdateMenuItem: boolean;
@@ -49,17 +49,26 @@ export const useAppUpdater = ({
   useEffect(() => {
     let cancelled = false;
     const detectSupport = async () => {
+      const isWindows =
+        typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent);
+      if (!isWindows) {
+        if (!cancelled) {
+          setUpdaterSupport("enabled");
+        }
+        return;
+      }
+
       try {
         const installerKind = await detectWindowsInstallerKind();
         if (cancelled) {
           return;
         }
-        setUpdaterSupport(installerKind === "msi" ? "disabled" : "enabled");
+        setUpdaterSupport(installerKind === "nsis" ? "enabled" : "disabled");
       } catch {
         if (cancelled) {
           return;
         }
-        setUpdaterSupport("enabled");
+        setUpdaterSupport("disabled");
       }
     };
     void detectSupport();
@@ -87,19 +96,8 @@ export const useAppUpdater = ({
         }
         const update = result.update ?? null;
         const installability = result.installability;
-
-        if (update && installability.installable) {
-          setUpdateSummary(update);
-          setBlockedReason(null);
-          if (manual) {
-            setStatus(`Update ${update.version} is available.`);
-            setUpdateAvailableOpen(true);
-          }
-          return;
-        }
-
-        setUpdateSummary(null);
-        if (update && !installability.installable) {
+        if (!installability.installable) {
+          setUpdateSummary(null);
           const reason = installability.reason ?? BLOCKED_UPDATE_MESSAGE;
           setBlockedReason(reason);
           if (manual) {
@@ -111,6 +109,17 @@ export const useAppUpdater = ({
           return;
         }
 
+        if (update) {
+          setUpdateSummary(update);
+          setBlockedReason(null);
+          if (manual) {
+            setStatus(`Update ${update.version} is available.`);
+            setUpdateAvailableOpen(true);
+          }
+          return;
+        }
+
+        setUpdateSummary(null);
         setBlockedReason(null);
         if (manual) {
           setStatus("You are up to date.");
@@ -196,6 +205,9 @@ export const useAppUpdater = ({
   }, [channel, installing, setStatus, updaterSupport]);
 
   const updateMenuState = useMemo<UpdateMenuState>(() => {
+    if (installing) {
+      return "installing";
+    }
     if (manualCheckInProgress) {
       return "checking";
     }
@@ -203,7 +215,7 @@ export const useAppUpdater = ({
       return "available";
     }
     return "default";
-  }, [manualCheckInProgress, updateSummary]);
+  }, [installing, manualCheckInProgress, updateSummary]);
 
   return {
     showUpdateMenuItem: updaterSupport === "enabled",

@@ -723,6 +723,7 @@ export default function AppContainer({
   const {
     confirmProjectActionOpen,
     pendingProjectAction,
+    projectActionConfirmBusy,
     saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange,
@@ -865,6 +866,10 @@ export default function AppContainer({
   const handleConfirmRemoveClass = useCallback(() => {
     void confirmRemoveClass();
   }, [confirmRemoveClass]);
+  const handleRequestInstallUpdate = useCallback(() => {
+    handleUpdateAvailableOpenChange(false);
+    onRequestInstallUpdate();
+  }, [handleUpdateAvailableOpenChange, onRequestInstallUpdate]);
 
   return (
     <div className="flex h-full flex-col">
@@ -1046,6 +1051,7 @@ export default function AppContainer({
         confirmProjectActionOpen={confirmProjectActionOpen}
         onConfirmProjectActionOpenChange={onConfirmProjectActionOpenChange}
         canConfirmProjectAction={Boolean(pendingProjectAction)}
+        projectActionConfirmBusy={projectActionConfirmBusy}
         onSaveBeforeProjectAction={() => {
           void saveAndConfirmProjectAction();
         }}
@@ -1065,7 +1071,7 @@ export default function AppContainer({
         onUpdateAvailableOpenChange={handleUpdateAvailableOpenChange}
         updateSummary={updateSummary}
         blockedUpdateReason={blockedUpdateReason}
-        onInstallUpdate={onRequestInstallUpdate}
+        onInstallUpdate={handleRequestInstallUpdate}
         updateInstallBusy={updateInstallBusy}
         busy={busy}
       />

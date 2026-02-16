@@ -185,51 +185,21 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --ci --bundles "msi,nsis" --config src-tauri/tauri.windows.conf.json
 
-      - name: Resolve release metadata
-        id: release_meta
-        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_GH_RELEASE == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && (github.event.inputs.release_channel == 'prerelease' || github.event.inputs.release_tag != '')) }}
-        shell: pwsh
-        run: |
-          $eventName = "${{ github.event_name }}"
-          $channel = "${{ github.event.inputs.release_channel }}"
-          $tagInput = "${{ github.event.inputs.release_tag }}"
-
-          if ($eventName -eq "workflow_dispatch") {
-            if ($channel -eq "prerelease") {
-              $tag = "updater-prerelease"
-              $isPrerelease = "true"
-            } else {
-              if ([string]::IsNullOrWhiteSpace($tagInput)) {
-                throw "release_tag is required for stable channel publishing."
-              }
-              $tag = $tagInput
-              $isPrerelease = "false"
-            }
-          } else {
-            $tag = "${{ github.ref_name }}"
-            $isPrerelease = "false"
-          }
-
-          "tag_name=$tag" >> $env:GITHUB_OUTPUT
-          "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
-
-      - name: Generate updater manifests
-        if: ${{ steps.release_meta.outputs.tag_name != '' }}
+      - name: Prepare release assets
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
 
-          $cargoVersionLine = Get-Content "src-tauri/Cargo.toml" | Where-Object { $_ -match '^version\s*=\s*"([^"]+)"' } | Select-Object -First 1
+          $cargoVersionLine = Get-Content "src-tauri/Cargo.toml" | Where-Object { $_ -match '^\s*version\s*=\s*"([^"]+)"' } | Select-Object -First 1
           if (-not $cargoVersionLine) {
             throw "Could not resolve app version from src-tauri/Cargo.toml"
           }
-          $versionMatch = [regex]::Match($cargoVersionLine, '^version\s*=\s*"([^"]+)"')
+          $versionMatch = [regex]::Match($cargoVersionLine, '^\s*version\s*=\s*"([^"]+)"')
           if (-not $versionMatch.Success) {
             throw "Could not parse app version from src-tauri/Cargo.toml"
           }
           $version = $versionMatch.Groups[1].Value
-          $releaseTag = "${{ steps.release_meta.outputs.tag_name }}"
-          $releaseBase = "https://github.com/${{ github.repository }}/releases/download/$releaseTag"
+
           $releaseAssetDir = "release-assets"
           New-Item -ItemType Directory -Force -Path $releaseAssetDir | Out-Null
 
@@ -239,6 +209,7 @@ jobs:
           $msiFile = Get-ChildItem "src-tauri/target/release/bundle/msi" -File | Where-Object {
             ($_.Name -match '\.msi$') -and (Test-Path "$($_.FullName).sig")
           } | Select-Object -First 1
+
           if ($null -eq $nsisFile) { throw "NSIS bundle not found." }
           if ($null -eq $msiFile) { throw "MSI bundle not found." }
 
@@ -247,22 +218,72 @@ jobs:
           if (!(Test-Path $nsisSigPath)) { throw "NSIS signature not found: $nsisSigPath" }
           if (!(Test-Path $msiSigPath)) { throw "MSI signature not found: $msiSigPath" }
 
-          $nsisReleaseName = "UnimozerNext_${version}_x64-setup.exe"
-          $msiReleaseName = "UnimozerNext_${version}_x64-setup.msi"
-          $nsisReleasePath = Join-Path $releaseAssetDir $nsisReleaseName
-          $msiReleasePath = Join-Path $releaseAssetDir $msiReleaseName
-          $nsisReleaseSigPath = "$nsisReleasePath.sig"
-          $msiReleaseSigPath = "$msiReleasePath.sig"
-
+          $nsisReleasePath = Join-Path $releaseAssetDir "UnimozerNext_${version}_x64-setup.exe"
+          $msiReleasePath = Join-Path $releaseAssetDir "UnimozerNext_${version}_x64-setup.msi"
           Copy-Item -Path $nsisFile.FullName -Destination $nsisReleasePath -Force
           Copy-Item -Path $msiFile.FullName -Destination $msiReleasePath -Force
-          Copy-Item -Path $nsisSigPath -Destination $nsisReleaseSigPath -Force
-          Copy-Item -Path $msiSigPath -Destination $msiReleaseSigPath -Force
+          Copy-Item -Path $nsisSigPath -Destination "$nsisReleasePath.sig" -Force
+          Copy-Item -Path $msiSigPath -Destination "$msiReleasePath.sig" -Force
+
+      - name: Resolve release metadata
+        id: release_meta
+        shell: pwsh
+        run: |
+          $eventName = "${{ github.event_name }}"
+          $publishInput = "${{ github.event.inputs.publish_release }}"
+          $channel = "${{ github.event.inputs.release_channel }}"
+          $tagInput = "${{ github.event.inputs.release_tag }}"
+          $publishRelease = $false
+          $tag = ""
+          $isPrerelease = "false"
+
+          if ($eventName -eq "push") {
+            if ("${{ github.ref }}" -like "refs/tags/*" -and "${{ vars.PUBLISH_GH_RELEASE }}" -eq "true") {
+              $publishRelease = $true
+              $tag = "${{ github.ref_name }}"
+            }
+          } elseif ($eventName -eq "workflow_dispatch" -and $publishInput -eq "true") {
+            if ($channel -eq "prerelease") {
+              $publishRelease = $true
+              $tag = "updater-prerelease"
+              $isPrerelease = "true"
+            } elseif (-not [string]::IsNullOrWhiteSpace($tagInput)) {
+              $publishRelease = $true
+              $tag = $tagInput
+            }
+          }
+
+          "publish_release=$($publishRelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "tag_name=$tag" >> $env:GITHUB_OUTPUT
+          "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
+
+      - name: Generate updater manifests
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $nsisFile = Get-ChildItem "release-assets" -File -Filter "UnimozerNext_*_x64-setup.exe" | Select-Object -First 1
+          $msiFile = Get-ChildItem "release-assets" -File -Filter "UnimozerNext_*_x64-setup.msi" | Select-Object -First 1
+          if ($null -eq $nsisFile) { throw "Prepared NSIS release asset not found." }
+          if ($null -eq $msiFile) { throw "Prepared MSI release asset not found." }
+
+          $versionMatch = [regex]::Match($nsisFile.Name, '^UnimozerNext_(.+)_x64-setup\.exe$')
+          if (-not $versionMatch.Success) {
+            throw "Could not parse version from NSIS release filename: $($nsisFile.Name)"
+          }
+          $version = $versionMatch.Groups[1].Value
+          $releaseTag = "${{ steps.release_meta.outputs.tag_name }}"
+          $releaseBase = "https://github.com/${{ github.repository }}/releases/download/$releaseTag"
+          $nsisSigPath = "$($nsisFile.FullName).sig"
+          $msiSigPath = "$($msiFile.FullName).sig"
+          if (!(Test-Path $nsisSigPath)) { throw "Prepared NSIS signature not found: $nsisSigPath" }
+          if (!(Test-Path $msiSigPath)) { throw "Prepared MSI signature not found: $msiSigPath" }
 
           $nsisSig = (Get-Content $nsisSigPath -Raw).Trim()
           $msiSig = (Get-Content $msiSigPath -Raw).Trim()
-          $nsisAssetName = [System.Uri]::EscapeDataString($nsisReleaseName)
-          $msiAssetName = [System.Uri]::EscapeDataString($msiReleaseName)
+          $nsisAssetName = [System.Uri]::EscapeDataString($nsisFile.Name)
+          $msiAssetName = [System.Uri]::EscapeDataString($msiFile.Name)
 
           New-Item -ItemType Directory -Force -Path "updater-manifests" | Out-Null
 
@@ -319,7 +340,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: ${{ steps.release_meta.outputs.tag_name != '' }}
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
@@ -334,7 +355,7 @@ jobs:
             updater-manifests/latest-windows-x86_64-msi.json
 
       - name: Prune stale prerelease Windows assets
-        if: ${{ steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
         uses: actions/github-script@v7
         with:
           script: |

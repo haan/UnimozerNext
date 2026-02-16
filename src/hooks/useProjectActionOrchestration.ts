@@ -24,6 +24,7 @@ type UseProjectActionOrchestrationArgs = {
 type UseProjectActionOrchestrationResult = {
   confirmProjectActionOpen: boolean;
   pendingProjectAction: ProjectAction | null;
+  projectActionConfirmBusy: boolean;
   saveAndConfirmProjectAction: () => void;
   confirmProjectAction: () => void;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
@@ -64,6 +65,7 @@ export const useProjectActionOrchestration = ({
   const {
     confirmProjectActionOpen,
     pendingProjectAction,
+    projectActionConfirmBusy,
     requestProjectAction,
     saveAndConfirmProjectAction,
     confirmProjectAction,
@@ -149,6 +151,7 @@ export const useProjectActionOrchestration = ({
   return {
     confirmProjectActionOpen,
     pendingProjectAction,
+    projectActionConfirmBusy,
     saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange: handleConfirmProjectActionOpenChange,
