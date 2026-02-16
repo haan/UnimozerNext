@@ -76,6 +76,8 @@ struct AdvancedSettings {
     debug_logging: bool,
     #[serde(default = "default_true")]
     structogram_colors: bool,
+    #[serde(default = "default_update_channel")]
+    update_channel: UpdateChannel,
 }
 
 impl Default for AdvancedSettings {
@@ -83,6 +85,7 @@ impl Default for AdvancedSettings {
         Self {
             debug_logging: default_false(),
             structogram_colors: default_true(),
+            update_channel: default_update_channel(),
         }
     }
 }
@@ -163,6 +166,13 @@ enum RecentProjectKind {
     Folder,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum UpdateChannel {
+    Stable,
+    Prerelease,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RecentProjectEntry {
@@ -223,6 +233,7 @@ impl Default for AppSettings {
             advanced: AdvancedSettings {
                 debug_logging: default_false(),
                 structogram_colors: default_true(),
+                update_channel: default_update_channel(),
             },
             structogram: StructogramSettings {
                 loop_header_color: default_structogram_loop_header_color(),
@@ -268,6 +279,10 @@ fn default_false() -> bool {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_update_channel() -> UpdateChannel {
+    UpdateChannel::Stable
 }
 
 fn default_split_ratio() -> f32 {

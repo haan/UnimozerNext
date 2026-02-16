@@ -21,6 +21,7 @@ import {
   AlertDialogTitle
 } from "../ui/alert-dialog";
 import type { AppSettings } from "../../models/settings";
+import type { UpdateSummary } from "../../services/updater";
 
 type AppDialogsProps = {
   aboutOpen: boolean;
@@ -77,6 +78,12 @@ type AppDialogsProps = {
   onMethodReturnOpenChange: (open: boolean) => void;
   methodReturnLabel: string;
   methodReturnValue: string | null;
+  updateAvailableOpen: boolean;
+  onUpdateAvailableOpenChange: (open: boolean) => void;
+  updateSummary: UpdateSummary | null;
+  blockedUpdateReason: string | null;
+  onInstallUpdate: () => void;
+  updateInstallBusy: boolean;
   busy: boolean;
 };
 
@@ -135,6 +142,12 @@ export const AppDialogs = ({
   onMethodReturnOpenChange,
   methodReturnLabel,
   methodReturnValue,
+  updateAvailableOpen,
+  onUpdateAvailableOpenChange,
+  updateSummary,
+  blockedUpdateReason,
+  onInstallUpdate,
+  updateInstallBusy,
   busy
 }: AppDialogsProps) => (
   <>
@@ -333,6 +346,58 @@ export const AppDialogs = ({
         </div>
         <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
           <AlertDialogAction className="w-full">OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog open={updateAvailableOpen} onOpenChange={onUpdateAvailableOpenChange}>
+      <AlertDialogContent size="md">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Update available</AlertDialogTitle>
+          <AlertDialogDescription className="text-center">
+            {updateSummary
+              ? `Version ${updateSummary.version} is ready to install.`
+              : "A new version is available."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        {updateSummary ? (
+          <div className="mt-3 space-y-2">
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-foreground">
+              <div>
+                Current: <strong>{updateSummary.currentVersion}</strong>
+              </div>
+              <div>
+                Available: <strong>{updateSummary.version}</strong>
+              </div>
+              <div>
+                Target: <strong>{updateSummary.target}</strong>
+              </div>
+            </div>
+            <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-foreground whitespace-pre-wrap">
+              {updateSummary.notes?.trim() || "No release notes provided."}
+            </div>
+          </div>
+        ) : null}
+        {blockedUpdateReason ? (
+          <div className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            {blockedUpdateReason}
+          </div>
+        ) : null}
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogCancel
+            variant="outline"
+            className="w-full"
+            disabled={updateInstallBusy || busy}
+          >
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            className="w-full"
+            disabled={updateInstallBusy || busy || !updateSummary}
+            onClick={onInstallUpdate}
+          >
+            Install update
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

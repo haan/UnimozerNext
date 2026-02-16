@@ -79,6 +79,9 @@ type AppMenuProps = {
   onExportDiagramPng: (style: ExportStyle) => void;
   onCopyStructogramPng: () => void;
   onExportStructogramPng: () => void;
+  updateMenuState: "default" | "checking" | "available";
+  onCheckForUpdates: () => void;
+  onOpenUpdateDialog: () => void;
 };
 
 export const AppMenu = ({
@@ -143,7 +146,10 @@ export const AppMenu = ({
   onCopyDiagramPng,
   onExportDiagramPng,
   onCopyStructogramPng,
-  onExportStructogramPng
+  onExportStructogramPng,
+  updateMenuState,
+  onCheckForUpdates,
+  onOpenUpdateDialog
 }: AppMenuProps) => {
   const diagramViewActionsDisabled = structogramMode;
   const structogramActionsDisabled = !structogramMode;
@@ -554,6 +560,18 @@ export const AppMenu = ({
         <MenubarMenu>
           <MenubarTrigger>Help</MenubarTrigger>
           <MenubarContent>
+            {updateMenuState === "checking" ? (
+              <MenubarItem disabled>Checking for updates...</MenubarItem>
+            ) : updateMenuState === "available" ? (
+              <MenubarItem onClick={onOpenUpdateDialog}>
+                Update is available
+              </MenubarItem>
+            ) : (
+              <MenubarItem onClick={onCheckForUpdates}>
+                Check for updates...
+              </MenubarItem>
+            )}
+            <MenubarSeparator />
             <MenubarItem onClick={onOpenAbout}>
               About
             </MenubarItem>

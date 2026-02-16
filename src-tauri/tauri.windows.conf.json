@@ -1,5 +1,10 @@
 {
   "bundle": {
+    "windows": {
+      "nsis": {
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    },
     "resources": {
       "../resources/jdk/win-x64": "jdk/win-x64",
       "../resources/java-parser/parser-bridge.jar": "java-parser/parser-bridge.jar",

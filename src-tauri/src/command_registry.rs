@@ -36,6 +36,10 @@ pub(crate) fn with_invoke_handlers(
         crate::ls::ls_format_document,
         crate::launch_io::take_startup_logs,
         crate::launch_io::take_launch_open_paths,
-        crate::external_links::open_url
+        crate::external_links::open_url,
+        crate::updater_io::updater_check,
+        crate::updater_io::updater_install,
+        crate::updater_io::updater_installability,
+        crate::updater_io::detect_windows_installer_kind
     ])
 }

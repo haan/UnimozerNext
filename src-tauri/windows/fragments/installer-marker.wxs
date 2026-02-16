@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="InstallerMarker" Guid="*">
+        <RegistryKey Root="HKMU" Key="Software\com.unimozer.next\Installer">
+          <RegistryValue Name="InstallPath" Type="string" Value="[INSTALLDIR]" KeyPath="yes" />
+          <RegistryValue Name="InstallerKind" Type="string" Value="msi" />
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="InstallerMarkerComponents">
+      <ComponentRef Id="InstallerMarker" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>

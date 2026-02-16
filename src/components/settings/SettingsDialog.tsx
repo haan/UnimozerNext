@@ -751,6 +751,38 @@ export const SettingsDialog = ({
               <div className="mt-4 grid gap-2">
                 <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
+                    <p className="text-sm font-medium">Update channel</p>
+                    <p className="text-xs text-muted-foreground">
+                      Stable checks normal releases. Prerelease checks test updater builds.
+                    </p>
+                  </div>
+                  <div className="w-44">
+                    <Select
+                      value={settings.advanced.updateChannel}
+                      onValueChange={(value) =>
+                        onChange({
+                          ...settings,
+                          advanced: {
+                            ...settings.advanced,
+                            updateChannel:
+                              value === "prerelease" ? "prerelease" : "stable"
+                          }
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select channel" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="stable">Stable</SelectItem>
+                        <SelectItem value="prerelease">Prerelease</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
                     <p className="text-sm font-medium">Debug logging</p>
                     <p className="text-xs text-muted-foreground">
                       Show internal diagnostics in the console.

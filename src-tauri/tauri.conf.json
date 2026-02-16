@@ -26,6 +26,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["msi", "nsis"],
     "icon": [
       "icons/32x32.png",
@@ -51,9 +52,20 @@
     ],
     "windows": {
       "wix": {
-        "fragmentPaths": ["./windows/fragments/umz-association.wxs"],
-        "componentGroupRefs": ["UmzFileAssociationComponents"]
+        "fragmentPaths": [
+          "./windows/fragments/umz-association.wxs",
+          "./windows/fragments/installer-marker.wxs"
+        ],
+        "componentGroupRefs": ["UmzFileAssociationComponents", "InstallerMarkerComponents"]
       }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBCOTRFQUE3QzRGOTAzRkQKUldUOUEvbkVwK3FVQ3pNWkYzdURnU2YxTm9EY3Q2TXhEWU9yNGNMSWhWY0lseHdUL2R4ZldmV3IK",
+      "endpoints": [
+        "https://github.com/haan/UnimozerNext/releases/latest/download/latest-{{target}}.json"
+      ]
     }
   }
 }

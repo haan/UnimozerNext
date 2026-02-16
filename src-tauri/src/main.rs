@@ -18,6 +18,7 @@ mod project_io;
 mod settings_io;
 mod shared_types;
 mod startup_diagnostics;
+mod updater_io;
 mod workspace_session;
 
 use app_bootstrap::{handle_run_event, setup_startup};
@@ -58,7 +59,8 @@ fn main() {
         .manage(ls::LsState::default())
         .plugin(tauri_plugin_window_state::Builder::new().build())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_dialog::init());
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build());
     let app = with_invoke_handlers(builder)
         .build(tauri::generate_context!())
         .expect("error while building tauri application");

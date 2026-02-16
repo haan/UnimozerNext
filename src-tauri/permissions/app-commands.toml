@@ -36,5 +36,9 @@ commands.allow = [
   "ls_format_document",
   "take_startup_logs",
   "take_launch_open_paths",
-  "open_url"
+  "open_url",
+  "updater_check",
+  "updater_install",
+  "updater_installability",
+  "detect_windows_installer_kind"
 ]

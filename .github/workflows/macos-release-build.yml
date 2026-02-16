@@ -15,6 +15,10 @@ on:
         description: Override and publish GitHub release for this run
         required: false
         default: "false"
+      release_channel:
+        description: Publish channel (stable or prerelease)
+        required: false
+        default: stable
       release_tag:
         description: Tag name to publish (e.g. v0.10.5). Leave empty to skip release publishing.
         required: false
@@ -32,12 +36,14 @@ jobs:
           - arch: x64
             os: macos-15-intel
             rust_target: x86_64-apple-darwin
+            updater_target: darwin-x86_64
             jdk_dir: mac-x64
             jdtls_config_dir: config_mac
             tauri_config: src-tauri/tauri.macos.x64.conf.json
           - arch: arm64
             os: macos-14
             rust_target: aarch64-apple-darwin
+            updater_target: darwin-aarch64
             jdk_dir: mac-arm64
             jdtls_config_dir: config_mac_arm
             tauri_config: src-tauri/tauri.macos.arm64.conf.json
@@ -229,7 +235,82 @@ jobs:
         env:
           RUST_LOG: tauri_bundler=trace
           RUST_BACKTRACE: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --ci --target ${{ matrix.rust_target }} --bundles "dmg" --config ${{ matrix.tauri_config }}
+
+      - name: Resolve release metadata
+        id: release_meta
+        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_GH_RELEASE == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && (github.event.inputs.release_channel == 'prerelease' || github.event.inputs.release_tag != '')) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          event_name="${{ github.event_name }}"
+          channel="${{ github.event.inputs.release_channel }}"
+          release_tag="${{ github.event.inputs.release_tag }}"
+
+          if [[ "$event_name" == "workflow_dispatch" ]]; then
+            if [[ "$channel" == "prerelease" ]]; then
+              tag_name="updater-prerelease"
+              is_prerelease="true"
+            else
+              if [[ -z "$release_tag" ]]; then
+                echo "release_tag is required for stable channel publishing." >&2
+                exit 1
+              fi
+              tag_name="$release_tag"
+              is_prerelease="false"
+            fi
+          else
+            tag_name="${{ github.ref_name }}"
+            is_prerelease="false"
+          fi
+
+          echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
+
+      - name: Generate updater manifest
+        if: ${{ steps.release_meta.outputs.tag_name != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_tag="${{ steps.release_meta.outputs.tag_name }}"
+          release_base="https://github.com/${{ github.repository }}/releases/download/$release_tag"
+          updater_target="${{ matrix.updater_target }}"
+
+          app_tarball="$(find "src-tauri/target/${{ matrix.rust_target }}/release/bundle" -type f -name '*.app.tar.gz' | head -n 1)"
+          if [[ -z "$app_tarball" ]]; then
+            echo "Updater app tarball not found." >&2
+            exit 1
+          fi
+          app_sig="$app_tarball.sig"
+          if [[ ! -f "$app_sig" ]]; then
+            echo "Updater signature not found for $app_tarball" >&2
+            exit 1
+          fi
+
+          version="$(sed -nE 's/^version\\s*=\\s*\"([^\"]+)\"/\\1/p' src-tauri/Cargo.toml | head -n 1)"
+          if [[ -z "$version" ]]; then
+            echo "Could not resolve app version from src-tauri/Cargo.toml" >&2
+            exit 1
+          fi
+          signature="$(tr -d '\n\r' < "$app_sig")"
+          app_name="$(basename "$app_tarball")"
+          app_name_encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$app_name")"
+
+          mkdir -p updater-manifests
+          cat > "updater-manifests/latest-${updater_target}.json" <<JSON
+          {
+            "version": "$version",
+            "platforms": {
+              "$updater_target": {
+                "signature": "$signature",
+                "url": "$release_base/$app_name_encoded"
+              }
+            }
+          }
+          JSON
 
       - name: Upload macOS bundle artifacts
         uses: actions/upload-artifact@v4
@@ -237,12 +318,20 @@ jobs:
           name: macos-${{ matrix.arch }}-bundles
           path: |
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz.sig
+            updater-manifests/latest-${{ matrix.updater_target }}.json
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_GH_RELEASE == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && github.event.inputs.release_tag != '') }}
+        if: ${{ steps.release_meta.outputs.tag_name != '' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.release_meta.outputs.is_prerelease != 'true' }}
           files: |
             src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz
+            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz.sig
+            updater-manifests/latest-${{ matrix.updater_target }}.json

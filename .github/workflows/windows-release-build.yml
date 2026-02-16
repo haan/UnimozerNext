@@ -15,6 +15,10 @@ on:
         description: Override and publish GitHub release for this run
         required: false
         default: "false"
+      release_channel:
+        description: Publish channel (stable or prerelease)
+        required: false
+        default: stable
       release_tag:
         description: Tag name to publish (e.g. v0.10.5). Leave empty to skip release publishing.
         required: false
@@ -177,7 +181,98 @@ jobs:
         env:
           RUST_LOG: tauri_bundler=trace
           RUST_BACKTRACE: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --ci --bundles "msi,nsis" --config src-tauri/tauri.windows.conf.json
+
+      - name: Resolve release metadata
+        id: release_meta
+        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_GH_RELEASE == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && (github.event.inputs.release_channel == 'prerelease' || github.event.inputs.release_tag != '')) }}
+        shell: pwsh
+        run: |
+          $eventName = "${{ github.event_name }}"
+          $channel = "${{ github.event.inputs.release_channel }}"
+          $tagInput = "${{ github.event.inputs.release_tag }}"
+
+          if ($eventName -eq "workflow_dispatch") {
+            if ($channel -eq "prerelease") {
+              $tag = "updater-prerelease"
+              $isPrerelease = "true"
+            } else {
+              if ([string]::IsNullOrWhiteSpace($tagInput)) {
+                throw "release_tag is required for stable channel publishing."
+              }
+              $tag = $tagInput
+              $isPrerelease = "false"
+            }
+          } else {
+            $tag = "${{ github.ref_name }}"
+            $isPrerelease = "false"
+          }
+
+          "tag_name=$tag" >> $env:GITHUB_OUTPUT
+          "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
+
+      - name: Generate updater manifests
+        if: ${{ steps.release_meta.outputs.tag_name != '' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $cargoVersionLine = Get-Content "src-tauri/Cargo.toml" | Where-Object { $_ -match '^version\s*=\s*"([^"]+)"' } | Select-Object -First 1
+          if (-not $cargoVersionLine) {
+            throw "Could not resolve app version from src-tauri/Cargo.toml"
+          }
+          $versionMatch = [regex]::Match($cargoVersionLine, '^version\s*=\s*"([^"]+)"')
+          if (-not $versionMatch.Success) {
+            throw "Could not parse app version from src-tauri/Cargo.toml"
+          }
+          $version = $versionMatch.Groups[1].Value
+          $releaseTag = "${{ steps.release_meta.outputs.tag_name }}"
+          $releaseBase = "https://github.com/${{ github.repository }}/releases/download/$releaseTag"
+
+          $nsisCandidates = Get-ChildItem "src-tauri/target/release/bundle/nsis" -File | Where-Object {
+            ($_.Name -match '\.exe($|\.zip$)') -and (Test-Path "$($_.FullName).sig")
+          }
+          $msiCandidates = Get-ChildItem "src-tauri/target/release/bundle/msi" -File | Where-Object {
+            ($_.Name -match '\.msi($|\.zip$)') -and (Test-Path "$($_.FullName).sig")
+          }
+          $nsisFile = $nsisCandidates | Sort-Object @{ Expression = { if ($_.Name -match '\.exe$') { 0 } else { 1 } } }, Name | Select-Object -First 1
+          $msiFile = $msiCandidates | Sort-Object @{ Expression = { if ($_.Name -match '\.msi$') { 0 } else { 1 } } }, Name | Select-Object -First 1
+          if ($null -eq $nsisFile) { throw "NSIS bundle not found." }
+          if ($null -eq $msiFile) { throw "MSI bundle not found." }
+
+          $nsisSigPath = "$($nsisFile.FullName).sig"
+          $msiSigPath = "$($msiFile.FullName).sig"
+          if (!(Test-Path $nsisSigPath)) { throw "NSIS signature not found: $nsisSigPath" }
+          if (!(Test-Path $msiSigPath)) { throw "MSI signature not found: $msiSigPath" }
+
+          $nsisSig = (Get-Content $nsisSigPath -Raw).Trim()
+          $msiSig = (Get-Content $msiSigPath -Raw).Trim()
+          $nsisAssetName = [System.Uri]::EscapeDataString($nsisFile.Name)
+          $msiAssetName = [System.Uri]::EscapeDataString($msiFile.Name)
+
+          New-Item -ItemType Directory -Force -Path "updater-manifests" | Out-Null
+
+          @{
+            version = $version
+            platforms = @{
+              "windows-x86_64-nsis" = @{
+                signature = $nsisSig
+                url = "$releaseBase/$nsisAssetName"
+              }
+            }
+          } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 "updater-manifests/latest-windows-x86_64-nsis.json"
+
+          @{
+            version = $version
+            platforms = @{
+              "windows-x86_64-msi" = @{
+                signature = $msiSig
+                url = "$releaseBase/$msiAssetName"
+              }
+            }
+          } | ConvertTo-Json -Depth 10 | Set-Content -Encoding utf8 "updater-manifests/latest-windows-x86_64-msi.json"
 
       - name: Dump WiX debug files on failure
         if: failure()
@@ -204,14 +299,32 @@ jobs:
           name: windows-installers
           path: |
             src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/msi/*.msi.zip
+            src-tauri/target/release/bundle/msi/*.msi.sig
+            src-tauri/target/release/bundle/msi/*.msi.zip.sig
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.zip
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+            src-tauri/target/release/bundle/nsis/*.exe.zip.sig
+            updater-manifests/latest-windows-x86_64-nsis.json
+            updater-manifests/latest-windows-x86_64-msi.json
           if-no-files-found: error
 
       - name: Publish GitHub release
-        if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && vars.PUBLISH_GH_RELEASE == 'true') || (github.event_name == 'workflow_dispatch' && github.event.inputs.publish_release == 'true' && github.event.inputs.release_tag != '') }}
+        if: ${{ steps.release_meta.outputs.tag_name != '' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_tag || github.ref_name }}
+          tag_name: ${{ steps.release_meta.outputs.tag_name }}
+          prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.release_meta.outputs.is_prerelease != 'true' }}
           files: |
             src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/msi/*.msi.zip
+            src-tauri/target/release/bundle/msi/*.msi.sig
+            src-tauri/target/release/bundle/msi/*.msi.zip.sig
             src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.exe.zip
+            src-tauri/target/release/bundle/nsis/*.exe.sig
+            src-tauri/target/release/bundle/nsis/*.exe.zip.sig
+            updater-manifests/latest-windows-x86_64-nsis.json
+            updater-manifests/latest-windows-x86_64-msi.json

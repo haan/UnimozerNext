@@ -46,6 +46,7 @@ import { useUmlParseDrafts } from "./hooks/useUmlParseDrafts";
 import { useWorkspaceUiControllers } from "./hooks/useWorkspaceUiControllers";
 import { useProjectDiskReload } from "./hooks/useProjectDiskReload";
 import { useWebviewGuard } from "./hooks/useWebviewGuard";
+import { useAppUpdater } from "./hooks/useAppUpdater";
 import {
   CONSOLE_MIN_HEIGHT_PX,
   EDITOR_MIN_HEIGHT_PX,
@@ -158,6 +159,7 @@ export default function AppContainer({
   } = useDialogState();
   const debugLogging = settings.advanced.debugLogging;
   const structogramColorsEnabled = settings.advanced.structogramColors;
+  const updateChannel = settings.advanced.updateChannel;
   const structogramLoopHeaderColor = settings.structogram.loopHeaderColor;
   const structogramIfHeaderColor = settings.structogram.ifHeaderColor;
   const structogramSwitchHeaderColor = settings.structogram.switchHeaderColor;
@@ -345,6 +347,21 @@ export default function AppContainer({
   const clearConsole = useCallback(() => {
     resetConsoleOutput();
   }, [resetConsoleOutput]);
+
+  const {
+    updateMenuState,
+    updateAvailableOpen,
+    updateInstallBusy,
+    updateSummary,
+    blockedReason: blockedUpdateReason,
+    checkForUpdates,
+    openUpdateDialog,
+    handleUpdateAvailableOpenChange,
+    installUpdate
+  } = useAppUpdater({
+    channel: updateChannel,
+    setStatus
+  });
 
   const appendDebugOutput = useCallback(
     (text: string) => {
@@ -883,6 +900,9 @@ export default function AppContainer({
         onExportDiagramPng={handleExportDiagramPng}
         onCopyStructogramPng={handleCopyStructogramPng}
         onExportStructogramPng={handleExportStructogramPng}
+        updateMenuState={updateMenuState}
+        onCheckForUpdates={checkForUpdates}
+        onOpenUpdateDialog={openUpdateDialog}
       />
       <AppWorkspacePanels
         containerRef={containerRef}
@@ -1027,6 +1047,14 @@ export default function AppContainer({
         onMethodReturnOpenChange={handleMethodReturnOpenChange}
         methodReturnLabel={methodReturnLabel}
         methodReturnValue={methodReturnValue}
+        updateAvailableOpen={updateAvailableOpen}
+        onUpdateAvailableOpenChange={handleUpdateAvailableOpenChange}
+        updateSummary={updateSummary}
+        blockedUpdateReason={blockedUpdateReason}
+        onInstallUpdate={() => {
+          void installUpdate();
+        }}
+        updateInstallBusy={updateInstallBusy}
         busy={busy}
       />
       <Toaster theme={darkMode ? "dark" : "light"} />

@@ -20,6 +20,7 @@ export type EditorSettings = {
 export type AdvancedSettings = {
   debugLogging: boolean;
   structogramColors: boolean;
+  updateChannel: "stable" | "prerelease";
 };
 
 export type StructogramSettings = {
