@@ -84,7 +84,9 @@ type AppDialogsProps = {
   updateAvailableOpen: boolean;
   onUpdateAvailableOpenChange: (open: boolean) => void;
   updateSummary: UpdateSummary | null;
+  updateHasPendingChanges: boolean;
   blockedUpdateReason: string | null;
+  onSaveAndInstallUpdate: () => void;
   onInstallUpdate: () => void;
   updateInstallBusy: boolean;
   busy: boolean;
@@ -150,7 +152,9 @@ export const AppDialogs = ({
   updateAvailableOpen,
   onUpdateAvailableOpenChange,
   updateSummary,
+  updateHasPendingChanges,
   blockedUpdateReason,
+  onSaveAndInstallUpdate,
   onInstallUpdate,
   updateInstallBusy,
   busy
@@ -364,12 +368,22 @@ export const AppDialogs = ({
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-    <AlertDialog open={updateAvailableOpen} onOpenChange={onUpdateAvailableOpenChange}>
+    <AlertDialog
+      open={updateAvailableOpen}
+      onOpenChange={(open) => {
+        if (updateInstallBusy) {
+          return;
+        }
+        onUpdateAvailableOpenChange(open);
+      }}
+    >
       <AlertDialogContent size="md">
         <AlertDialogHeader className="items-center text-center">
-          <AlertDialogTitle>Update available</AlertDialogTitle>
+          <AlertDialogTitle>{updateInstallBusy ? "Installing update..." : "Update available"}</AlertDialogTitle>
           <AlertDialogDescription className="text-center">
-            {updateSummary
+            {updateInstallBusy
+              ? "Downloading update. Unimozer Next will close automatically when ready."
+              : updateSummary
               ? `Version ${updateSummary.version} is ready to install.`
               : "A new version is available."}
           </AlertDialogDescription>
@@ -390,27 +404,93 @@ export const AppDialogs = ({
             </div>
           </div>
         ) : null}
+        {updateInstallBusy ? (
+          <div className="mt-2 flex items-center justify-center gap-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+            <svg
+              className="h-4 w-4 animate-spin"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              aria-hidden="true"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+                stroke="currentColor"
+                strokeWidth="3"
+                opacity="0.25"
+              />
+              <path
+                d="M21 12a9 9 0 0 0-9-9"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+              />
+            </svg>
+            <span>Installing update...</span>
+          </div>
+        ) : null}
         {blockedUpdateReason ? (
           <div className="mt-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
             {blockedUpdateReason}
           </div>
         ) : null}
-        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
-          <AlertDialogCancel
-            variant="outline"
-            className="w-full"
-            disabled={updateInstallBusy || busy}
-          >
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
-            className="w-full"
-            disabled={updateInstallBusy || busy || !updateSummary}
-            onClick={onInstallUpdate}
-          >
-            {updateInstallBusy ? "Installing..." : "Install update"}
-          </AlertDialogAction>
-        </AlertDialogFooter>
+        {updateInstallBusy ? (
+          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+            <Button type="button" size="sm" className="w-full" disabled>
+              Installing...
+            </Button>
+          </AlertDialogFooter>
+        ) : updateHasPendingChanges ? (
+          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-3 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+            <AlertDialogCancel
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="w-full"
+              disabled={busy || !updateSummary}
+              onClick={onInstallUpdate}
+            >
+              Install without saving
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              className="w-full"
+              disabled={busy || !updateSummary}
+              onClick={onSaveAndInstallUpdate}
+            >
+              Save and install
+            </Button>
+          </AlertDialogFooter>
+        ) : (
+          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+            <AlertDialogCancel
+              variant="outline"
+              className="w-full"
+              disabled={busy}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <Button
+              type="button"
+              size="sm"
+              className="w-full"
+              disabled={busy || !updateSummary}
+              onClick={onInstallUpdate}
+            >
+              Install update
+            </Button>
+          </AlertDialogFooter>
+        )}
       </AlertDialogContent>
     </AlertDialog>
   </>

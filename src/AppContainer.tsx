@@ -731,7 +731,6 @@ export default function AppContainer({
     onRequestOpenProject,
     onRequestOpenFolderProject,
     onRequestOpenRecentProject,
-    onRequestInstallUpdate,
     onRequestExit,
     onSave: onSaveProject,
     onSaveAs: onSaveProjectAs
@@ -746,7 +745,6 @@ export default function AppContainer({
     handleNewProject,
     handleSave: handleSaveAndRefreshDiskSnapshot,
     handleSaveAs: handleSaveAsAndRefreshDiskSnapshot,
-    handleInstallUpdate: installUpdate,
     handleZoomIn,
     handleZoomOut,
     handleZoomReset
@@ -866,10 +864,24 @@ export default function AppContainer({
   const handleConfirmRemoveClass = useCallback(() => {
     void confirmRemoveClass();
   }, [confirmRemoveClass]);
-  const handleRequestInstallUpdate = useCallback(() => {
-    handleUpdateAvailableOpenChange(false);
-    onRequestInstallUpdate();
-  }, [handleUpdateAvailableOpenChange, onRequestInstallUpdate]);
+  const handleInstallUpdateWithoutSave = useCallback(() => {
+    if (updateInstallBusy) {
+      return;
+    }
+    void installUpdate();
+  }, [installUpdate, updateInstallBusy]);
+  const handleSaveAndInstallUpdate = useCallback(() => {
+    if (updateInstallBusy) {
+      return;
+    }
+    void (async () => {
+      const saved = await handleSaveAndRefreshDiskSnapshot();
+      if (!saved) {
+        return;
+      }
+      await installUpdate();
+    })();
+  }, [handleSaveAndRefreshDiskSnapshot, installUpdate, updateInstallBusy]);
 
   return (
     <div className="flex h-full flex-col">
@@ -1070,8 +1082,10 @@ export default function AppContainer({
         updateAvailableOpen={updateAvailableOpen}
         onUpdateAvailableOpenChange={handleUpdateAvailableOpenChange}
         updateSummary={updateSummary}
+        updateHasPendingChanges={hasPendingProjectChanges}
         blockedUpdateReason={blockedUpdateReason}
-        onInstallUpdate={handleRequestInstallUpdate}
+        onSaveAndInstallUpdate={handleSaveAndInstallUpdate}
+        onInstallUpdate={handleInstallUpdateWithoutSave}
         updateInstallBusy={updateInstallBusy}
         busy={busy}
       />

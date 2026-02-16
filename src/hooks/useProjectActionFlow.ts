@@ -5,8 +5,7 @@ export type ProjectAction =
   | "openFolder"
   | "openRecent"
   | "new"
-  | "exit"
-  | "installUpdate";
+  | "exit";
 
 type UseProjectActionFlowArgs = {
   busy: boolean;
@@ -17,7 +16,6 @@ type UseProjectActionFlowArgs = {
   onOpenRecentProject: () => void;
   onNewProject: () => void;
   onExit: () => void;
-  onInstallUpdate: () => void;
   onSave: () => Promise<boolean>;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -43,7 +41,6 @@ export const useProjectActionFlow = ({
   onOpenRecentProject,
   onNewProject,
   onExit,
-  onInstallUpdate,
   onSave,
   onZoomIn,
   onZoomOut,
@@ -69,15 +66,12 @@ export const useProjectActionFlow = ({
         onOpenRecentProject();
       } else if (action === "exit") {
         onExit();
-      } else if (action === "installUpdate") {
-        onInstallUpdate();
       } else {
         onNewProject();
       }
     },
     [
       onExit,
-      onInstallUpdate,
       onNewProject,
       onOpenFolderProject,
       onOpenProject,

@@ -22,7 +22,7 @@ type UseAppUpdaterResult = {
   checkForUpdates: () => void;
   openUpdateDialog: () => void;
   handleUpdateAvailableOpenChange: (open: boolean) => void;
-  installUpdate: () => void;
+  installUpdate: () => Promise<void>;
 };
 
 const BLOCKED_UPDATE_MESSAGE = "This installation cannot self-update on this computer.";

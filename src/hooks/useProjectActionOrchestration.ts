@@ -15,7 +15,6 @@ type UseProjectActionOrchestrationArgs = {
   handleNewProject: () => Promise<void>;
   handleSave: () => Promise<boolean>;
   handleSaveAs: () => Promise<boolean>;
-  handleInstallUpdate: () => void;
   handleZoomIn: () => void;
   handleZoomOut: () => void;
   handleZoomReset: () => void;
@@ -32,7 +31,6 @@ type UseProjectActionOrchestrationResult = {
   onRequestOpenProject: () => void;
   onRequestOpenFolderProject: () => void;
   onRequestOpenRecentProject: (entry: RecentProjectEntry) => void;
-  onRequestInstallUpdate: () => void;
   onRequestExit: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -49,7 +47,6 @@ export const useProjectActionOrchestration = ({
   handleNewProject,
   handleSave,
   handleSaveAs,
-  handleInstallUpdate,
   handleZoomIn,
   handleZoomOut,
   handleZoomReset
@@ -91,7 +88,6 @@ export const useProjectActionOrchestration = ({
       void handleNewProject();
     },
     onExit: guardedExit,
-    onInstallUpdate: handleInstallUpdate,
     onSave: handleSave,
     onZoomIn: handleZoomIn,
     onZoomOut: handleZoomOut,
@@ -136,10 +132,6 @@ export const useProjectActionOrchestration = ({
     requestProjectAction("exit");
   }, [requestProjectAction]);
 
-  const onRequestInstallUpdate = useCallback(() => {
-    requestProjectAction("installUpdate");
-  }, [requestProjectAction]);
-
   const onSave = useCallback(() => {
     void handleSave();
   }, [handleSave]);
@@ -159,7 +151,6 @@ export const useProjectActionOrchestration = ({
     onRequestOpenProject,
     onRequestOpenFolderProject,
     onRequestOpenRecentProject,
-    onRequestInstallUpdate,
     onRequestExit,
     onSave,
     onSaveAs
