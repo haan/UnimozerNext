@@ -6,6 +6,7 @@ import { useWindowCloseGuard } from "./useWindowCloseGuard";
 
 type UseProjectActionOrchestrationArgs = {
   busy: boolean;
+  updateInstallBusy: boolean;
   projectPath: string | null;
   hasPendingProjectChanges: boolean;
   awaitBeforeExit: () => Promise<void>;
@@ -38,6 +39,7 @@ type UseProjectActionOrchestrationResult = {
 
 export const useProjectActionOrchestration = ({
   busy,
+  updateInstallBusy,
   projectPath,
   hasPendingProjectChanges,
   awaitBeforeExit,
@@ -53,10 +55,12 @@ export const useProjectActionOrchestration = ({
 }: UseProjectActionOrchestrationArgs): UseProjectActionOrchestrationResult => {
   const requestProjectActionRef = useRef<(action: ProjectAction) => void>(() => undefined);
   const pendingRecentProjectRef = useRef<RecentProjectEntry | null>(null);
+  const projectActionBusy = busy || updateInstallBusy;
 
   const guardedExit = useWindowCloseGuard({
     awaitBeforeExit,
-    onCloseRequested: () => requestProjectActionRef.current("exit")
+    onCloseRequested: () => requestProjectActionRef.current("exit"),
+    shouldHandleCloseRequest: () => !updateInstallBusy
   });
 
   const {
@@ -68,7 +72,7 @@ export const useProjectActionOrchestration = ({
     confirmProjectAction,
     onConfirmProjectActionOpenChange
   } = useProjectActionFlow({
-    busy,
+    busy: projectActionBusy,
     projectPath,
     hasPendingProjectChanges,
     onOpenProject: () => {
@@ -99,23 +103,35 @@ export const useProjectActionOrchestration = ({
   }, [requestProjectAction]);
 
   const onRequestNewProject = useCallback(() => {
+    if (projectActionBusy) {
+      return;
+    }
     requestProjectAction("new");
-  }, [requestProjectAction]);
+  }, [projectActionBusy, requestProjectAction]);
 
   const onRequestOpenProject = useCallback(() => {
+    if (projectActionBusy) {
+      return;
+    }
     requestProjectAction("open");
-  }, [requestProjectAction]);
+  }, [projectActionBusy, requestProjectAction]);
 
   const onRequestOpenFolderProject = useCallback(() => {
+    if (projectActionBusy) {
+      return;
+    }
     requestProjectAction("openFolder");
-  }, [requestProjectAction]);
+  }, [projectActionBusy, requestProjectAction]);
 
   const onRequestOpenRecentProject = useCallback(
     (entry: RecentProjectEntry) => {
+      if (projectActionBusy) {
+        return;
+      }
       pendingRecentProjectRef.current = entry;
       requestProjectAction("openRecent");
     },
-    [requestProjectAction]
+    [projectActionBusy, requestProjectAction]
   );
 
   const handleConfirmProjectActionOpenChange = useCallback(
@@ -129,8 +145,11 @@ export const useProjectActionOrchestration = ({
   );
 
   const onRequestExit = useCallback(() => {
+    if (projectActionBusy) {
+      return;
+    }
     requestProjectAction("exit");
-  }, [requestProjectAction]);
+  }, [projectActionBusy, requestProjectAction]);
 
   const onSave = useCallback(() => {
     void handleSave();

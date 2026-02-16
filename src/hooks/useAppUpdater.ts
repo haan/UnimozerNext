@@ -39,7 +39,6 @@ export const useAppUpdater = ({
     "pending"
   );
   const [checking, setChecking] = useState(false);
-  const [manualCheckInProgress, setManualCheckInProgress] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [updateSummary, setUpdateSummary] = useState<UpdateSummary | null>(null);
   const [blockedReason, setBlockedReason] = useState<string | null>(null);
@@ -85,9 +84,6 @@ export const useAppUpdater = ({
       const checkToken = Date.now();
       activeCheckTokenRef.current = checkToken;
       setChecking(true);
-      if (manual) {
-        setManualCheckInProgress(true);
-      }
 
       try {
         const result = await updaterCheck(channel);
@@ -138,7 +134,6 @@ export const useAppUpdater = ({
       } finally {
         if (activeCheckTokenRef.current === checkToken) {
           setChecking(false);
-          setManualCheckInProgress(false);
         }
       }
     },
@@ -208,14 +203,14 @@ export const useAppUpdater = ({
     if (installing) {
       return "installing";
     }
-    if (manualCheckInProgress) {
+    if (checking) {
       return "checking";
     }
     if (updateSummary) {
       return "available";
     }
     return "default";
-  }, [installing, manualCheckInProgress, updateSummary]);
+  }, [checking, installing, updateSummary]);
 
   return {
     showUpdateMenuItem: updaterSupport === "enabled",

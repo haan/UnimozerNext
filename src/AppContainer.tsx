@@ -572,7 +572,7 @@ export default function AppContainer({
   }, [markDiskSnapshotCurrent]);
 
   const appMenuState = useAppMenuState({
-    busy,
+    busy: busy || updateInstallBusy,
     hasPendingProjectChanges,
     projectName,
     isMac,
@@ -735,7 +735,8 @@ export default function AppContainer({
     onSave: onSaveProject,
     onSaveAs: onSaveProjectAs
   } = useProjectActionOrchestration({
-    busy,
+    busy: busy || updateInstallBusy,
+    updateInstallBusy,
     projectPath,
     hasPendingProjectChanges,
     awaitBeforeExit: awaitPackedArchiveSync,

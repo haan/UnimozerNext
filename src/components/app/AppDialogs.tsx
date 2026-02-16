@@ -443,7 +443,7 @@ export const AppDialogs = ({
             </Button>
           </AlertDialogFooter>
         ) : updateHasPendingChanges ? (
-          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-3 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
             <AlertDialogCancel
               variant="outline"
               className="w-full"
@@ -454,8 +454,8 @@ export const AppDialogs = ({
             <Button
               type="button"
               size="sm"
-              variant="secondary"
-              className="w-full"
+              variant="ghost"
+              className="w-full border border-input bg-background font-medium shadow-sm text-foreground hover:bg-accent hover:text-accent-foreground"
               disabled={busy || !updateSummary}
               onClick={onInstallUpdate}
             >
@@ -464,7 +464,7 @@ export const AppDialogs = ({
             <Button
               type="button"
               size="sm"
-              className="w-full"
+              className="col-span-2 w-full"
               disabled={busy || !updateSummary}
               onClick={onSaveAndInstallUpdate}
             >

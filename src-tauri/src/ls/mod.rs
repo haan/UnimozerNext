@@ -359,10 +359,12 @@ fn stop_process(mut process: LsProcess) -> Result<(), String> {
         }
     }
 
-    process
-        .child
-        .kill()
-        .map_err(crate::command_error::to_command_error)?;
+    match process.child.kill() {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::InvalidInput => {}
+        Err(error) => return Err(crate::command_error::to_command_error(error)),
+    }
+    let _ = process.child.wait();
     Ok(())
 }
 
