@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Unimozer Next",
-  "version": "0.10.11-alpha.1",
+  "version": "0.10.11-1",
   "identifier": "com.unimozer.next",
   "build": {
     "beforeDevCommand": "npm run dev",
