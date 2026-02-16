@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import type { UpdateChannel, UpdateSummary } from "../services/updater";
-import { updaterCheck, updaterInstall } from "../services/updater";
+import { detectWindowsInstallerKind, updaterCheck, updaterInstall } from "../services/updater";
 import { trimStatusText } from "../services/status";
 
 type UseAppUpdaterArgs = {
@@ -13,6 +13,7 @@ type UseAppUpdaterArgs = {
 type UpdateMenuState = "default" | "checking" | "available";
 
 type UseAppUpdaterResult = {
+  showUpdateMenuItem: boolean;
   updateMenuState: UpdateMenuState;
   updateAvailableOpen: boolean;
   updateInstallBusy: boolean;
@@ -24,13 +25,19 @@ type UseAppUpdaterResult = {
   installUpdate: () => void;
 };
 
-const BLOCKED_UPDATE_MESSAGE =
-  "Update found, but this installation cannot self-update on this computer.";
+const BLOCKED_UPDATE_MESSAGE = "This installation cannot self-update on this computer.";
+const INSTALLING_UPDATE_MESSAGE =
+  "Downloading update... Unimozer Next will close to apply it.";
+const INSTALLED_UPDATE_MESSAGE =
+  "Update downloaded. Unimozer Next is closing to apply it.";
 
 export const useAppUpdater = ({
   channel,
   setStatus
 }: UseAppUpdaterArgs): UseAppUpdaterResult => {
+  const [updaterSupport, setUpdaterSupport] = useState<"pending" | "enabled" | "disabled">(
+    "pending"
+  );
   const [checking, setChecking] = useState(false);
   const [manualCheckInProgress, setManualCheckInProgress] = useState(false);
   const [installing, setInstalling] = useState(false);
@@ -39,8 +46,33 @@ export const useAppUpdater = ({
   const [updateAvailableOpen, setUpdateAvailableOpen] = useState(false);
   const activeCheckTokenRef = useRef(0);
 
+  useEffect(() => {
+    let cancelled = false;
+    const detectSupport = async () => {
+      try {
+        const installerKind = await detectWindowsInstallerKind();
+        if (cancelled) {
+          return;
+        }
+        setUpdaterSupport(installerKind === "msi" ? "disabled" : "enabled");
+      } catch {
+        if (cancelled) {
+          return;
+        }
+        setUpdaterSupport("enabled");
+      }
+    };
+    void detectSupport();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const performCheck = useCallback(
     async (manual: boolean) => {
+      if (updaterSupport !== "enabled") {
+        return;
+      }
       const checkToken = Date.now();
       activeCheckTokenRef.current = checkToken;
       setChecking(true);
@@ -101,44 +133,46 @@ export const useAppUpdater = ({
         }
       }
     },
-    [channel, setStatus]
+    [channel, setStatus, updaterSupport]
   );
 
   useEffect(() => {
     setUpdateSummary(null);
     setBlockedReason(null);
     setUpdateAvailableOpen(false);
+    if (updaterSupport !== "enabled") {
+      return;
+    }
     void performCheck(false);
-  }, [channel, performCheck]);
+  }, [channel, performCheck, updaterSupport]);
 
   const checkForUpdates = useCallback(() => {
-    if (checking || installing) {
+    if (updaterSupport !== "enabled" || checking || installing) {
       return;
     }
     void performCheck(true);
-  }, [checking, installing, performCheck]);
+  }, [checking, installing, performCheck, updaterSupport]);
 
   const openUpdateDialog = useCallback(() => {
-    if (!updateSummary) {
+    if (updaterSupport !== "enabled" || !updateSummary) {
       return;
     }
     setUpdateAvailableOpen(true);
-  }, [updateSummary]);
+  }, [updateSummary, updaterSupport]);
 
   const handleUpdateAvailableOpenChange = useCallback((open: boolean) => {
     setUpdateAvailableOpen(open);
   }, []);
 
   const installUpdate = useCallback(async () => {
-    if (installing) {
+    if (updaterSupport !== "enabled" || installing) {
       return;
     }
-    setStatus("Installing update...");
+    setStatus(INSTALLING_UPDATE_MESSAGE);
     setInstalling(true);
     try {
       const result = await updaterInstall(channel);
-      const message =
-        result.message?.trim() || "Update installed. Restart Unimozer Next to apply.";
+      const message = result.message?.trim() || INSTALLED_UPDATE_MESSAGE;
       if (result.installed) {
         setStatus(message);
         toast.success(message);
@@ -159,7 +193,7 @@ export const useAppUpdater = ({
     } finally {
       setInstalling(false);
     }
-  }, [channel, installing, setStatus]);
+  }, [channel, installing, setStatus, updaterSupport]);
 
   const updateMenuState = useMemo<UpdateMenuState>(() => {
     if (manualCheckInProgress) {
@@ -172,6 +206,7 @@ export const useAppUpdater = ({
   }, [manualCheckInProgress, updateSummary]);
 
   return {
+    showUpdateMenuItem: updaterSupport === "enabled",
     updateMenuState,
     updateAvailableOpen,
     updateInstallBusy: installing,

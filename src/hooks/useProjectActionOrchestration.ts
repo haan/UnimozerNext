@@ -13,8 +13,9 @@ type UseProjectActionOrchestrationArgs = {
   handleOpenFolderProject: () => Promise<void>;
   handleOpenRecentProject: (entry: RecentProjectEntry) => Promise<void>;
   handleNewProject: () => Promise<void>;
-  handleSave: () => Promise<void>;
-  handleSaveAs: () => Promise<void>;
+  handleSave: () => Promise<boolean>;
+  handleSaveAs: () => Promise<boolean>;
+  handleInstallUpdate: () => void;
   handleZoomIn: () => void;
   handleZoomOut: () => void;
   handleZoomReset: () => void;
@@ -23,12 +24,14 @@ type UseProjectActionOrchestrationArgs = {
 type UseProjectActionOrchestrationResult = {
   confirmProjectActionOpen: boolean;
   pendingProjectAction: ProjectAction | null;
+  saveAndConfirmProjectAction: () => void;
   confirmProjectAction: () => void;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onRequestOpenFolderProject: () => void;
   onRequestOpenRecentProject: (entry: RecentProjectEntry) => void;
+  onRequestInstallUpdate: () => void;
   onRequestExit: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -45,6 +48,7 @@ export const useProjectActionOrchestration = ({
   handleNewProject,
   handleSave,
   handleSaveAs,
+  handleInstallUpdate,
   handleZoomIn,
   handleZoomOut,
   handleZoomReset
@@ -61,6 +65,7 @@ export const useProjectActionOrchestration = ({
     confirmProjectActionOpen,
     pendingProjectAction,
     requestProjectAction,
+    saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange
   } = useProjectActionFlow({
@@ -84,9 +89,8 @@ export const useProjectActionOrchestration = ({
       void handleNewProject();
     },
     onExit: guardedExit,
-    onSave: () => {
-      void handleSave();
-    },
+    onInstallUpdate: handleInstallUpdate,
+    onSave: handleSave,
     onZoomIn: handleZoomIn,
     onZoomOut: handleZoomOut,
     onZoomReset: handleZoomReset
@@ -130,6 +134,10 @@ export const useProjectActionOrchestration = ({
     requestProjectAction("exit");
   }, [requestProjectAction]);
 
+  const onRequestInstallUpdate = useCallback(() => {
+    requestProjectAction("installUpdate");
+  }, [requestProjectAction]);
+
   const onSave = useCallback(() => {
     void handleSave();
   }, [handleSave]);
@@ -141,12 +149,14 @@ export const useProjectActionOrchestration = ({
   return {
     confirmProjectActionOpen,
     pendingProjectAction,
+    saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange: handleConfirmProjectActionOpenChange,
     onRequestNewProject,
     onRequestOpenProject,
     onRequestOpenFolderProject,
     onRequestOpenRecentProject,
+    onRequestInstallUpdate,
     onRequestExit,
     onSave,
     onSaveAs

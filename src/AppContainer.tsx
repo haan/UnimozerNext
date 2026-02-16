@@ -349,6 +349,7 @@ export default function AppContainer({
   }, [resetConsoleOutput]);
 
   const {
+    showUpdateMenuItem,
     updateMenuState,
     updateAvailableOpen,
     updateInstallBusy,
@@ -704,24 +705,32 @@ export default function AppContainer({
   });
 
   const handleSaveAndRefreshDiskSnapshot = useCallback(async () => {
-    await handleSave();
-    await markDiskSnapshotCurrent();
+    const saved = await handleSave();
+    if (saved) {
+      await markDiskSnapshotCurrent();
+    }
+    return saved;
   }, [handleSave, markDiskSnapshotCurrent]);
 
   const handleSaveAsAndRefreshDiskSnapshot = useCallback(async () => {
-    await handleSaveAs();
-    await markDiskSnapshotCurrent();
+    const saved = await handleSaveAs();
+    if (saved) {
+      await markDiskSnapshotCurrent();
+    }
+    return saved;
   }, [handleSaveAs, markDiskSnapshotCurrent]);
 
   const {
     confirmProjectActionOpen,
     pendingProjectAction,
+    saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange,
     onRequestNewProject,
     onRequestOpenProject,
     onRequestOpenFolderProject,
     onRequestOpenRecentProject,
+    onRequestInstallUpdate,
     onRequestExit,
     onSave: onSaveProject,
     onSaveAs: onSaveProjectAs
@@ -736,6 +745,7 @@ export default function AppContainer({
     handleNewProject,
     handleSave: handleSaveAndRefreshDiskSnapshot,
     handleSaveAs: handleSaveAsAndRefreshDiskSnapshot,
+    handleInstallUpdate: installUpdate,
     handleZoomIn,
     handleZoomOut,
     handleZoomReset
@@ -900,6 +910,7 @@ export default function AppContainer({
         onExportDiagramPng={handleExportDiagramPng}
         onCopyStructogramPng={handleCopyStructogramPng}
         onExportStructogramPng={handleExportStructogramPng}
+        showUpdateMenuItem={showUpdateMenuItem}
         updateMenuState={updateMenuState}
         onCheckForUpdates={checkForUpdates}
         onOpenUpdateDialog={openUpdateDialog}
@@ -1035,6 +1046,9 @@ export default function AppContainer({
         confirmProjectActionOpen={confirmProjectActionOpen}
         onConfirmProjectActionOpenChange={onConfirmProjectActionOpenChange}
         canConfirmProjectAction={Boolean(pendingProjectAction)}
+        onSaveBeforeProjectAction={() => {
+          void saveAndConfirmProjectAction();
+        }}
         onConfirmProjectAction={confirmProjectAction}
         missingRecentProjectOpen={missingRecentProjectOpen}
         missingRecentProjectPath={missingRecentProjectPath}
@@ -1051,9 +1065,7 @@ export default function AppContainer({
         onUpdateAvailableOpenChange={handleUpdateAvailableOpenChange}
         updateSummary={updateSummary}
         blockedUpdateReason={blockedUpdateReason}
-        onInstallUpdate={() => {
-          void installUpdate();
-        }}
+        onInstallUpdate={onRequestInstallUpdate}
         updateInstallBusy={updateInstallBusy}
         busy={busy}
       />

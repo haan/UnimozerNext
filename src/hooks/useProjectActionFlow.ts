@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type ProjectAction = "open" | "openFolder" | "openRecent" | "new" | "exit";
+export type ProjectAction =
+  | "open"
+  | "openFolder"
+  | "openRecent"
+  | "new"
+  | "exit"
+  | "installUpdate";
 
 type UseProjectActionFlowArgs = {
   busy: boolean;
@@ -11,7 +17,8 @@ type UseProjectActionFlowArgs = {
   onOpenRecentProject: () => void;
   onNewProject: () => void;
   onExit: () => void;
-  onSave: () => void;
+  onInstallUpdate: () => void;
+  onSave: () => Promise<boolean>;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
@@ -21,6 +28,7 @@ type UseProjectActionFlowResult = {
   confirmProjectActionOpen: boolean;
   pendingProjectAction: ProjectAction | null;
   requestProjectAction: (action: ProjectAction) => void;
+  saveAndConfirmProjectAction: () => void;
   confirmProjectAction: () => void;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
 };
@@ -34,6 +42,7 @@ export const useProjectActionFlow = ({
   onOpenRecentProject,
   onNewProject,
   onExit,
+  onInstallUpdate,
   onSave,
   onZoomIn,
   onZoomOut,
@@ -52,11 +61,20 @@ export const useProjectActionFlow = ({
         onOpenRecentProject();
       } else if (action === "exit") {
         onExit();
+      } else if (action === "installUpdate") {
+        onInstallUpdate();
       } else {
         onNewProject();
       }
     },
-    [onExit, onNewProject, onOpenFolderProject, onOpenProject, onOpenRecentProject]
+    [
+      onExit,
+      onInstallUpdate,
+      onNewProject,
+      onOpenFolderProject,
+      onOpenProject,
+      onOpenRecentProject
+    ]
   );
 
   const requestProjectAction = useCallback(
@@ -79,6 +97,22 @@ export const useProjectActionFlow = ({
       runProjectAction(action);
     }
   }, [pendingProjectAction, runProjectAction]);
+
+  const saveAndConfirmProjectAction = useCallback(async () => {
+    const action = pendingProjectAction;
+    if (!action) {
+      return;
+    }
+
+    const saved = await onSave();
+    if (!saved) {
+      return;
+    }
+
+    setConfirmProjectActionOpen(false);
+    setPendingProjectAction(null);
+    runProjectAction(action);
+  }, [onSave, pendingProjectAction, runProjectAction]);
 
   const onConfirmProjectActionOpenChange = useCallback((open: boolean) => {
     setConfirmProjectActionOpen(open);
@@ -108,7 +142,7 @@ export const useProjectActionFlow = ({
       if (key === "s") {
         event.preventDefault();
         if (busy || !projectPath) return;
-        onSave();
+        void onSave();
         return;
       }
       if (key === "+" || key === "=") {
@@ -136,6 +170,7 @@ export const useProjectActionFlow = ({
     confirmProjectActionOpen,
     pendingProjectAction,
     requestProjectAction,
+    saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange
   };

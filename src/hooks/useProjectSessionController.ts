@@ -143,6 +143,7 @@ export const useProjectSessionController = ({
       setDiagramLayoutDirty(false);
       clearPackedArchiveSyncError();
     }
+    return success;
   }, [
     awaitPackedArchiveSync,
     clearPackedArchiveSyncError,
@@ -157,6 +158,7 @@ export const useProjectSessionController = ({
       setDiagramLayoutDirty(false);
       clearPackedArchiveSyncError();
     }
+    return success;
   }, [
     awaitPackedArchiveSync,
     clearPackedArchiveSyncError,

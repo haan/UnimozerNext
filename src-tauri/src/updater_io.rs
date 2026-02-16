@@ -163,7 +163,7 @@ pub async fn updater_install(
     Ok(UpdateInstallResult {
         installed: true,
         version: Some(version),
-        message: Some("Update installed. Restart the app to apply it.".to_string()),
+        message: Some("Update downloaded. Unimozer Next will now close to apply it.".to_string()),
     })
 }
 

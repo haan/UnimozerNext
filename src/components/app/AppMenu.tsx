@@ -79,6 +79,7 @@ type AppMenuProps = {
   onExportDiagramPng: (style: ExportStyle) => void;
   onCopyStructogramPng: () => void;
   onExportStructogramPng: () => void;
+  showUpdateMenuItem: boolean;
   updateMenuState: "default" | "checking" | "available";
   onCheckForUpdates: () => void;
   onOpenUpdateDialog: () => void;
@@ -147,6 +148,7 @@ export const AppMenu = ({
   onExportDiagramPng,
   onCopyStructogramPng,
   onExportStructogramPng,
+  showUpdateMenuItem,
   updateMenuState,
   onCheckForUpdates,
   onOpenUpdateDialog
@@ -560,18 +562,22 @@ export const AppMenu = ({
         <MenubarMenu>
           <MenubarTrigger>Help</MenubarTrigger>
           <MenubarContent>
-            {updateMenuState === "checking" ? (
-              <MenubarItem disabled>Checking for updates...</MenubarItem>
-            ) : updateMenuState === "available" ? (
-              <MenubarItem onClick={onOpenUpdateDialog}>
-                Update is available
-              </MenubarItem>
-            ) : (
-              <MenubarItem onClick={onCheckForUpdates}>
-                Check for updates...
-              </MenubarItem>
-            )}
-            <MenubarSeparator />
+            {showUpdateMenuItem ? (
+              <>
+                {updateMenuState === "checking" ? (
+                  <MenubarItem disabled>Checking for updates...</MenubarItem>
+                ) : updateMenuState === "available" ? (
+                  <MenubarItem onClick={onOpenUpdateDialog}>
+                    Update is available
+                  </MenubarItem>
+                ) : (
+                  <MenubarItem onClick={onCheckForUpdates}>
+                    Check for updates...
+                  </MenubarItem>
+                )}
+                <MenubarSeparator />
+              </>
+            ) : null}
             <MenubarItem onClick={onOpenAbout}>
               About
             </MenubarItem>

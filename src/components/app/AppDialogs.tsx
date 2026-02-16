@@ -20,6 +20,7 @@ import {
   AlertDialogMedia,
   AlertDialogTitle
 } from "../ui/alert-dialog";
+import { Button } from "../ui/button";
 import type { AppSettings } from "../../models/settings";
 import type { UpdateSummary } from "../../services/updater";
 
@@ -66,6 +67,7 @@ type AppDialogsProps = {
   confirmProjectActionOpen: boolean;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
   canConfirmProjectAction: boolean;
+  onSaveBeforeProjectAction: () => void;
   onConfirmProjectAction: () => void;
   missingRecentProjectOpen: boolean;
   missingRecentProjectPath: string | null;
@@ -130,6 +132,7 @@ export const AppDialogs = ({
   confirmProjectActionOpen,
   onConfirmProjectActionOpenChange,
   canConfirmProjectAction,
+  onSaveBeforeProjectAction,
   onConfirmProjectAction,
   missingRecentProjectOpen,
   missingRecentProjectPath,
@@ -256,12 +259,12 @@ export const AppDialogs = ({
     >
       <AlertDialogContent size="sm">
         <AlertDialogHeader className="items-center text-center">
-          <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+          <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
           <AlertDialogDescription className="text-center">
-            You have unsaved changes. Continuing will discard them.
+            You have unsaved changes. Save before continuing, or continue to discard them.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-2 gap-3 border-t border-border bg-muted/40 px-6 py-4">
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-3 gap-3 border-t border-border bg-muted/40 px-6 py-4">
           <AlertDialogCancel
             variant="outline"
             className="w-full"
@@ -269,7 +272,17 @@ export const AppDialogs = ({
           >
             Cancel
           </AlertDialogCancel>
+          <Button
+            type="button"
+            size="sm"
+            className="w-full"
+            disabled={busy || !canConfirmProjectAction}
+            onClick={onSaveBeforeProjectAction}
+          >
+            Save
+          </Button>
           <AlertDialogAction
+            variant="outline"
             className="w-full"
             disabled={busy || !canConfirmProjectAction}
             onClick={onConfirmProjectAction}
