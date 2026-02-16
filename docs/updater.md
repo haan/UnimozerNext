@@ -137,6 +137,7 @@ macOS updater manifests/assets:
 Notes:
 - `.dmg` is for normal user download/install.
 - updater consumes signed updater artifacts/manifests, not dmg.
+- macOS CI must build with `app` + `dmg` so updater `.app.tar.gz` artifacts exist.
 
 ## 6) Installer kind detection on Windows
 

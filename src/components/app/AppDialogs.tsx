@@ -393,7 +393,7 @@ export const AppDialogs = ({
             disabled={updateInstallBusy || busy || !updateSummary}
             onClick={onInstallUpdate}
           >
-            Install update
+            {updateInstallBusy ? "Installing..." : "Install update"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

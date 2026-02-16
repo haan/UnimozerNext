@@ -6,6 +6,7 @@ use tauri::AppHandle;
 use tauri_plugin_updater::UpdaterExt;
 
 use crate::command_error::{to_command_error, CommandResult};
+use crate::lifecycle::shutdown_background_processes;
 
 const STABLE_ENDPOINT_TEMPLATE: &str =
     "https://github.com/haan/UnimozerNext/releases/latest/download/latest-{target}.json";
@@ -149,6 +150,11 @@ pub async fn updater_install(
     };
 
     let version = update.version.to_string();
+    // Ensure no background Java/LSP processes keep files in the install
+    // directory locked while the updater installer runs.
+    shutdown_background_processes(&app);
+    std::thread::sleep(std::time::Duration::from_millis(300));
+
     update
         .download_and_install(|_, _| {}, || {})
         .await

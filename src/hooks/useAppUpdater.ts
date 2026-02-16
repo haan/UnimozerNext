@@ -133,6 +133,7 @@ export const useAppUpdater = ({
     if (installing) {
       return;
     }
+    setStatus("Installing update...");
     setInstalling(true);
     try {
       const result = await updaterInstall(channel);
