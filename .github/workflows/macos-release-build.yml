@@ -289,15 +289,29 @@ jobs:
             echo "Updater signature not found for $app_tarball" >&2
             exit 1
           fi
+          dmg_file="$(find "src-tauri/target/${{ matrix.rust_target }}/release/bundle" -type f -name '*.dmg' | head -n 1)"
+          if [[ -z "$dmg_file" ]]; then
+            echo "DMG bundle not found." >&2
+            exit 1
+          fi
 
           version="$(sed -nE 's/^version\\s*=\\s*\"([^\"]+)\"/\\1/p' src-tauri/Cargo.toml | head -n 1)"
           if [[ -z "$version" ]]; then
             echo "Could not resolve app version from src-tauri/Cargo.toml" >&2
             exit 1
           fi
+          release_asset_dir="release-assets"
+          mkdir -p "$release_asset_dir"
+          arch_suffix="${{ matrix.arch }}"
+
+          app_release_name="UnimozerNext_${version}_${arch_suffix}.app.tar.gz"
+          dmg_release_name="UnimozerNext_${version}_${arch_suffix}.dmg"
+          cp "$app_tarball" "$release_asset_dir/$app_release_name"
+          cp "$app_sig" "$release_asset_dir/$app_release_name.sig"
+          cp "$dmg_file" "$release_asset_dir/$dmg_release_name"
+
           signature="$(tr -d '\n\r' < "$app_sig")"
-          app_name="$(basename "$app_tarball")"
-          app_name_encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$app_name")"
+          app_name_encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$app_release_name")"
 
           mkdir -p updater-manifests
           cat > "updater-manifests/latest-${updater_target}.json" <<JSON
@@ -317,9 +331,9 @@ jobs:
         with:
           name: macos-${{ matrix.arch }}-bundles
           path: |
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz.sig
+            release-assets/UnimozerNext_*_${{ matrix.arch }}.dmg
+            release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz
+            release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz.sig
             updater-manifests/latest-${{ matrix.updater_target }}.json
           if-no-files-found: error
 
@@ -331,7 +345,7 @@ jobs:
           prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
           make_latest: ${{ steps.release_meta.outputs.is_prerelease != 'true' }}
           files: |
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz
-            src-tauri/target/${{ matrix.rust_target }}/release/bundle/**/*.app.tar.gz.sig
+            release-assets/UnimozerNext_*_${{ matrix.arch }}.dmg
+            release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz
+            release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz.sig
             updater-manifests/latest-${{ matrix.updater_target }}.json

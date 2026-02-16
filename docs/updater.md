@@ -119,12 +119,20 @@ Important:
 Windows updater manifests/assets:
 - `latest-windows-x86_64-nsis.json`
 - `latest-windows-x86_64-msi.json`
-- matching signed NSIS/MSI updater artifacts (`.sig` present)
+- `UnimozerNext_{version}_x64-setup.exe`
+- `UnimozerNext_{version}_x64-setup.exe.sig`
+- `UnimozerNext_{version}_x64-setup.msi`
+- `UnimozerNext_{version}_x64-setup.msi.sig`
 
 macOS updater manifests/assets:
 - `latest-darwin-x86_64.json`
 - `latest-darwin-aarch64.json`
-- matching signed `.app.tar.gz` updater artifacts (`.sig` present)
+- `UnimozerNext_{version}_x64.app.tar.gz`
+- `UnimozerNext_{version}_x64.app.tar.gz.sig`
+- `UnimozerNext_{version}_arm64.app.tar.gz`
+- `UnimozerNext_{version}_arm64.app.tar.gz.sig`
+- `UnimozerNext_{version}_x64.dmg`
+- `UnimozerNext_{version}_arm64.dmg`
 
 Notes:
 - `.dmg` is for normal user download/install.
@@ -164,4 +172,3 @@ Targets currently resolved by backend:
 
 - Signature/pk failure:
   - confirm `pubkey` in `src-tauri/tauri.conf.json` matches private key used in CI secrets
-

@@ -373,9 +373,6 @@ export const AppDialogs = ({
                 Target: <strong>{updateSummary.target}</strong>
               </div>
             </div>
-            <div className="max-h-48 overflow-y-auto rounded-md border border-border bg-muted/20 px-3 py-2 text-sm text-foreground whitespace-pre-wrap">
-              {updateSummary.notes?.trim() || "No release notes provided."}
-            </div>
           </div>
         ) : null}
         {blockedUpdateReason ? (
