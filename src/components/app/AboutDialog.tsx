@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { openExternalUrl } from "../../services/externalLinks";
 
@@ -20,6 +21,31 @@ const linkClass =
   "break-all cursor-pointer text-primary underline underline-offset-2 transition hover:text-primary/80";
 
 export const AboutDialog = ({ open, onOpenChange }: AboutDialogProps) => {
+  const [appVersion, setAppVersion] = useState<string>("");
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    let active = true;
+    const loadVersion = async () => {
+      try {
+        const version = await getVersion();
+        if (active) {
+          setAppVersion(version);
+        }
+      } catch {
+        if (active) {
+          setAppVersion("");
+        }
+      }
+    };
+    void loadVersion();
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
   const openLink = useCallback((url: string) => {
     void openExternalUrl(url).catch(() => {
       if (typeof window !== "undefined") {
@@ -31,7 +57,12 @@ export const AboutDialog = ({ open, onOpenChange }: AboutDialogProps) => {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
     <DialogContent className="w-[700px] max-w-[94vw] overflow-hidden p-0">
-      <div className="border-b border-border bg-muted/45 px-6 py-6 text-center dark:bg-background">
+      <div className="relative border-b border-border bg-muted/45 px-6 py-6 text-center dark:bg-background">
+        {appVersion ? (
+          <div className="absolute right-4 top-3 text-xs font-medium text-muted-foreground">
+            v{appVersion}
+          </div>
+        ) : null}
         <img
           src="/icon/icon.png"
           alt="Unimozer Next logo"

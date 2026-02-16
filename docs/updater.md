@@ -70,6 +70,7 @@ Use these `workflow_dispatch` inputs:
 Result:
 - assets/manifests are published under release tag `updater-prerelease`
 - rerunning overwrites that prerelease feed for next test cycle
+- stale versioned assets for the same platform are pruned **after** publish (no pre-upload delete window)
 
 ### 3.2 Configure test app to prerelease channel
 In app:
