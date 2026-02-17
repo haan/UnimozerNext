@@ -125,6 +125,30 @@ Windows updater manifests/assets:
 - `UnimozerNext_{version}_x64-setup.msi`
 - `UnimozerNext_{version}_x64-setup.msi.sig`
 
+### Stable alias assets for website downloads
+
+For the public install website, stable releases also publish fixed alias names:
+
+- `UnimozerNext_latest_x64-setup.exe`
+- `UnimozerNext_latest_x64-setup.exe.sig`
+- `UnimozerNext_latest_x64-setup.msi`
+- `UnimozerNext_latest_x64-setup.msi.sig`
+- `UnimozerNext_latest_x64.dmg`
+- `UnimozerNext_latest_arm64.dmg`
+
+These aliases are intended for direct links via:
+
+- `https://github.com/haan/UnimozerNext/releases/latest/download/<alias-name>`
+
+Example:
+
+- `https://github.com/haan/UnimozerNext/releases/latest/download/UnimozerNext_latest_x64-setup.exe`
+
+Scope note:
+
+- The website uses stable-channel links only.
+- It does not consume prerelease (`updater-prerelease`) feeds.
+
 macOS updater manifests/assets:
 - `latest-darwin-x86_64.json`
 - `latest-darwin-aarch64.json`

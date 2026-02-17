@@ -225,6 +225,14 @@ jobs:
           Copy-Item -Path $nsisSigPath -Destination "$nsisReleasePath.sig" -Force
           Copy-Item -Path $msiSigPath -Destination "$msiReleasePath.sig" -Force
 
+          # Stable website aliases (fixed names for latest/download links).
+          $nsisAliasPath = Join-Path $releaseAssetDir "UnimozerNext_latest_x64-setup.exe"
+          $msiAliasPath = Join-Path $releaseAssetDir "UnimozerNext_latest_x64-setup.msi"
+          Copy-Item -Path $nsisReleasePath -Destination $nsisAliasPath -Force
+          Copy-Item -Path $msiReleasePath -Destination $msiAliasPath -Force
+          Copy-Item -Path "$nsisReleasePath.sig" -Destination "$nsisAliasPath.sig" -Force
+          Copy-Item -Path "$msiReleasePath.sig" -Destination "$msiAliasPath.sig" -Force
+
       - name: Resolve release metadata
         id: release_meta
         shell: pwsh
@@ -335,6 +343,10 @@ jobs:
             release-assets/UnimozerNext_*_x64-setup.exe.sig
             release-assets/UnimozerNext_*_x64-setup.msi
             release-assets/UnimozerNext_*_x64-setup.msi.sig
+            release-assets/UnimozerNext_latest_x64-setup.exe
+            release-assets/UnimozerNext_latest_x64-setup.exe.sig
+            release-assets/UnimozerNext_latest_x64-setup.msi
+            release-assets/UnimozerNext_latest_x64-setup.msi.sig
             updater-manifests/latest-windows-x86_64-nsis.json
             updater-manifests/latest-windows-x86_64-msi.json
           if-no-files-found: error
@@ -351,6 +363,10 @@ jobs:
             release-assets/UnimozerNext_*_x64-setup.exe.sig
             release-assets/UnimozerNext_*_x64-setup.msi
             release-assets/UnimozerNext_*_x64-setup.msi.sig
+            release-assets/UnimozerNext_latest_x64-setup.exe
+            release-assets/UnimozerNext_latest_x64-setup.exe.sig
+            release-assets/UnimozerNext_latest_x64-setup.msi
+            release-assets/UnimozerNext_latest_x64-setup.msi.sig
             updater-manifests/latest-windows-x86_64-nsis.json
             updater-manifests/latest-windows-x86_64-msi.json
 

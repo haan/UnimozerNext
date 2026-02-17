@@ -275,6 +275,10 @@ jobs:
           cp "$app_sig" "$release_asset_dir/$app_release_name.sig"
           cp "$dmg_file" "$release_asset_dir/$dmg_release_name"
 
+          # Stable website alias (fixed name for latest/download links).
+          dmg_alias_name="UnimozerNext_latest_${arch_suffix}.dmg"
+          cp "$dmg_file" "$release_asset_dir/$dmg_alias_name"
+
       - name: Resolve release metadata
         id: release_meta
         shell: bash
@@ -359,6 +363,7 @@ jobs:
             release-assets/UnimozerNext_*_${{ matrix.arch }}.dmg
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz.sig
+            release-assets/UnimozerNext_latest_${{ matrix.arch }}.dmg
             updater-manifests/latest-${{ matrix.updater_target }}.json
           if-no-files-found: error
 
@@ -373,6 +378,7 @@ jobs:
             release-assets/UnimozerNext_*_${{ matrix.arch }}.dmg
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz.sig
+            release-assets/UnimozerNext_latest_${{ matrix.arch }}.dmg
             updater-manifests/latest-${{ matrix.updater_target }}.json
 
       - name: Prune stale prerelease macOS assets
