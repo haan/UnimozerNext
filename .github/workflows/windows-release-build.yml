@@ -343,10 +343,6 @@ jobs:
             release-assets/UnimozerNext_*_x64-setup.exe.sig
             release-assets/UnimozerNext_*_x64-setup.msi
             release-assets/UnimozerNext_*_x64-setup.msi.sig
-            release-assets/UnimozerNext_latest_x64-setup.exe
-            release-assets/UnimozerNext_latest_x64-setup.exe.sig
-            release-assets/UnimozerNext_latest_x64-setup.msi
-            release-assets/UnimozerNext_latest_x64-setup.msi.sig
             updater-manifests/latest-windows-x86_64-nsis.json
             updater-manifests/latest-windows-x86_64-msi.json
           if-no-files-found: error
@@ -363,10 +359,6 @@ jobs:
             release-assets/UnimozerNext_*_x64-setup.exe.sig
             release-assets/UnimozerNext_*_x64-setup.msi
             release-assets/UnimozerNext_*_x64-setup.msi.sig
-            release-assets/UnimozerNext_latest_x64-setup.exe
-            release-assets/UnimozerNext_latest_x64-setup.exe.sig
-            release-assets/UnimozerNext_latest_x64-setup.msi
-            release-assets/UnimozerNext_latest_x64-setup.msi.sig
             updater-manifests/latest-windows-x86_64-nsis.json
             updater-manifests/latest-windows-x86_64-msi.json
 

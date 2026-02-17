@@ -363,7 +363,6 @@ jobs:
             release-assets/UnimozerNext_*_${{ matrix.arch }}.dmg
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz.sig
-            release-assets/UnimozerNext_latest_${{ matrix.arch }}.dmg
             updater-manifests/latest-${{ matrix.updater_target }}.json
           if-no-files-found: error
 
@@ -378,7 +377,6 @@ jobs:
             release-assets/UnimozerNext_*_${{ matrix.arch }}.dmg
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz
             release-assets/UnimozerNext_*_${{ matrix.arch }}.app.tar.gz.sig
-            release-assets/UnimozerNext_latest_${{ matrix.arch }}.dmg
             updater-manifests/latest-${{ matrix.updater_target }}.json
 
       - name: Prune stale prerelease macOS assets
