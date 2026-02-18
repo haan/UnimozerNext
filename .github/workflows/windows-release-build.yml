@@ -177,14 +177,6 @@ jobs:
           Remove-Item -Recurse -Force "src-tauri/target/release/wix" -ErrorAction SilentlyContinue
           Remove-Item -Recurse -Force "src-tauri/target/release/bundle" -ErrorAction SilentlyContinue
 
-      - name: Build Tauri installers (MSI, NSIS)
-        env:
-          RUST_LOG: tauri_bundler=trace
-          RUST_BACKTRACE: "1"
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --ci --bundles "msi,nsis" --config src-tauri/tauri.windows.conf.json
-
       - name: Resolve Authenticode metadata
         id: authenticode_meta
         shell: pwsh
@@ -212,6 +204,24 @@ jobs:
             Write-Host "Authenticode signing disabled for this run (event=$eventName ref=$runRef publish_release=$publishInput release_channel=$releaseChannel)."
           }
 
+      - name: Build Tauri binary only (Authenticode path)
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        env:
+          RUST_LOG: tauri_bundler=trace
+          RUST_BACKTRACE: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --ci --no-bundle --config src-tauri/tauri.windows.conf.json
+
+      - name: Build Tauri installers (MSI, NSIS) (non-Authenticode path)
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode != 'true' }}
+        env:
+          RUST_LOG: tauri_bundler=trace
+          RUST_BACKTRACE: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --ci --bundles "msi,nsis" --config src-tauri/tauri.windows.conf.json
+
       - name: Azure login (OIDC)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
         uses: azure/login@v1
@@ -219,20 +229,6 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Authenticode sign Windows installers (MSI + NSIS)
-        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/trusted-signing-action@v0.5.9
-        with:
-          endpoint: https://weu.codesigning.azure.net/
-          trusted-signing-account-name: haala-artifact
-          certificate-profile-name: unimozer-public-signing
-          files-folder: src-tauri/target/release/bundle
-          files-folder-recurse: true
-          files-folder-filter: msi,exe
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
 
       - name: Authenticode sign app binaries (EXE + DLL)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
@@ -244,6 +240,29 @@ jobs:
           files-folder: src-tauri/target/release
           files-folder-recurse: false
           files-folder-filter: exe,dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Build Tauri installers (MSI, NSIS) (Authenticode path)
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        env:
+          RUST_LOG: tauri_bundler=trace
+          RUST_BACKTRACE: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --ci --bundles "msi,nsis" --config src-tauri/tauri.windows.conf.json
+
+      - name: Authenticode sign Windows installers (MSI + NSIS)
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        uses: azure/trusted-signing-action@v0.5.9
+        with:
+          endpoint: https://weu.codesigning.azure.net/
+          trusted-signing-account-name: haala-artifact
+          certificate-profile-name: unimozer-public-signing
+          files-folder: src-tauri/target/release/bundle
+          files-folder-recurse: true
+          files-folder-filter: msi,exe
           file-digest: SHA256
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
