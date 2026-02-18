@@ -185,8 +185,11 @@ If old installs predate marker support and heuristics cannot determine installer
 Windows CI now supports Authenticode via Azure Trusted Signing.
 
 Current behavior:
-- Authenticode signing runs only on tag push runs (`refs/tags/v*`).
-- `workflow_dispatch` runs from branches build normally but skip Authenticode.
+- Authenticode signing runs on tag push runs (`refs/tags/v*`).
+- Authenticode also runs on `workflow_dispatch` only when all are true:
+  - `publish_release=true`
+  - `release_channel=prerelease`
+  - run was launched from `refs/heads/main` or `refs/heads/prerelease`
 - Installers are signed first (MSI + NSIS), then top-level app `exe/dll` binaries are signed.
 - After Authenticode, updater `.sig` files are regenerated for installer artifacts so Tauri updater manifests remain valid.
 
@@ -237,8 +240,10 @@ Targets currently resolved by backend:
   - confirm `pubkey` in `src-tauri/tauri.conf.json` matches private key used in CI secrets
 
 - Authenticode step skipped unexpectedly:
-  - confirm run is a tag push (`refs/tags/v*`) and not a manual branch run
-  - confirm Azure OIDC federation includes the tag pattern you are using
+  - confirm run is either:
+    - a tag push (`refs/tags/v*`), or
+    - a manual prerelease publish from `main`/`prerelease`
+  - confirm Azure OIDC federation includes your tag and branch subjects/claims
 
 - Updater signature mismatch after signed release:
   - confirm updater `.sig` files were regenerated after Authenticode in Windows workflow

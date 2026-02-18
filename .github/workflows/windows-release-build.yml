@@ -189,14 +189,27 @@ jobs:
         id: authenticode_meta
         shell: pwsh
         run: |
-          $shouldAuthenticode =
-            ("${{ github.event_name }}" -eq "push") -and
-            ("${{ github.ref }}" -like "refs/tags/v*")
+          $eventName = "${{ github.event_name }}"
+          $runRef = "${{ github.ref }}"
+          $publishInput = "${{ github.event.inputs.publish_release }}"
+          $releaseChannel = "${{ github.event.inputs.release_channel }}"
+
+          $isTagPush =
+            ($eventName -eq "push") -and
+            ($runRef -like "refs/tags/v*")
+
+          $isManualPrerelease =
+            ($eventName -eq "workflow_dispatch") -and
+            ($publishInput -eq "true") -and
+            ($releaseChannel -eq "prerelease") -and
+            (($runRef -eq "refs/heads/main") -or ($runRef -eq "refs/heads/prerelease"))
+
+          $shouldAuthenticode = $isTagPush -or $isManualPrerelease
           "should_authenticode=$($shouldAuthenticode.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           if ($shouldAuthenticode) {
             Write-Host "Authenticode signing enabled for this run."
           } else {
-            Write-Host "Authenticode signing disabled for this run."
+            Write-Host "Authenticode signing disabled for this run (event=$eventName ref=$runRef publish_release=$publishInput release_channel=$releaseChannel)."
           }
 
       - name: Azure login (OIDC)
