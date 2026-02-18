@@ -254,12 +254,38 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
 
+          $signToolCommand = Get-Command signtool -ErrorAction SilentlyContinue
+          if ($null -ne $signToolCommand) {
+            $signtoolExe = $signToolCommand.Source
+          } else {
+            $kitsBinRoot = Join-Path ${env:ProgramFiles(x86)} "Windows Kits\10\bin"
+            if (!(Test-Path $kitsBinRoot)) {
+              throw "signtool not found on PATH and Windows Kits bin directory does not exist: $kitsBinRoot"
+            }
+
+            $candidates = Get-ChildItem -Path $kitsBinRoot -Recurse -File -Filter "signtool.exe" |
+              Where-Object { $_.FullName -match "\\x64\\" } |
+              Sort-Object FullName -Descending
+
+            $selected = $candidates | Select-Object -First 1
+            if ($null -eq $selected) {
+              $selected = Get-ChildItem -Path $kitsBinRoot -Recurse -File -Filter "signtool.exe" |
+                Sort-Object FullName -Descending |
+                Select-Object -First 1
+            }
+            if ($null -eq $selected) {
+              throw "signtool.exe could not be resolved from Windows Kits path: $kitsBinRoot"
+            }
+            $signtoolExe = $selected.FullName
+          }
+          Write-Host "[signing] Using signtool: $signtoolExe"
+
           $msiInstallers = Get-ChildItem "src-tauri/target/release/bundle/msi" -File -Filter "*.msi"
           if ($msiInstallers.Count -eq 0) {
             throw "No MSI installers found for signature verification."
           }
           foreach ($installer in $msiInstallers) {
-            & signtool verify /pa /v $installer.FullName
+            & $signtoolExe verify /pa /v $installer.FullName
             if ($LASTEXITCODE -ne 0) {
               throw "signtool verification failed for $($installer.FullName)"
             }
@@ -270,7 +296,7 @@ jobs:
             throw "No NSIS installers found for signature verification."
           }
           foreach ($installer in $nsisInstallers) {
-            & signtool verify /pa /v $installer.FullName
+            & $signtoolExe verify /pa /v $installer.FullName
             if ($LASTEXITCODE -ne 0) {
               throw "signtool verification failed for $($installer.FullName)"
             }
@@ -285,7 +311,7 @@ jobs:
             Write-Host "[signing] No top-level EXE/DLL binaries found for verification."
           } else {
             foreach ($binary in $topLevelBinaries) {
-              & signtool verify /pa /v $binary.FullName
+              & $signtoolExe verify /pa /v $binary.FullName
               if ($LASTEXITCODE -ne 0) {
                 throw "signtool verification failed for $($binary.FullName)"
               }
