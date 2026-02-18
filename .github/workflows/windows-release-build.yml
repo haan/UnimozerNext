@@ -24,6 +24,7 @@ on:
         default: ""
 
 permissions:
+  id-token: write
   contents: write
 
 jobs:
@@ -183,6 +184,130 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --ci --bundles "msi,nsis" --config src-tauri/tauri.windows.conf.json
+
+      - name: Resolve Authenticode metadata
+        id: authenticode_meta
+        shell: pwsh
+        run: |
+          $shouldAuthenticode =
+            ("${{ github.event_name }}" -eq "push") -and
+            ("${{ github.ref }}" -like "refs/tags/v*")
+          "should_authenticode=$($shouldAuthenticode.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          if ($shouldAuthenticode) {
+            Write-Host "Authenticode signing enabled for this run."
+          } else {
+            Write-Host "Authenticode signing disabled for this run."
+          }
+
+      - name: Azure login (OIDC)
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Authenticode sign Windows installers (MSI + NSIS)
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        uses: azure/trusted-signing-action@v0.5.9
+        with:
+          endpoint: https://weu.codesigning.azure.net/
+          trusted-signing-account-name: haala-artifact
+          certificate-profile-name: unimozer-public-signing
+          files-folder: src-tauri/target/release/bundle
+          files-folder-recurse: true
+          files-folder-filter: msi,exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Authenticode sign app binaries (EXE + DLL)
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        uses: azure/trusted-signing-action@v0.5.9
+        with:
+          endpoint: https://weu.codesigning.azure.net/
+          trusted-signing-account-name: haala-artifact
+          certificate-profile-name: unimozer-public-signing
+          files-folder: src-tauri/target/release
+          files-folder-recurse: false
+          files-folder-filter: exe,dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify Authenticode signatures
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $msiInstallers = Get-ChildItem "src-tauri/target/release/bundle/msi" -File -Filter "*.msi"
+          if ($msiInstallers.Count -eq 0) {
+            throw "No MSI installers found for signature verification."
+          }
+          foreach ($installer in $msiInstallers) {
+            & signtool verify /pa /v $installer.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool verification failed for $($installer.FullName)"
+            }
+          }
+
+          $nsisInstallers = Get-ChildItem "src-tauri/target/release/bundle/nsis" -File -Filter "*.exe"
+          if ($nsisInstallers.Count -eq 0) {
+            throw "No NSIS installers found for signature verification."
+          }
+          foreach ($installer in $nsisInstallers) {
+            & signtool verify /pa /v $installer.FullName
+            if ($LASTEXITCODE -ne 0) {
+              throw "signtool verification failed for $($installer.FullName)"
+            }
+          }
+
+          $topLevelBinaries = @()
+          if (Test-Path "src-tauri/target/release") {
+            $topLevelBinaries += Get-ChildItem "src-tauri/target/release" -File -Filter "*.exe"
+            $topLevelBinaries += Get-ChildItem "src-tauri/target/release" -File -Filter "*.dll"
+          }
+          if ($topLevelBinaries.Count -eq 0) {
+            Write-Host "[signing] No top-level EXE/DLL binaries found for verification."
+          } else {
+            foreach ($binary in $topLevelBinaries) {
+              & signtool verify /pa /v $binary.FullName
+              if ($LASTEXITCODE -ne 0) {
+                throw "signtool verification failed for $($binary.FullName)"
+              }
+            }
+          }
+
+      - name: Regenerate updater signatures after Authenticode
+        if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $nsisInstaller = Get-ChildItem "src-tauri/target/release/bundle/nsis" -File -Filter "*.exe" | Select-Object -First 1
+          $msiInstaller = Get-ChildItem "src-tauri/target/release/bundle/msi" -File -Filter "*.msi" | Select-Object -First 1
+          if ($null -eq $nsisInstaller) {
+            throw "Could not locate NSIS installer for updater signature regeneration."
+          }
+          if ($null -eq $msiInstaller) {
+            throw "Could not locate MSI installer for updater signature regeneration."
+          }
+
+          foreach ($file in @($nsisInstaller.FullName, $msiInstaller.FullName)) {
+            $sigPath = "$file.sig"
+            if (Test-Path $sigPath) {
+              Remove-Item -Path $sigPath -Force
+            }
+            npx tauri signer sign "$file" | Out-Null
+            if (!(Test-Path $sigPath)) {
+              throw "Updater signature was not generated for $file"
+            }
+            Write-Host "[signing] Regenerated updater signature: $sigPath"
+          }
 
       - name: Prepare release assets
         shell: pwsh

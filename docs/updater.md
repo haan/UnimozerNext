@@ -180,7 +180,36 @@ Current logic:
 
 If old installs predate marker support and heuristics cannot determine installer type, detection resolves to `unknown` and self-update remains disabled until a known installer marker is present.
 
-## 7) Current endpoints used by app
+## 7) Windows Authenticode signing in CI
+
+Windows CI now supports Authenticode via Azure Trusted Signing.
+
+Current behavior:
+- Authenticode signing runs only on tag push runs (`refs/tags/v*`).
+- `workflow_dispatch` runs from branches build normally but skip Authenticode.
+- Installers are signed first (MSI + NSIS), then top-level app `exe/dll` binaries are signed.
+- After Authenticode, updater `.sig` files are regenerated for installer artifacts so Tauri updater manifests remain valid.
+
+Required workflow permissions:
+- `id-token: write` (for Azure OIDC login)
+- `contents: write` (release upload/publish)
+
+Required GitHub secrets for Azure OIDC login:
+- `AZURE_CLIENT_ID`
+- `AZURE_TENANT_ID`
+- `AZURE_SUBSCRIPTION_ID`
+
+Required GitHub secrets for Tauri updater signatures:
+- `TAURI_SIGNING_PRIVATE_KEY`
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
+
+Azure requirements:
+- Trusted Signing endpoint (West Europe): `https://weu.codesigning.azure.net/`
+- Trusted Signing account: `haala-artifact`
+- Certificate profile: `unimozer-public-signing`
+- The GitHub OIDC service principal must have signer permissions on the certificate profile (Artifact Signing signer role).
+
+## 8) Current endpoints used by app
 
 - Stable:
   - `https://github.com/haan/UnimozerNext/releases/latest/download/latest-{{target}}.json`
@@ -192,7 +221,7 @@ Targets currently resolved by backend:
 - `darwin-x86_64`
 - `darwin-aarch64`
 
-## 8) Quick troubleshooting
+## 9) Quick troubleshooting
 
 - Help never shows `Update is available`:
   - check app is on expected channel (stable/prerelease)
@@ -206,3 +235,10 @@ Targets currently resolved by backend:
 
 - Signature/pk failure:
   - confirm `pubkey` in `src-tauri/tauri.conf.json` matches private key used in CI secrets
+
+- Authenticode step skipped unexpectedly:
+  - confirm run is a tag push (`refs/tags/v*`) and not a manual branch run
+  - confirm Azure OIDC federation includes the tag pattern you are using
+
+- Updater signature mismatch after signed release:
+  - confirm updater `.sig` files were regenerated after Authenticode in Windows workflow
