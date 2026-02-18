@@ -22,6 +22,7 @@ import {
   UML_LINE_HEIGHT,
   EDGE_CORNER_GUTTER,
   EDGE_RADIUS,
+  EDGE_STUB_LENGTH,
   REFLEXIVE_LOOP_INSET,
   EDGE_SNAP_DELTA,
   UML_CORNER_RADIUS,
@@ -42,6 +43,7 @@ import {
   ZOOM_STEP_IN,
   ZOOM_STEP_OUT
 } from "./constants";
+import { formatMethodSignature } from "./methodSignature";
 
 const computeNodeHeight = (
   node: UmlNode,
@@ -190,7 +192,12 @@ const measureFontMetrics = (font: string, fontSize: number): FontMetrics => {
   };
 };
 
-const computeNodeWidth = (node: UmlNode, diagram: DiagramState, fontSize: number) => {
+const computeNodeWidth = (
+  node: UmlNode,
+  diagram: DiagramState,
+  fontSize: number,
+  showParameterNames: boolean
+) => {
   const padding = TEXT_PADDING;
   const nameWidth = measureTextWidth(node.name, `600 ${fontSize}px ${UML_FONT_FAMILY}`);
   const fieldWidth = diagram.showFields
@@ -210,8 +217,9 @@ const computeNodeWidth = (node: UmlNode, diagram: DiagramState, fontSize: number
         0,
         ...node.methods.map((method) => {
           const visibility = method.visibility ? `${method.visibility} ` : "";
+          const signature = formatMethodSignature(method, showParameterNames);
           return measureTextWidth(
-            `${visibility}${method.signature}`,
+            `${visibility}${signature}`,
             `${fontSize}px ${UML_FONT_FAMILY}`
           );
         })
@@ -255,7 +263,12 @@ const getRectEdgeAnchor = (
   }
 
   const maxGutter = getEdgeGutter(rect);
-  const preferHorizontal = Math.abs(dx) >= Math.abs(dy);
+  const halfWidth = rect.width / 2;
+  const halfHeight = rect.height / 2;
+  const normalizedX = Math.abs(dx) / Math.max(1, halfWidth);
+  const normalizedY = Math.abs(dy) / Math.max(1, halfHeight);
+  const preferHorizontal = normalizedX >= normalizedY;
+
   if (preferHorizontal && dx !== 0) {
     const sideX = dx > 0 ? rect.x + rect.width : rect.x;
     const t = (sideX - cx) / dx;
@@ -283,8 +296,30 @@ const buildOrthogonalPath = (
   startNormal: { x: number; y: number },
   endNormal: { x: number; y: number }
 ) => {
-  const s1 = { x: start.x + startNormal.x, y: start.y + startNormal.y };
-  const s2 = { x: end.x + endNormal.x, y: end.y + endNormal.y };
+  const centerDistance = Math.hypot(end.x - start.x, end.y - start.y);
+  const oppositeHorizontal =
+    startNormal.x !== 0 && endNormal.x !== 0 && startNormal.x === -endNormal.x;
+  const oppositeVertical =
+    startNormal.y !== 0 && endNormal.y !== 0 && startNormal.y === -endNormal.y;
+
+  let stubLength = Math.min(EDGE_STUB_LENGTH, Math.max(0, (centerDistance - 2) / 2));
+  if (oppositeHorizontal) {
+    const horizontalGap = Math.abs(end.x - start.x);
+    stubLength = Math.min(stubLength, Math.max(0, (horizontalGap - 2) / 2));
+  }
+  if (oppositeVertical) {
+    const verticalGap = Math.abs(end.y - start.y);
+    stubLength = Math.min(stubLength, Math.max(0, (verticalGap - 2) / 2));
+  }
+
+  const s1 = {
+    x: start.x + startNormal.x * stubLength,
+    y: start.y + startNormal.y * stubLength
+  };
+  const s2 = {
+    x: end.x + endNormal.x * stubLength,
+    y: end.y + endNormal.y * stubLength
+  };
   const dx = s2.x - s1.x;
   const dy = s2.y - s1.y;
 
@@ -319,6 +354,7 @@ export type UmlDiagramProps = {
   diagram: DiagramState;
   compiled?: boolean;
   showPackages?: boolean;
+  showParameterNames?: boolean;
   fontSize?: number;
   exportDefaultPath?: string | null;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
@@ -385,6 +421,7 @@ export const UmlDiagram = ({
   diagram,
   compiled,
   showPackages,
+  showParameterNames = true,
   fontSize,
   exportDefaultPath,
   onNodePositionChange,
@@ -614,26 +651,34 @@ export const UmlDiagram = ({
       }
     };
 
-    const handleUp = () => {
+    const handleUp = (event: PointerEvent) => {
       if (dragging) {
-        const { id, moved } = dragging;
+        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, viewRef.current);
+        const x = point.x - dragging.offsetX;
+        const y = point.y - dragging.offsetY;
+        const moved =
+          dragging.moved ||
+          Math.abs(point.x - dragging.startX) > DRAG_MOVE_THRESHOLD_PX ||
+          Math.abs(point.y - dragging.startY) > DRAG_MOVE_THRESHOLD_PX;
+        const { id } = dragging;
         setDragging(null);
-        const position = diagram.nodes[id];
-        if (position) {
-          onNodePositionChange(id, position.x, position.y, moved);
-        }
+        onNodePositionChange(id, x, y, moved);
         if (!moved && onNodeSelect) {
           onNodeSelect(id);
         }
       }
       if (draggingPackage) {
-        const { nodes, moved } = draggingPackage;
+        const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, viewRef.current);
+        const dx = point.x - draggingPackage.startX;
+        const dy = point.y - draggingPackage.startY;
+        const moved =
+          draggingPackage.moved ||
+          Math.abs(point.x - draggingPackage.startX) > DRAG_MOVE_THRESHOLD_PX ||
+          Math.abs(point.y - draggingPackage.startY) > DRAG_MOVE_THRESHOLD_PX;
+        const { nodes } = draggingPackage;
         setDraggingPackage(null);
         nodes.forEach((node) => {
-          const position = diagram.nodes[node.id];
-          if (position) {
-            onNodePositionChange(node.id, position.x, position.y, moved);
-          }
+          onNodePositionChange(node.id, node.x + dx, node.y + dy, moved);
         });
       }
       if (panning) {
@@ -653,7 +698,6 @@ export const UmlDiagram = ({
     dragging,
     draggingPackage,
     panning,
-    diagram.nodes,
     commitViewport,
     onNodePositionChange,
     onNodeSelect
@@ -673,11 +717,13 @@ export const UmlDiagram = ({
           ...node,
           x: position.x,
           y: position.y,
-          width: fontReady ? computeNodeWidth(node, diagram, umlFontSize) : NODE_WIDTH,
+          width: fontReady
+            ? computeNodeWidth(node, diagram, umlFontSize, showParameterNames)
+            : NODE_WIDTH,
           height: computeNodeHeight(node, diagram, headerHeight, rowHeight)
         };
       }),
-    [diagram, graph.nodes, fontReady, headerHeight, rowHeight, umlFontSize]
+    [diagram, graph.nodes, fontReady, headerHeight, rowHeight, showParameterNames, umlFontSize]
   );
 
   const nodeMap = useMemo(() => {
@@ -685,6 +731,75 @@ export const UmlDiagram = ({
     nodesWithLayout.forEach((node) => map.set(node.id, node));
     return map;
   }, [nodesWithLayout]);
+
+  const routedEdges = useMemo(() => {
+    return graph.edges
+      .filter((edge) => edge.kind !== "reflexive-association")
+      .flatMap((edge) => {
+        const from = nodeMap.get(edge.from);
+        const to = nodeMap.get(edge.to);
+        if (!from || !to) {
+          return [];
+        }
+
+        const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+        const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+        const dx = toCenter.x - fromCenter.x;
+        const dy = toCenter.y - fromCenter.y;
+        const absDx = Math.abs(dx);
+        const absDy = Math.abs(dy);
+        const snapHorizontal = absDy <= EDGE_SNAP_DELTA && absDy <= absDx;
+        const snapVertical = !snapHorizontal && absDx <= EDGE_SNAP_DELTA;
+        let start = getRectEdgeAnchor(from, toCenter);
+        let end = getRectEdgeAnchor(to, fromCenter);
+
+        if (snapHorizontal) {
+          const fromGutter = getEdgeGutter(from);
+          const toGutter = getEdgeGutter(to);
+          const yMin = Math.max(from.y + fromGutter, to.y + toGutter);
+          const yMax = Math.min(
+            from.y + from.height - fromGutter,
+            to.y + to.height - toGutter
+          );
+          if (yMin <= yMax) {
+            const y = clamp((fromCenter.y + toCenter.y) / 2, yMin, yMax);
+            const startX = dx >= 0 ? from.x + from.width : from.x;
+            const endX = dx >= 0 ? to.x : to.x + to.width;
+            start = { x: startX, y, normal: { x: dx >= 0 ? 1 : -1, y: 0 } };
+            end = { x: endX, y, normal: { x: dx >= 0 ? -1 : 1, y: 0 } };
+          }
+        } else if (snapVertical) {
+          const fromGutter = getEdgeGutter(from);
+          const toGutter = getEdgeGutter(to);
+          const xMin = Math.max(from.x + fromGutter, to.x + toGutter);
+          const xMax = Math.min(
+            from.x + from.width - fromGutter,
+            to.x + to.width - toGutter
+          );
+          if (xMin <= xMax) {
+            const x = clamp((fromCenter.x + toCenter.x) / 2, xMin, xMax);
+            const startY = dy >= 0 ? from.y + from.height : from.y;
+            const endY = dy >= 0 ? to.y : to.y + to.height;
+            start = { x, y: startY, normal: { x: 0, y: dy >= 0 ? 1 : -1 } };
+            end = { x, y: endY, normal: { x: 0, y: dy >= 0 ? -1 : 1 } };
+          }
+        }
+
+        const typedStart = start as { x: number; y: number; normal: { x: number; y: number } };
+        const typedEnd = end as { x: number; y: number; normal: { x: number; y: number } };
+
+        const path =
+          edge.kind === "extends"
+            ? `M ${typedStart.x} ${typedStart.y} L ${typedEnd.x} ${typedEnd.y}`
+            : buildOrthogonalPath(
+                typedStart,
+                typedEnd,
+                typedStart.normal,
+                typedEnd.normal
+              );
+        return [{ edge, path }];
+      });
+  }, [graph.edges, nodeMap]);
 
   const packages = useMemo(() => {
     if (!showPackages) return [];
@@ -1294,58 +1409,7 @@ export const UmlDiagram = ({
         transform={layerTransform}
         pointerEvents="none"
       >
-        {graph.edges
-          .filter((edge) => edge.kind !== "reflexive-association")
-          .map((edge) => {
-          const from = nodeMap.get(edge.from);
-          const to = nodeMap.get(edge.to);
-          if (!from || !to) return null;
-          const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
-          const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
-          const dx = toCenter.x - fromCenter.x;
-          const dy = toCenter.y - fromCenter.y;
-          const absDx = Math.abs(dx);
-          const absDy = Math.abs(dy);
-          const snapHorizontal = absDy <= EDGE_SNAP_DELTA && absDy <= absDx;
-          const snapVertical = !snapHorizontal && absDx <= EDGE_SNAP_DELTA;
-          let start = getRectEdgeAnchor(from, toCenter);
-          let end = getRectEdgeAnchor(to, fromCenter);
-
-          if (snapHorizontal) {
-            const fromGutter = getEdgeGutter(from);
-            const toGutter = getEdgeGutter(to);
-            const yMin = Math.max(from.y + fromGutter, to.y + toGutter);
-            const yMax = Math.min(
-              from.y + from.height - fromGutter,
-              to.y + to.height - toGutter
-            );
-            if (yMin <= yMax) {
-              const y = clamp((fromCenter.y + toCenter.y) / 2, yMin, yMax);
-              const startX = dx >= 0 ? from.x + from.width : from.x;
-              const endX = dx >= 0 ? to.x : to.x + to.width;
-              start = { x: startX, y, normal: { x: dx >= 0 ? 1 : -1, y: 0 } };
-              end = { x: endX, y, normal: { x: dx >= 0 ? -1 : 1, y: 0 } };
-            }
-          } else if (snapVertical) {
-            const fromGutter = getEdgeGutter(from);
-            const toGutter = getEdgeGutter(to);
-            const xMin = Math.max(from.x + fromGutter, to.x + toGutter);
-            const xMax = Math.min(
-              from.x + from.width - fromGutter,
-              to.x + to.width - toGutter
-            );
-            if (xMin <= xMax) {
-              const x = clamp((fromCenter.x + toCenter.x) / 2, xMin, xMax);
-              const startY = dy >= 0 ? from.y + from.height : from.y;
-              const endY = dy >= 0 ? to.y : to.y + to.height;
-              start = { x, y: startY, normal: { x: 0, y: dy >= 0 ? 1 : -1 } };
-              end = { x, y: endY, normal: { x: 0, y: dy >= 0 ? -1 : 1 } };
-            }
-          }
-          const path =
-            edge.kind === "extends"
-              ? `M ${start.x} ${start.y} L ${end.x} ${end.y}`
-              : buildOrthogonalPath(start, end, start.normal, end.normal);
+        {routedEdges.map(({ edge, path }) => {
           if (edge.kind === "association") {
             return <Association key={edge.id} d={path} />;
           }
@@ -1387,6 +1451,7 @@ export const UmlDiagram = ({
             rowHeight={rowHeight}
             rowTextBaselineOffset={rowTextBaselineOffset}
             headerTextBaselineY={headerTextBaselineY}
+            showParameterNames={showParameterNames}
             onHeaderPointerDown={(event) => {
               if (event.button !== 0) return;
               event.preventDefault();

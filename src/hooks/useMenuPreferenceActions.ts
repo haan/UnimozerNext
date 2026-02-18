@@ -17,6 +17,7 @@ type UseMenuPreferenceActionsResult = {
   handleToggleShowDependencies: (value: boolean) => void;
   handleToggleShowPackages: (value: boolean) => void;
   handleToggleShowSwingAttributes: (value: boolean) => void;
+  handleToggleShowParameterNames: (value: boolean) => void;
   handleToggleStructogramMode: (value: boolean) => void;
   handleToggleStructogramColors: (value: boolean) => void;
   handleToggleWordWrap: (value: boolean) => void;
@@ -96,6 +97,13 @@ export const useMenuPreferenceActions = ({
     [updateUmlSettings]
   );
 
+  const handleToggleShowParameterNames = useCallback(
+    (value: boolean) => {
+      updateUmlSettings({ showParameterNames: value });
+    },
+    [updateUmlSettings]
+  );
+
   const handleToggleStructogramMode = useCallback(
     (value: boolean) => {
       setLeftPanelViewMode(value ? "structogram" : "uml");
@@ -149,6 +157,7 @@ export const useMenuPreferenceActions = ({
     handleToggleShowDependencies,
     handleToggleShowPackages,
     handleToggleShowSwingAttributes,
+    handleToggleShowParameterNames,
     handleToggleStructogramMode,
     handleToggleStructogramColors,
     handleToggleWordWrap,

@@ -16,6 +16,7 @@ type ObjectBenchSectionProps = {
   diagram: DiagramState | null;
   compiled: boolean;
   showPackages?: boolean;
+  showParameterNames?: boolean;
   fontSize: number;
   structogramColorsEnabled?: boolean;
   exportDefaultPath?: string | null;
@@ -58,6 +59,7 @@ export const ObjectBenchSection = ({
   diagram,
   compiled,
   showPackages,
+  showParameterNames,
   fontSize,
   structogramColorsEnabled,
   exportDefaultPath,
@@ -102,6 +104,7 @@ export const ObjectBenchSection = ({
           diagram={diagram}
           compiled={compiled}
           showPackages={showPackages}
+          showParameterNames={showParameterNames}
           fontSize={fontSize}
           structogramColorsEnabled={structogramColorsEnabled}
           exportDefaultPath={exportDefaultPath}

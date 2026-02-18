@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import { UML_REVEAL_REQUEST_TTL_SECONDS } from "../constants/app";
@@ -17,6 +17,7 @@ export type PendingRevealRequest = {
 
 type UseDiagramInteractionsArgs = {
   umlGraph: UmlGraph | null;
+  diagramState: DiagramState | null;
   diagramPath: string | null;
   setDiagramState: Dispatch<SetStateAction<DiagramState | null>>;
   requestPackedArchiveSync: () => void;
@@ -39,6 +40,7 @@ type UseDiagramInteractionsResult = {
 
 export const useDiagramInteractions = ({
   umlGraph,
+  diagramState,
   diagramPath,
   setDiagramState,
   requestPackedArchiveSync,
@@ -50,34 +52,40 @@ export const useDiagramInteractions = ({
   clearPendingReveal,
   setSelectedClassId
 }: UseDiagramInteractionsArgs): UseDiagramInteractionsResult => {
+  const diagramStateRef = useRef<DiagramState | null>(diagramState);
+
+  useEffect(() => {
+    diagramStateRef.current = diagramState;
+  }, [diagramState]);
+
   const handleNodePositionChange = useCallback(
     (id: string, x: number, y: number, commit: boolean) => {
-      let nextToPersist: DiagramState | null = null;
-      setDiagramState((prev) => {
-        if (!prev) return prev;
-        const current = prev.nodes[id];
-        const isSamePosition = Boolean(current && current.x === x && current.y === y);
-        if (isSamePosition) {
-          return prev;
+      const previous = diagramStateRef.current;
+      if (!previous) {
+        return;
+      }
+      const current = previous.nodes[id];
+      const isSamePosition = Boolean(current && current.x === x && current.y === y);
+      if (isSamePosition) {
+        return;
+      }
+
+      const next: DiagramState = {
+        ...previous,
+        nodes: {
+          ...previous.nodes,
+          [id]: { x, y }
         }
-        const next = {
-          ...prev,
-          nodes: {
-            ...prev.nodes,
-            [id]: { x, y }
-          }
-        };
-        if (commit) {
-          nextToPersist = next;
-        }
-        return next;
-      });
-      if (!commit || !diagramPath || !nextToPersist) {
+      };
+      diagramStateRef.current = next;
+      setDiagramState(next);
+
+      if (!commit || !diagramPath) {
         return;
       }
       void invoke("write_text_file", {
         path: diagramPath,
-        contents: JSON.stringify(nextToPersist, null, 2)
+        contents: JSON.stringify(next, null, 2)
       })
         .then(() => {
           requestPackedArchiveSync();
@@ -89,34 +97,33 @@ export const useDiagramInteractions = ({
 
   const handleViewportChange = useCallback(
     (viewport: DiagramViewport, commit: boolean) => {
-      let nextToPersist: DiagramState | null = null;
-      setDiagramState((prev) => {
-        if (!prev) return prev;
-        const current = prev.viewport;
-        const unchanged =
-          current.panX === viewport.panX &&
-          current.panY === viewport.panY &&
-          current.zoom === viewport.zoom;
-        if (unchanged) {
-          return prev;
-        }
-        const next = {
-          ...prev,
-          viewport
-        };
-        if (commit) {
-          nextToPersist = next;
-        }
-        return next;
-      });
+      const previous = diagramStateRef.current;
+      if (!previous) {
+        return;
+      }
+      const current = previous.viewport;
+      const unchanged =
+        current.panX === viewport.panX &&
+        current.panY === viewport.panY &&
+        current.zoom === viewport.zoom;
+      if (unchanged) {
+        return;
+      }
 
-      if (!commit || !diagramPath || !nextToPersist) {
+      const next: DiagramState = {
+        ...previous,
+        viewport
+      };
+      diagramStateRef.current = next;
+      setDiagramState(next);
+
+      if (!commit || !diagramPath) {
         return;
       }
 
       void invoke("write_text_file", {
         path: diagramPath,
-        contents: JSON.stringify(nextToPersist, null, 2)
+        contents: JSON.stringify(next, null, 2)
       })
         .then(() => {
           requestPackedArchiveSync();

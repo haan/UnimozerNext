@@ -8,6 +8,7 @@ export const SECTION_PADDING = 8; // Vertical padding above/below attribute and 
 export const TEXT_PADDING = 12; // Horizontal padding for text inside class boxes.
 export const EDGE_CORNER_GUTTER = 40; // No-attach zone near class box corners for edge anchors.
 export const EDGE_RADIUS = 2; // Corner radius for orthogonal edge bends.
+export const EDGE_STUB_LENGTH = 12; // Minimum perpendicular distance from node edge before first bend.
 export const REFLEXIVE_LOOP_INSET = 15; // How far reflexive loops extend outside the class box.
 export const EDGE_SNAP_DELTA = 60; // Snap threshold for near-horizontal/vertical edges.
 export const UML_CORNER_RADIUS = 2; // Corner radius for UML class and package boxes.

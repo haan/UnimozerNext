@@ -3,6 +3,7 @@ export type UmlSettings = {
   codeHighlight: boolean;
   showPackages: boolean;
   showSwingAttributes: boolean;
+  showParameterNames: boolean;
 };
 
 export type EditorSettings = {

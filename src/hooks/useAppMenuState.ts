@@ -22,6 +22,7 @@ type UseAppMenuStateArgs = {
   showDependencies: boolean;
   showPackages: boolean;
   showSwingAttributes: boolean;
+  showParameterNames: boolean;
   canUseStructogramMode: boolean;
   leftPanelViewMode: DiagramViewMode;
   structogramColorsEnabled: boolean;
@@ -49,6 +50,7 @@ export type AppMenuState = {
   showDependencies: boolean;
   showPackages: boolean;
   showSwingAttributes: boolean;
+  showParameterNames: boolean;
   canUseStructogramMode: boolean;
   structogramMode: boolean;
   structogramColorsEnabled: boolean;
@@ -76,6 +78,7 @@ export const useAppMenuState = ({
   showDependencies,
   showPackages,
   showSwingAttributes,
+  showParameterNames,
   canUseStructogramMode,
   leftPanelViewMode,
   structogramColorsEnabled,
@@ -103,6 +106,7 @@ export const useAppMenuState = ({
       showDependencies,
       showPackages,
       showSwingAttributes,
+      showParameterNames,
       canUseStructogramMode,
       structogramMode: leftPanelViewMode === "structogram",
       structogramColorsEnabled,
@@ -126,6 +130,7 @@ export const useAppMenuState = ({
       projectName,
       showDependencies,
       showInheritedObjectFields,
+      showParameterNames,
       showPackages,
       showPrivateObjectFields,
       showStaticObjectFields,

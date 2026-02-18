@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { editor as MonacoEditorType } from "monaco-editor";
 
@@ -167,6 +167,7 @@ export default function AppContainer({
   const codeHighlightEnabled = settings.uml.codeHighlight;
   const showDependencies = settings.uml.showDependencies;
   const showPackages = settings.uml.showPackages;
+  const showParameterNames = settings.uml.showParameterNames;
   const fontSize = settings.general.fontSize;
   const darkMode = settings.general.darkMode;
   const showPrivateObjectFields =
@@ -203,6 +204,13 @@ export default function AppContainer({
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
+  const umlNodeLayoutSignature = useMemo(() => {
+    if (!umlGraph) {
+      return "";
+    }
+    return [...umlGraph.nodes.map((node) => node.id)].sort().join("|");
+  }, [umlGraph]);
+  const lastDiagramLoadKeyRef = useRef<string | null>(null);
   const {
     monacoRef,
     lsReadyRef,
@@ -591,6 +599,7 @@ export default function AppContainer({
     showDependencies,
     showPackages,
     showSwingAttributes,
+    showParameterNames,
     canUseStructogramMode,
     leftPanelViewMode,
     structogramColorsEnabled,
@@ -616,9 +625,17 @@ export default function AppContainer({
   }, [openFilePath]);
 
   useEffect(() => {
-    if (!projectPath || !umlGraph) return;
+    if (!projectPath || !umlGraph) {
+      lastDiagramLoadKeyRef.current = null;
+      return;
+    }
+    const loadKey = `${projectPath}|${umlNodeLayoutSignature}`;
+    if (lastDiagramLoadKeyRef.current === loadKey) {
+      return;
+    }
+    lastDiagramLoadKeyRef.current = loadKey;
     void loadDiagramState(projectPath, umlGraph);
-  }, [projectPath, umlGraph, loadDiagramState]);
+  }, [projectPath, umlGraph, umlNodeLayoutSignature, loadDiagramState]);
 
 
   const {
@@ -629,6 +646,7 @@ export default function AppContainer({
     handleMethodSelect
   } = useDiagramInteractions({
     umlGraph,
+    diagramState,
     diagramPath,
     setDiagramState,
     requestPackedArchiveSync,
@@ -694,6 +712,7 @@ export default function AppContainer({
     handleToggleShowDependencies,
     handleToggleShowPackages,
     handleToggleShowSwingAttributes,
+    handleToggleShowParameterNames,
     handleToggleStructogramMode,
     handleToggleStructogramColors,
     handleToggleWordWrap,
@@ -915,6 +934,7 @@ export default function AppContainer({
         onToggleShowDependencies={handleToggleShowDependencies}
         onToggleShowPackages={handleToggleShowPackages}
         onToggleShowSwingAttributes={handleToggleShowSwingAttributes}
+        onToggleShowParameterNames={handleToggleShowParameterNames}
         onToggleStructogramMode={handleToggleStructogramMode}
         onToggleStructogramColors={handleToggleStructogramColors}
         onToggleWordWrap={handleToggleWordWrap}
@@ -948,6 +968,7 @@ export default function AppContainer({
           diagram: diagramState,
           compiled: compileStatus === "success",
           showPackages,
+          showParameterNames,
           fontSize,
           structogramColorsEnabled,
           exportDefaultPath,

@@ -10,6 +10,8 @@ struct UmlSettings {
     show_swing_attributes: bool,
     #[serde(default = "default_true")]
     code_highlight: bool,
+    #[serde(default = "default_true")]
+    show_parameter_names: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -212,6 +214,7 @@ impl Default for AppSettings {
                 show_packages: default_true(),
                 show_swing_attributes: default_true(),
                 code_highlight: default_true(),
+                show_parameter_names: default_true(),
             },
             object_bench: ObjectBenchSettings {
                 show_private_object_fields: default_true(),

@@ -288,6 +288,26 @@ export const SettingsDialog = ({
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
+                    <p className="text-sm font-medium">Show parameter names</p>
+                    <p className="text-xs text-muted-foreground">
+                      Display method parameters as name : type in UML method signatures.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.uml.showParameterNames}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        uml: {
+                          ...settings.uml,
+                          showParameterNames: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
                     <p className="text-sm font-medium">Jump to code</p>
                     <p className="text-xs text-muted-foreground">
                       Move the editor cursor when selecting UML members.

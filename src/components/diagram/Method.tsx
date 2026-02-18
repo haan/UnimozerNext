@@ -1,16 +1,24 @@
 import type { UmlMethod as UmlMethodModel } from "../../models/uml";
 import { TEXT_PADDING } from "./constants";
+import { formatMethodSignature } from "./methodSignature";
 
 export type UmlMethodProps = {
   method: UmlMethodModel;
   baselineY: number;
   fontSize: number;
+  showParameterNames?: boolean;
   onSelect?: () => void;
 };
 
-export const UmlMethod = ({ method, baselineY, fontSize, onSelect }: UmlMethodProps) => {
+export const UmlMethod = ({
+  method,
+  baselineY,
+  fontSize,
+  showParameterNames = true,
+  onSelect
+}: UmlMethodProps) => {
   const visibility = method.visibility ?? "";
-  const signature = method.signature ?? "";
+  const signature = formatMethodSignature(method, showParameterNames);
   return (
     <text
       x={TEXT_PADDING}

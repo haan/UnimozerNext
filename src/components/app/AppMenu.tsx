@@ -36,6 +36,7 @@ type AppMenuProps = {
   showDependencies: boolean;
   showPackages: boolean;
   showSwingAttributes: boolean;
+  showParameterNames: boolean;
   canUseStructogramMode: boolean;
   structogramMode: boolean;
   structogramColorsEnabled: boolean;
@@ -66,6 +67,7 @@ type AppMenuProps = {
   onToggleShowDependencies: (value: boolean) => void;
   onToggleShowPackages: (value: boolean) => void;
   onToggleShowSwingAttributes: (value: boolean) => void;
+  onToggleShowParameterNames: (value: boolean) => void;
   onToggleStructogramMode: (value: boolean) => void;
   onToggleStructogramColors: (value: boolean) => void;
   onToggleWordWrap: (value: boolean) => void;
@@ -105,6 +107,7 @@ export const AppMenu = ({
   showDependencies,
   showPackages,
   showSwingAttributes,
+  showParameterNames,
   canUseStructogramMode,
   structogramMode,
   structogramColorsEnabled,
@@ -135,6 +138,7 @@ export const AppMenu = ({
   onToggleShowDependencies,
   onToggleShowPackages,
   onToggleShowSwingAttributes,
+  onToggleShowParameterNames,
   onToggleStructogramMode,
   onToggleStructogramColors,
   onToggleWordWrap,
@@ -291,6 +295,14 @@ export const AppMenu = ({
                   }
                 >
                   Show javax.swing fields
+                </MenubarCheckboxItem>
+                <MenubarCheckboxItem
+                  checked={showParameterNames}
+                  onCheckedChange={(checked) =>
+                    onToggleShowParameterNames(Boolean(checked))
+                  }
+                >
+                  Show parameter names
                 </MenubarCheckboxItem>
               </MenubarSubContent>
             </MenubarSub>

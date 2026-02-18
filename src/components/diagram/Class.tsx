@@ -31,6 +31,7 @@ export type ClassProps = {
   rowHeight: number;
   rowTextBaselineOffset: number;
   headerTextBaselineY: number;
+  showParameterNames?: boolean;
   onHeaderPointerDown: (event: React.PointerEvent<SVGRectElement>) => void;
   onCompile?: () => void;
   onRunMain?: () => void;
@@ -54,6 +55,7 @@ export const Class = ({
   rowHeight,
   rowTextBaselineOffset,
   headerTextBaselineY,
+  showParameterNames = true,
   onHeaderPointerDown,
   onCompile,
   onRunMain,
@@ -157,6 +159,7 @@ export const Class = ({
           method={method}
           baselineY={baselineY}
           fontSize={fontSize}
+          showParameterNames={showParameterNames}
           onSelect={onMethodSelect ? () => onMethodSelect(method, node) : undefined}
         />
       );
