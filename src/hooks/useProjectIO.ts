@@ -86,7 +86,7 @@ type UseProjectIOResult = {
   handleNewProject: (options?: { clearConsole?: boolean }) => Promise<void>;
   openFileByPath: (
     path: string,
-    options?: { clearConsole?: boolean; preferDisk?: boolean }
+    options?: { clearConsole?: boolean; preferDisk?: boolean; suppressStatus?: boolean }
   ) => Promise<void>;
   handleSave: () => Promise<boolean>;
   handleSaveAs: () => Promise<boolean>;
@@ -245,9 +245,13 @@ export const useProjectIO = ({
   );
 
   const openFileByPath = useCallback(
-    async (path: string, options?: { clearConsole?: boolean; preferDisk?: boolean }) => {
+    async (
+      path: string,
+      options?: { clearConsole?: boolean; preferDisk?: boolean; suppressStatus?: boolean }
+    ) => {
       const shouldClearConsole = options?.clearConsole ?? true;
       const preferDisk = options?.preferDisk ?? false;
+      const suppressStatus = options?.suppressStatus ?? false;
       if (shouldClearConsole) {
         clearConsole();
       }
@@ -260,7 +264,9 @@ export const useProjectIO = ({
           setContent(existingDraft.content);
           setLastSavedContent(existingDraft.lastSavedContent);
           notifyLsOpen(path, existingDraft.content);
-          setStatus(`Opened ${name}`);
+          if (!suppressStatus) {
+            setStatus(`Opened ${name}`);
+          }
         } else {
           const text = await invoke<string>("read_text_file", { path });
           setOpenFile({ name, path });
@@ -268,7 +274,9 @@ export const useProjectIO = ({
           setLastSavedContent(text);
           updateDraftForPath(path, text, text);
           notifyLsOpen(path, text);
-          setStatus(`Opened ${name}`);
+          if (!suppressStatus) {
+            setStatus(`Opened ${name}`);
+          }
         }
       } catch (error) {
         setStatus(`Failed to open file: ${formatStatus(error)}`);
@@ -555,7 +563,7 @@ export const useProjectIO = ({
     }
     setBusy(true);
     try {
-      await formatAndSaveUmlFiles(true);
+      await formatAndSaveUmlFiles(false);
       if (projectStorageMode === "packed") {
         if (!packedArchivePath) {
           throw new Error("Packed project archive path is missing.");
@@ -617,7 +625,7 @@ export const useProjectIO = ({
     const archivePath = ensureUmzPath(selection);
     setBusy(true);
     try {
-      await formatAndSaveUmlFiles(true);
+      await formatAndSaveUmlFiles(projectStorageMode !== "packed");
       await invoke("save_packed_project", {
         projectRoot: projectPath,
         archivePath
@@ -661,7 +669,11 @@ export const useProjectIO = ({
         relativeFilePath === previousOpenFilePath
           ? previousOpenFilePath
           : joinPath(nextProjectRoot, relativeFilePath);
-      await openFileByPath(candidatePath, { clearConsole: false, preferDisk: true });
+      await openFileByPath(candidatePath, {
+        clearConsole: false,
+        preferDisk: true,
+        suppressStatus: true
+      });
     };
 
     if (projectStorageMode === "folder" || projectStorageMode === "scratch") {
@@ -671,7 +683,6 @@ export const useProjectIO = ({
         setFileDrafts({});
         await restoreOpenFile(projectPath);
         setCompileStatus(null);
-        setStatus("Project reloaded from disk.");
         return true;
       } catch (error) {
         setStatus(`Failed to reload project: ${formatStatus(error)}`);
@@ -707,7 +718,6 @@ export const useProjectIO = ({
         setFileDrafts({});
         await restoreOpenFile(nextProjectRoot);
         setCompileStatus(null);
-        setStatus(`Project reloaded from ${toDisplayPath(response.archivePath)}.`);
         return true;
       } catch (error) {
         setStatus(`Failed to reload project: ${formatStatus(error)}`);

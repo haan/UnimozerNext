@@ -76,16 +76,23 @@ Result:
 In app:
 - `Settings -> Advanced -> Update channel -> Prerelease`
 
+Note:
+- On prerelease channel, the app checks both `updater-prerelease` and stable (`latest`) and uses whichever version is ahead.
+
 ### 3.3 Validate behavior
 On a machine with an older installed build:
 - launch app (silent check runs)
 - if user can update, Help menu should show `Update is available`
 - click `Help -> Update is available` and install
 
-If install path is not writable (school-managed user):
+If install path is not writable (school-managed user, NSIS install):
 - startup shows no popup
 - Help stays `Check for updates...`
 - manual check shows blocked message
+
+For MSI or unknown installer detection on Windows:
+- updater menu is hidden
+- in-app self-update is disabled by design
 
 ## 4) Stable release flow
 
@@ -169,9 +176,9 @@ Notes:
 Current logic:
 1. registry marker (`Software\com.unimozer.next\Installer`) written by MSI/NSIS installers
 2. uninstall registry heuristic fallback
-3. final fallback = `nsis`
+3. final fallback = `unknown` (self-update disabled)
 
-So if old installs predate marker support, fallback behavior still works.
+If old installs predate marker support and heuristics cannot determine installer type, detection resolves to `unknown` and self-update remains disabled until a known installer marker is present.
 
 ## 7) Current endpoints used by app
 
@@ -181,7 +188,7 @@ So if old installs predate marker support, fallback behavior still works.
   - `https://github.com/haan/UnimozerNext/releases/download/updater-prerelease/latest-{{target}}.json`
 
 Targets currently resolved by backend:
-- `windows-x86_64-nsis` or `windows-x86_64-msi`
+- `windows-x86_64-nsis`, `windows-x86_64-msi`, or `windows-x86_64-unknown`
 - `darwin-x86_64`
 - `darwin-aarch64`
 
@@ -191,6 +198,7 @@ Targets currently resolved by backend:
   - check app is on expected channel (stable/prerelease)
   - check remote version is higher than installed
   - check installability (managed machine may block self-update)
+  - on Windows MSI/unknown installs, updater menu is intentionally hidden
 
 - Update check finds nothing:
   - verify release has correct `latest-<target>.json` files

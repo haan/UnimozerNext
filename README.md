@@ -62,7 +62,7 @@ unimozer-next/
 
 ## External Resources (Required Runtime Payloads)
 
-This repository tracks only folder skeletons for some runtime resource paths (`.gitkeep`), but does **not** commit large runtime payloads.
+This repository tracks only some resource folder skeletons (mainly JDK/JDTLS), but does **not** commit large runtime payloads.
 The following payloads are intentionally excluded in `.gitignore`:
 
 - `/resources/jdk/**` (except tracked skeleton folders/files)
@@ -74,13 +74,20 @@ You must populate these before running `npm run tauri dev` or local `npm run tau
 
 ### 1) Verify tracked directory skeletons
 
-These folders are already tracked in git (`.gitkeep`). Verify they exist:
+JDK/JDTLS skeleton folders are tracked in git (`.gitkeep`). Verify they exist:
 
 ```powershell
 Test-Path resources\jdk\win-x64
 Test-Path resources\jdk\mac-x64
 Test-Path resources\jdk\mac-arm64
 Test-Path resources\jdtls
+```
+
+Create local bridge output folders if missing:
+
+```powershell
+New-Item -ItemType Directory -Force -Path resources\java-parser | Out-Null
+New-Item -ItemType Directory -Force -Path resources\jshell-bridge | Out-Null
 Test-Path resources\java-parser
 Test-Path resources\jshell-bridge
 ```

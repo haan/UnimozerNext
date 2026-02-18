@@ -58,9 +58,6 @@ export const useDiagramInteractions = ({
         const current = prev.nodes[id];
         const isSamePosition = Boolean(current && current.x === x && current.y === y);
         if (isSamePosition) {
-          if (commit) {
-            nextToPersist = prev;
-          }
           return prev;
         }
         const next = {
@@ -101,9 +98,6 @@ export const useDiagramInteractions = ({
           current.panY === viewport.panY &&
           current.zoom === viewport.zoom;
         if (unchanged) {
-          if (commit) {
-            nextToPersist = prev;
-          }
           return prev;
         }
         const next = {

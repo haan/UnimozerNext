@@ -620,6 +620,97 @@ export const CodePanel = memo(
           });
         };
 
+        const tryAutoCloseBlockComments = () => {
+          if (!autoCloseComments) {
+            return;
+          }
+          const monaco = monacoRef.current;
+          if (!monaco) {
+            return;
+          }
+          const model = editor.getModel();
+          if (!model) {
+            return;
+          }
+          const selections = editor.getSelections() ?? [];
+          if (selections.length === 0) {
+            return;
+          }
+
+          const edits: MonacoEditorType.IIdentifiedSingleEditOperation[] = [];
+          const nextSelections = selections.map(
+            (selection) =>
+              new monaco.Selection(
+                selection.selectionStartLineNumber,
+                selection.selectionStartColumn,
+                selection.positionLineNumber,
+                selection.positionColumn
+              )
+          );
+
+          for (let index = 0; index < selections.length; index += 1) {
+            const selection = selections[index]!;
+            if (!selection.isEmpty()) {
+              continue;
+            }
+            const { lineNumber, column } = selection.getPosition();
+            if (column < 3) {
+              continue;
+            }
+            const blockOpenToken = model.getValueInRange({
+              startLineNumber: lineNumber,
+              startColumn: column - 2,
+              endLineNumber: lineNumber,
+              endColumn: column
+            });
+            const javadocOpenToken =
+              column >= 4
+                ? model.getValueInRange({
+                    startLineNumber: lineNumber,
+                    startColumn: column - 3,
+                    endLineNumber: lineNumber,
+                    endColumn: column
+                  })
+                : "";
+            if (blockOpenToken !== "/*" && javadocOpenToken !== "/**") {
+              continue;
+            }
+            const lineContent = model.getLineContent(lineNumber);
+            const afterToken = lineContent.slice(column - 1, column + 1);
+            const beforeChar = column > 1 ? lineContent[column - 2] ?? "" : "";
+            const afterChar = lineContent[column - 1] ?? "";
+            const hasClosingAhead = afterToken === "*/";
+            const hasClosingAroundCaret = beforeChar === "*" && afterChar === "/";
+            if (hasClosingAhead || hasClosingAroundCaret) {
+              continue;
+            }
+
+            edits.push({
+              range: {
+                startLineNumber: lineNumber,
+                startColumn: column,
+                endLineNumber: lineNumber,
+                endColumn: column
+              },
+              text: "*/",
+              forceMoveMarkers: true
+            });
+            nextSelections[index] = new monaco.Selection(
+              lineNumber,
+              column,
+              lineNumber,
+              column
+            );
+          }
+
+          if (edits.length === 0) {
+            return;
+          }
+
+          editor.executeEdits("autoCloseComments", edits);
+          editor.setSelections(nextSelections);
+        };
+
         const subscriptions: Disposable[] = [
           editor.onDidChangeModel((event) => {
             refreshScopeDecorations();
@@ -631,6 +722,13 @@ export const CodePanel = memo(
             }
           }),
           editor.onDidChangeModelContent((event) => {
+            const shouldTryAutoCloseComments =
+              autoCloseComments &&
+              event.changes.length > 0 &&
+              event.changes.every((change) => change.rangeLength === 0 && change.text === "*");
+            if (shouldTryAutoCloseComments) {
+              tryAutoCloseBlockComments();
+            }
             if (shouldRefreshScopeForContentChanges(event)) {
               refreshScopeDecorations();
             }
@@ -683,7 +781,7 @@ export const CodePanel = memo(
         refreshScopeDecorations();
         refreshSelectionDecorations();
       },
-      [debugEnabled, logEvent, onCaretChange, scopeHighlighting]
+      [autoCloseComments, debugEnabled, logEvent, onCaretChange, scopeHighlighting]
     );
 
     useEffect(() => {

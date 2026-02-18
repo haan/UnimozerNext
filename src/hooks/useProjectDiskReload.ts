@@ -80,6 +80,9 @@ export const useProjectDiskReload = ({
       const token = await readDiskToken();
       if (token !== null) {
         lastObservedTokenRef.current = token;
+        if (pendingBusyTokenRef.current === token) {
+          pendingBusyTokenRef.current = null;
+        }
       }
     } catch {
       // Keep current baseline unchanged when snapshot update fails.
@@ -150,8 +153,14 @@ export const useProjectDiskReload = ({
     let pollInFlight = false;
 
     const handleDetectedChange = async (token: string) => {
+      if (token === lastObservedTokenRef.current) {
+        return;
+      }
+
       if (busy) {
-        pendingBusyTokenRef.current = token;
+        if (pendingBusyTokenRef.current !== token) {
+          pendingBusyTokenRef.current = token;
+        }
         return;
       }
 
@@ -162,13 +171,11 @@ export const useProjectDiskReload = ({
         return;
       }
 
-      setStatus("Files changed on disk. Reloading project...");
       const reloaded = await performReload();
       if (!reloaded) {
         lastObservedTokenRef.current = token;
         return;
       }
-      setStatus("Project reloaded from disk.");
     };
 
     const poll = async () => {
@@ -180,7 +187,9 @@ export const useProjectDiskReload = ({
         if (!busy && pendingBusyTokenRef.current !== null) {
           const pendingToken = pendingBusyTokenRef.current;
           pendingBusyTokenRef.current = null;
-          await handleDetectedChange(pendingToken);
+          if (pendingToken !== lastObservedTokenRef.current) {
+            await handleDetectedChange(pendingToken);
+          }
           return;
         }
         const token = await readDiskToken();
