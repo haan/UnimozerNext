@@ -217,6 +217,24 @@ Manual target-specific examples:
 - `npm run lint` - ESLint
 - `npm run build:parser` - rebuild parser bridge jar
 - `npm run build:jshell` - rebuild JShell bridge jar
+- `npm run assets:logo-runtime` - regenerate About dialog runtime logo/depth assets
+
+## Logo Runtime Assets
+
+About dialog depth-parallax uses preprocessed runtime files generated from source logo assets.
+
+- Source files:
+  - `public/icon/icon.png`
+  - `public/icon/icon_depthmap.png`
+- Generated runtime files (committed):
+  - `public/icon/icon_runtime.png`
+  - `public/icon/icon_depthmap_runtime.png`
+
+Regenerate runtime assets after changing either source file:
+
+```bash
+npm run assets:logo-runtime
+```
 
 ## Data and Compatibility Notes
 

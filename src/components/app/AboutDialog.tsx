@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "../ui/dialog";
 import { openExternalUrl } from "../../services/externalLinks";
+import { DepthLogo } from "./DepthLogo";
 
 type AboutDialogProps = {
   open: boolean;
@@ -63,11 +64,7 @@ export const AboutDialog = ({ open, onOpenChange }: AboutDialogProps) => {
             v{appVersion}
           </div>
         ) : null}
-        <img
-          src="/icon/icon.png"
-          alt="Unimozer Next logo"
-          className="mx-auto h-44 w-44 object-contain"
-        />
+        <DepthLogo open={open} className="mx-auto h-44 w-44" ariaLabel="Unimozer Next logo" />
         <DialogTitle className="mt-4 text-2xl">Unimozer Next</DialogTitle>
         <DialogDescription className="mx-auto mt-1 max-w-xl text-sm">
           A modern desktop rewrite of Unimozer for UML-first Java learning.
