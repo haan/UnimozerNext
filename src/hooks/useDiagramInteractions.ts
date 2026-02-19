@@ -36,6 +36,7 @@ type UseDiagramInteractionsResult = {
   handleNodeSelect: (id: string) => void;
   handleFieldSelect: (field: UmlNode["fields"][number], node: UmlNode) => void;
   handleMethodSelect: (method: UmlNode["methods"][number], node: UmlNode) => void;
+  awaitDiagramPersistence: () => Promise<void>;
 };
 
 export const useDiagramInteractions = ({
@@ -53,10 +54,34 @@ export const useDiagramInteractions = ({
   setSelectedClassId
 }: UseDiagramInteractionsArgs): UseDiagramInteractionsResult => {
   const diagramStateRef = useRef<DiagramState | null>(diagramState);
+  const diagramPersistTaskRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     diagramStateRef.current = diagramState;
   }, [diagramState]);
+
+  const queueDiagramPersist = useCallback(
+    (path: string, next: DiagramState) => {
+      const writeTask = async () => {
+        await invoke("write_text_file", {
+          path,
+          contents: JSON.stringify(next, null, 2)
+        });
+        requestPackedArchiveSync();
+      };
+
+      diagramPersistTaskRef.current = diagramPersistTaskRef.current.then(writeTask, writeTask);
+    },
+    [requestPackedArchiveSync]
+  );
+
+  const awaitDiagramPersistence = useCallback(async () => {
+    try {
+      await diagramPersistTaskRef.current;
+    } catch {
+      // Let existing status/error channels handle failures.
+    }
+  }, []);
 
   const handleNodePositionChange = useCallback(
     (id: string, x: number, y: number, commit: boolean) => {
@@ -80,19 +105,13 @@ export const useDiagramInteractions = ({
       diagramStateRef.current = next;
       setDiagramState(next);
 
-      if (!commit || !diagramPath) {
+      const persistPath = diagramPath;
+      if (!commit || !persistPath) {
         return;
       }
-      void invoke("write_text_file", {
-        path: diagramPath,
-        contents: JSON.stringify(next, null, 2)
-      })
-        .then(() => {
-          requestPackedArchiveSync();
-        })
-        .catch(() => undefined);
+      queueDiagramPersist(persistPath, next);
     },
-    [diagramPath, requestPackedArchiveSync, setDiagramState]
+    [diagramPath, queueDiagramPersist, setDiagramState]
   );
 
   const handleViewportChange = useCallback(
@@ -117,20 +136,13 @@ export const useDiagramInteractions = ({
       diagramStateRef.current = next;
       setDiagramState(next);
 
-      if (!commit || !diagramPath) {
+      const persistPath = diagramPath;
+      if (!commit || !persistPath) {
         return;
       }
-
-      void invoke("write_text_file", {
-        path: diagramPath,
-        contents: JSON.stringify(next, null, 2)
-      })
-        .then(() => {
-          requestPackedArchiveSync();
-        })
-        .catch(() => undefined);
+      queueDiagramPersist(persistPath, next);
     },
-    [diagramPath, requestPackedArchiveSync, setDiagramState]
+    [diagramPath, queueDiagramPersist, setDiagramState]
   );
 
   const getNodeById = useCallback(
@@ -211,7 +223,8 @@ export const useDiagramInteractions = ({
     handleViewportChange,
     handleNodeSelect,
     handleFieldSelect,
-    handleMethodSelect
+    handleMethodSelect,
+    awaitDiagramPersistence
   };
 };
 

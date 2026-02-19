@@ -643,7 +643,8 @@ export default function AppContainer({
     handleViewportChange,
     handleNodeSelect,
     handleFieldSelect,
-    handleMethodSelect
+    handleMethodSelect,
+    awaitDiagramPersistence
   } = useDiagramInteractions({
     umlGraph,
     diagramState,
@@ -659,11 +660,17 @@ export default function AppContainer({
     setSelectedClassId
   });
 
+  const awaitDiagramAndPackedSync = useCallback(async () => {
+    await awaitDiagramPersistence();
+    await awaitPackedArchiveSync();
+  }, [awaitDiagramPersistence, awaitPackedArchiveSync]);
+
   const { confirmRemoveClass } = useClassRemovalActions({
     projectPath,
     openFilePath,
     selectedClassId,
     removeTarget,
+    requestPackedArchiveSync,
     monacoRef,
     notifyLsClose,
     closeRemoveClassDialog,
@@ -724,20 +731,22 @@ export default function AppContainer({
   });
 
   const handleSaveAndRefreshDiskSnapshot = useCallback(async () => {
+    await awaitDiagramPersistence();
     const saved = await handleSave();
     if (saved) {
       await markDiskSnapshotCurrent();
     }
     return saved;
-  }, [handleSave, markDiskSnapshotCurrent]);
+  }, [awaitDiagramPersistence, handleSave, markDiskSnapshotCurrent]);
 
   const handleSaveAsAndRefreshDiskSnapshot = useCallback(async () => {
+    await awaitDiagramPersistence();
     const saved = await handleSaveAs();
     if (saved) {
       await markDiskSnapshotCurrent();
     }
     return saved;
-  }, [handleSaveAs, markDiskSnapshotCurrent]);
+  }, [awaitDiagramPersistence, handleSaveAs, markDiskSnapshotCurrent]);
 
   const {
     confirmProjectActionOpen,
@@ -758,7 +767,7 @@ export default function AppContainer({
     updateInstallBusy,
     projectPath,
     hasPendingProjectChanges,
-    awaitBeforeExit: awaitPackedArchiveSync,
+    awaitBeforeExit: awaitDiagramAndPackedSync,
     handleOpenProject,
     handleOpenFolderProject,
     handleOpenRecentProject,

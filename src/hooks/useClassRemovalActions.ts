@@ -15,6 +15,7 @@ type UseClassRemovalActionsArgs = {
   openFilePath: string | null;
   selectedClassId: string | null;
   removeTarget: UmlNode | null;
+  requestPackedArchiveSync: () => void;
   monacoRef: RefObject<Monaco | null>;
   notifyLsClose: (path: string) => void;
   closeRemoveClassDialog: () => void;
@@ -39,6 +40,7 @@ export const useClassRemovalActions = ({
   openFilePath,
   selectedClassId,
   removeTarget,
+  requestPackedArchiveSync,
   monacoRef,
   notifyLsClose,
   closeRemoveClassDialog,
@@ -89,6 +91,7 @@ export const useClassRemovalActions = ({
         });
 
         setCompileStatus(null);
+        requestPackedArchiveSync();
         setStatus(`Removed ${name}`);
         if (selectedClassId === node.id) {
           setSelectedClassId(null);
@@ -105,6 +108,7 @@ export const useClassRemovalActions = ({
       notifyLsClose,
       openFilePath,
       projectPath,
+      requestPackedArchiveSync,
       selectedClassId,
       setBusy,
       setCompileStatus,
