@@ -12,6 +12,8 @@ struct UmlSettings {
     code_highlight: bool,
     #[serde(default = "default_true")]
     show_parameter_names: bool,
+    #[serde(default = "default_edge_stroke_width")]
+    edge_stroke_width: f32,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -215,6 +217,7 @@ impl Default for AppSettings {
                 show_swing_attributes: default_true(),
                 code_highlight: default_true(),
                 show_parameter_names: default_true(),
+                edge_stroke_width: default_edge_stroke_width(),
             },
             object_bench: ObjectBenchSettings {
                 show_private_object_fields: default_true(),
@@ -282,6 +285,10 @@ fn default_false() -> bool {
 
 fn default_true() -> bool {
     true
+}
+
+fn default_edge_stroke_width() -> f32 {
+    1.0
 }
 
 fn default_update_channel() -> UpdateChannel {

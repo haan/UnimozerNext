@@ -73,10 +73,14 @@ body,
     --radius: 0.5rem;
     --uml-class-bg: #fdf2cc;
     --uml-class-border: hsl(var(--foreground) / 0.2);
-    --uml-class-invalid-bg: #fff1dd;
-    --uml-class-invalid-border: hsl(36 85% 45% / 0.55);
-    --uml-class-compiled-bg: #e7f7e7;
-    --uml-class-compiled-border: rgba(110, 180, 110, 0.6);
+    --uml-class-invalid-bg: #fde7df;
+    --uml-class-invalid-border: hsl(12 70% 55% / 0.75);
+    --uml-class-invalid-icon: hsl(13 73% 42%);
+    --uml-class-compiled-bg: #dff4d7;
+    --uml-class-compiled-border: hsl(118 28% 48% / 0.7);
+    --uml-node-shadow-color: hsl(222 47% 11%);
+    --uml-edge-stroke: hsl(var(--foreground) / 0.42);
+    --uml-edge-marker-stroke: hsl(var(--foreground) / 0.58);
     --uml-package-bg: #d9d4c3;
     --uml-package-border: hsl(var(--foreground) / 0.25);
     --uml-package-name-bg: #efe6cc;
@@ -114,10 +118,14 @@ body,
 
     --uml-class-bg: #2c3b32;
     --uml-class-border: hsl(138 24% 57% / 0.45);
-    --uml-class-invalid-bg: #4a3530;
-    --uml-class-invalid-border: hsl(21 79% 60% / 0.65);
-    --uml-class-compiled-bg: #284637;
-    --uml-class-compiled-border: rgba(113, 186, 138, 0.7);
+    --uml-class-invalid-bg: #5a2f2b;
+    --uml-class-invalid-border: hsl(14 78% 65% / 0.78);
+    --uml-class-invalid-icon: hsl(22 92% 66%);
+    --uml-class-compiled-bg: #2a4f3b;
+    --uml-class-compiled-border: hsl(132 32% 62% / 0.72);
+    --uml-node-shadow-color: hsl(142 38% 56%);
+    --uml-edge-stroke: hsl(0 0% 78% / 0.52);
+    --uml-edge-marker-stroke: hsl(0 0% 82% / 0.68);
     --uml-package-bg: #252526;
     --uml-package-border: hsl(0 0% 70% / 0.22);
     --uml-package-name-bg: #2f3033;

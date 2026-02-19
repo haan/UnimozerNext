@@ -1,13 +1,14 @@
 export type ReflexiveAssociationProps = {
   d: string;
+  strokeWidth?: number;
 };
 
-export const ReflexiveAssociation = ({ d }: ReflexiveAssociationProps) => (
+export const ReflexiveAssociation = ({ d, strokeWidth = 1 }: ReflexiveAssociationProps) => (
   <path
     d={d}
     fill="none"
-    stroke="hsl(var(--foreground) / 0.35)"
-    strokeWidth={1}
+    stroke="var(--uml-edge-stroke)"
+    strokeWidth={strokeWidth}
     strokeDasharray="0"
     strokeLinejoin="round"
     strokeLinecap="round"

@@ -1,13 +1,14 @@
 export type EdgePathProps = {
   d: string;
+  strokeWidth?: number;
 };
 
-export const Association = ({ d }: EdgePathProps) => (
+export const Association = ({ d, strokeWidth = 1 }: EdgePathProps) => (
   <path
     d={d}
     fill="none"
-    stroke="hsl(var(--foreground) / 0.35)"
-    strokeWidth={1}
+    stroke="var(--uml-edge-stroke)"
+    strokeWidth={strokeWidth}
     strokeDasharray="0"
     strokeLinejoin="round"
     strokeLinecap="round"

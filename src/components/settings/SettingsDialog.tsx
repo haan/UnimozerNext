@@ -306,6 +306,37 @@ export const SettingsDialog = ({
                     }
                   />
                 </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Edge stroke width</p>
+                    <p className="text-xs text-muted-foreground">
+                      Adjust the line thickness of UML relationships.
+                    </p>
+                  </div>
+                  <div className="flex w-44 items-center gap-3">
+                    <Slider
+                      value={[settings.uml.edgeStrokeWidth]}
+                      min={1}
+                      max={2}
+                      step={0.1}
+                      onValueChange={(value) =>
+                        onChange({
+                          ...settings,
+                          uml: {
+                            ...settings.uml,
+                            edgeStrokeWidth:
+                              Math.round((value[0] ?? 1) * 10) / 10
+                          }
+                        })
+                      }
+                    />
+                    <span className="w-9 text-right text-xs text-muted-foreground">
+                      {settings.uml.edgeStrokeWidth.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
                     <p className="text-sm font-medium">Jump to code</p>

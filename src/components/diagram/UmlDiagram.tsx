@@ -355,6 +355,7 @@ export type UmlDiagramProps = {
   compiled?: boolean;
   showPackages?: boolean;
   showParameterNames?: boolean;
+  edgeStrokeWidth?: number;
   fontSize?: number;
   exportDefaultPath?: string | null;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
@@ -422,6 +423,7 @@ export const UmlDiagram = ({
   compiled,
   showPackages,
   showParameterNames = true,
+  edgeStrokeWidth = 1,
   fontSize,
   exportDefaultPath,
   onNodePositionChange,
@@ -454,6 +456,7 @@ export const UmlDiagram = ({
   const viewRef = useRef(view);
   const [fontReady, setFontReady] = useState(false);
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
+  const normalizedEdgeStrokeWidth = clamp(edgeStrokeWidth, 1, 2);
   const bodyFontMetrics = useMemo(
     () => measureFontMetrics(`${umlFontSize}px ${UML_FONT_FAMILY}`, umlFontSize),
     [umlFontSize]
@@ -1278,7 +1281,20 @@ export const UmlDiagram = ({
     >
       <defs>
         <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
-          <feDropShadow dx="0" dy="1" stdDeviation="1" floodOpacity="0.12" />
+          <feDropShadow
+            dx="0"
+            dy="1"
+            stdDeviation="1"
+            floodColor="var(--uml-node-shadow-color)"
+            floodOpacity="0.2"
+          />
+          <feDropShadow
+            dx="0"
+            dy="4"
+            stdDeviation="2.8"
+            floodColor="var(--uml-node-shadow-color)"
+            floodOpacity="0.14"
+          />
         </filter>
         <marker
           id="edge-arrow"
@@ -1292,7 +1308,7 @@ export const UmlDiagram = ({
           <path
             d="M 0 0 L 12 6 L 0 12"
             fill="none"
-            stroke="hsl(var(--foreground) / 0.5)"
+            stroke="var(--uml-edge-marker-stroke)"
             strokeWidth={1.2}
           />
         </marker>
@@ -1308,7 +1324,7 @@ export const UmlDiagram = ({
           <path
             d="M 0 0 L 18 9 L 0 18 z"
             fill="hsl(var(--background))"
-            stroke="hsl(var(--foreground) / 0.4)"
+            stroke="var(--uml-edge-marker-stroke)"
             strokeWidth={1.8}
           />
         </marker>
@@ -1411,16 +1427,16 @@ export const UmlDiagram = ({
       >
         {routedEdges.map(({ edge, path }) => {
           if (edge.kind === "association") {
-            return <Association key={edge.id} d={path} />;
+            return <Association key={edge.id} d={path} strokeWidth={normalizedEdgeStrokeWidth} />;
           }
           if (edge.kind === "dependency") {
-            return <Dependency key={edge.id} d={path} />;
+            return <Dependency key={edge.id} d={path} strokeWidth={normalizedEdgeStrokeWidth} />;
           }
           if (edge.kind === "extends") {
-            return <Inheritance key={edge.id} d={path} />;
+            return <Inheritance key={edge.id} d={path} strokeWidth={normalizedEdgeStrokeWidth} />;
           }
           if (edge.kind === "implements") {
-            return <Implementation key={edge.id} d={path} />;
+            return <Implementation key={edge.id} d={path} strokeWidth={normalizedEdgeStrokeWidth} />;
           }
 
           return (
@@ -1428,8 +1444,8 @@ export const UmlDiagram = ({
               key={edge.id}
               d={path}
               fill="none"
-              stroke="hsl(var(--foreground) / 0.35)"
-              strokeWidth={1}
+              stroke="var(--uml-edge-stroke)"
+              strokeWidth={normalizedEdgeStrokeWidth}
               strokeDasharray="6 3"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -1494,7 +1510,13 @@ export const UmlDiagram = ({
             const endX = from.x + from.width;
             const endY = from.y + from.height / 2;
             const d = `M ${startX} ${startY} L ${startX} ${cornerY} L ${cornerX} ${cornerY} L ${cornerX} ${endY} L ${endX} ${endY}`;
-            return <ReflexiveAssociation key={edge.id} d={d} />;
+            return (
+              <ReflexiveAssociation
+                key={edge.id}
+                d={d}
+                strokeWidth={normalizedEdgeStrokeWidth}
+              />
+            );
           })}
       </g>
     </svg>

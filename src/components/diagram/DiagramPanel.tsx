@@ -27,6 +27,7 @@ export type DiagramPanelProps = {
   compiled?: boolean;
   showPackages?: boolean;
   showParameterNames?: boolean;
+  edgeStrokeWidth?: number;
   fontSize?: number;
   structogramColorsEnabled?: boolean;
   exportDefaultPath?: string | null;
@@ -87,6 +88,7 @@ export const DiagramPanel = ({
   compiled,
   showPackages,
   showParameterNames,
+  edgeStrokeWidth,
   fontSize,
   structogramColorsEnabled,
   exportDefaultPath,
@@ -201,6 +203,7 @@ export const DiagramPanel = ({
                 compiled={compiled}
                 showPackages={showPackages}
                 showParameterNames={showParameterNames}
+                edgeStrokeWidth={edgeStrokeWidth}
                 fontSize={fontSize}
                 exportDefaultPath={exportDefaultPath}
                 onExportStatus={onExportStatus}

@@ -168,6 +168,7 @@ export default function AppContainer({
   const showDependencies = settings.uml.showDependencies;
   const showPackages = settings.uml.showPackages;
   const showParameterNames = settings.uml.showParameterNames;
+  const edgeStrokeWidth = settings.uml.edgeStrokeWidth;
   const fontSize = settings.general.fontSize;
   const darkMode = settings.general.darkMode;
   const showPrivateObjectFields =
@@ -978,6 +979,7 @@ export default function AppContainer({
           compiled: compileStatus === "success",
           showPackages,
           showParameterNames,
+          edgeStrokeWidth,
           fontSize,
           structogramColorsEnabled,
           exportDefaultPath,

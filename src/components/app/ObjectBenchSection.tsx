@@ -17,6 +17,7 @@ type ObjectBenchSectionProps = {
   compiled: boolean;
   showPackages?: boolean;
   showParameterNames?: boolean;
+  edgeStrokeWidth?: number;
   fontSize: number;
   structogramColorsEnabled?: boolean;
   exportDefaultPath?: string | null;
@@ -60,6 +61,7 @@ export const ObjectBenchSection = ({
   compiled,
   showPackages,
   showParameterNames,
+  edgeStrokeWidth,
   fontSize,
   structogramColorsEnabled,
   exportDefaultPath,
@@ -105,6 +107,7 @@ export const ObjectBenchSection = ({
           compiled={compiled}
           showPackages={showPackages}
           showParameterNames={showParameterNames}
+          edgeStrokeWidth={edgeStrokeWidth}
           fontSize={fontSize}
           structogramColorsEnabled={structogramColorsEnabled}
           exportDefaultPath={exportDefaultPath}

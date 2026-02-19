@@ -215,7 +215,7 @@ export const Class = ({
           {node.isInvalid ? (
             <g
               transform={`translate(${node.width - 18}, ${headerHeight / 2 - 7})`}
-              style={{ color: "hsl(36 85% 35%)", pointerEvents: "none" }}
+              style={{ color: "var(--uml-class-invalid-icon)", pointerEvents: "none" }}
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"

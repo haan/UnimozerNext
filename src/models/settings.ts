@@ -4,6 +4,7 @@ export type UmlSettings = {
   showPackages: boolean;
   showSwingAttributes: boolean;
   showParameterNames: boolean;
+  edgeStrokeWidth: number;
 };
 
 export type EditorSettings = {
