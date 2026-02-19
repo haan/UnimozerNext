@@ -37,17 +37,24 @@ uniform vec2 uPointer;
 uniform float uStrength;
 
 void main() {
+  vec4 baseSample = texture2D(uImage, vUv);
   float depth = texture2D(uDepth, vUv).r - 0.5;
   vec2 offset = uPointer * (uStrength * depth);
   vec2 uv = clamp(vUv + offset, vec2(0.001), vec2(0.999));
-  vec4 sampled = texture2D(uImage, uv);
-  float alpha = smoothstep(0.28, 1.0, sampled.a);
+  vec4 displaced = texture2D(uImage, uv);
+
+  // Keep the silhouette anchored to the original alpha so displaced edge texels
+  // cannot introduce visible fringe on light backgrounds.
+  float coverage = smoothstep(0.01, 0.18, baseSample.a);
+  float alpha = displaced.a * coverage;
   if (alpha <= 0.0001) {
     gl_FragColor = vec4(0.0);
     return;
   }
-  vec3 straightRgb = sampled.a > 0.0001 ? sampled.rgb / sampled.a : vec3(0.0);
-  gl_FragColor = vec4(straightRgb * alpha, alpha);
+
+  // Texture upload uses premultiplied alpha. Rescale RGB to the adjusted alpha.
+  float colorScale = alpha / max(displaced.a, 0.0001);
+  gl_FragColor = vec4(displaced.rgb * colorScale, alpha);
 }
 `;
 
@@ -223,6 +230,7 @@ export const DepthLogo = ({
     let lastPointerMoveAt = performance.now();
     let resizeWidth = 0;
     let resizeHeight = 0;
+    let contextLost = false;
 
     const resizeCanvas = () => {
       const rect = canvas.getBoundingClientRect();
@@ -256,6 +264,7 @@ export const DepthLogo = ({
       window.removeEventListener("resize", resizeCanvas);
       window.removeEventListener("blur", resetPointerTarget);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
+      canvas.removeEventListener("webglcontextlost", handleContextLost);
 
       if (positionBuffer) {
         gl.deleteBuffer(positionBuffer);
@@ -277,6 +286,13 @@ export const DepthLogo = ({
       if (document.visibilityState !== "visible") {
         resetPointerTarget();
       }
+    };
+
+    const handleContextLost = (event: Event) => {
+      event.preventDefault();
+      contextLost = true;
+      setRenderWebGl(false);
+      setStaticSrc(runtimeIconSrc);
     };
 
     const initialize = async () => {
@@ -347,10 +363,11 @@ export const DepthLogo = ({
         window.addEventListener("resize", resizeCanvas);
         window.addEventListener("blur", resetPointerTarget);
         document.addEventListener("visibilitychange", handleVisibilityChange);
+        canvas.addEventListener("webglcontextlost", handleContextLost, false);
         setRenderWebGl(true);
 
         const renderFrame = (time: number) => {
-          if (cancelled) {
+          if (cancelled || contextLost) {
             return;
           }
 
