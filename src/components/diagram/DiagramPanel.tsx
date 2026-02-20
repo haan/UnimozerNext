@@ -242,6 +242,7 @@ export const DiagramPanel = ({
                         structogramExportControlsRef.current = controls;
                         onRegisterStructogramExport?.(controls);
                       }}
+                      onRegisterZoom={onRegisterZoom}
                     />
                   </div>
                 ) : (

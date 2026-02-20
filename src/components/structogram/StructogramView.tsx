@@ -7,19 +7,25 @@ import { toast } from "sonner";
 
 import { basename, joinPath } from "../../services/paths";
 import type { UmlMethod } from "../../models/uml";
+import type { ZoomControls } from "../diagram/UmlDiagram";
 import {
   STRUCTOGRAM_CANVAS_PADDING,
   STRUCTOGRAM_CHAR_WIDTH,
   STRUCTOGRAM_COLORS,
+  STRUCTOGRAM_DEFAULT_VIEW_SCALE,
   STRUCTOGRAM_EXPORT_PADDING,
   STRUCTOGRAM_EXPORT_SCALE,
   STRUCTOGRAM_FONT_SIZE,
   STRUCTOGRAM_HEADER_BOTTOM_PADDING,
   STRUCTOGRAM_HEADER_TOP_PADDING,
+  STRUCTOGRAM_MAX_VIEW_SCALE,
+  STRUCTOGRAM_MIN_VIEW_SCALE,
   STRUCTOGRAM_MONOCHROME_COLORS,
   STRUCTOGRAM_SVG_STROKE_WIDTH,
   STRUCTOGRAM_TEXT_PADDING_X,
-  STRUCTOGRAM_VIEWPORT_PADDING
+  STRUCTOGRAM_VIEWPORT_PADDING,
+  STRUCTOGRAM_ZOOM_STEP_IN,
+  STRUCTOGRAM_ZOOM_STEP_OUT
 } from "./constants";
 import { buildStructogramLayout, toMethodDeclaration } from "./layoutBuilder";
 import { renderStructogramNode } from "./renderTree";
@@ -36,6 +42,7 @@ type StructogramViewProps = {
   exportDefaultPath?: string | null;
   onExportStatus?: (message: string) => void;
   onRegisterExport?: (controls: StructogramExportControls | null) => void;
+  onRegisterZoom?: (controls: ZoomControls | null) => void;
 };
 
 const EXPORT_CSS_VARIABLES = [
@@ -144,6 +151,8 @@ const sanitizeFileName = (value: string) =>
     .replace(/^[-_.]+|[-_.]+$/g, "") || "structogram";
 
 const normalizePngPath = (path: string) => (path.toLowerCase().endsWith(".png") ? path : `${path}.png`);
+const clampViewScale = (value: number) =>
+  Math.max(STRUCTOGRAM_MIN_VIEW_SCALE, Math.min(STRUCTOGRAM_MAX_VIEW_SCALE, value));
 
 const resolveExportDirectory = (path: string) => {
   const normalized = path.replace(/[\\/]+$/, "");
@@ -164,12 +173,14 @@ export const StructogramView = ({
   colorsEnabled = true,
   exportDefaultPath,
   onExportStatus,
-  onRegisterExport
+  onRegisterExport,
+  onRegisterZoom
 }: StructogramViewProps) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const embeddedFontCssRef = useRef("");
   const embeddedFontCssLoadRef = useRef<Promise<string> | null>(null);
   const [measureFont, setMeasureFont] = useState(() => resolveMeasureFont());
+  const [viewScale, setViewScale] = useState(STRUCTOGRAM_DEFAULT_VIEW_SCALE);
   const ensureEmbeddedFontCss = useCallback(async () => {
     if (embeddedFontCssRef.current.length > 0) {
       return embeddedFontCssRef.current;
@@ -459,6 +470,18 @@ export const StructogramView = ({
     });
   }, [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas]);
 
+  const zoomIn = useCallback(() => {
+    setViewScale((prev) => clampViewScale(prev * STRUCTOGRAM_ZOOM_STEP_IN));
+  }, []);
+
+  const zoomOut = useCallback(() => {
+    setViewScale((prev) => clampViewScale(prev * STRUCTOGRAM_ZOOM_STEP_OUT));
+  }, []);
+
+  const resetZoom = useCallback(() => {
+    setViewScale(STRUCTOGRAM_DEFAULT_VIEW_SCALE);
+  }, []);
+
   useEffect(() => {
     if (!onRegisterExport) return;
     if (!renderMetrics) {
@@ -478,6 +501,18 @@ export const StructogramView = ({
     };
   }, [copyStructogramPng, exportStructogramPng, onRegisterExport, renderMetrics]);
 
+  useEffect(() => {
+    if (!onRegisterZoom) return;
+    onRegisterZoom({
+      zoomIn,
+      zoomOut,
+      resetZoom
+    });
+    return () => {
+      onRegisterZoom(null);
+    };
+  }, [onRegisterZoom, resetZoom, zoomIn, zoomOut]);
+
   if (!layout) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -490,8 +525,8 @@ export const StructogramView = ({
     return null;
   }
 
-  const scaledWidth = Math.round(renderMetrics.svgWidth * fontScale);
-  const scaledHeight = Math.round(renderMetrics.svgHeight * fontScale);
+  const scaledWidth = Math.round(renderMetrics.svgWidth * fontScale * viewScale);
+  const scaledHeight = Math.round(renderMetrics.svgHeight * fontScale * viewScale);
 
   return (
     <div
@@ -501,6 +536,17 @@ export const StructogramView = ({
       <div
         className="min-h-0 min-w-0 flex-1 overflow-auto bg-background"
         style={{ padding: `${STRUCTOGRAM_VIEWPORT_PADDING}px` }}
+        onWheel={(event) => {
+          if (event.ctrlKey || event.metaKey) {
+            return;
+          }
+          event.preventDefault();
+          if (event.deltaY < 0) {
+            zoomIn();
+          } else if (event.deltaY > 0) {
+            zoomOut();
+          }
+        }}
       >
         <svg
           ref={svgRef}
