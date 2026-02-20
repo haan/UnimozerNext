@@ -28,6 +28,8 @@ type UseAppMenuStateArgs = {
   structogramColorsEnabled: boolean;
   wordWrap: boolean;
   scopeHighlighting: boolean;
+  umlFullscreen: boolean;
+  editorFullscreen: boolean;
 };
 
 export type AppMenuState = {
@@ -56,6 +58,8 @@ export type AppMenuState = {
   structogramColorsEnabled: boolean;
   wordWrap: boolean;
   scopeHighlighting: boolean;
+  umlFullscreen: boolean;
+  editorFullscreen: boolean;
 };
 
 export const useAppMenuState = ({
@@ -83,7 +87,9 @@ export const useAppMenuState = ({
   leftPanelViewMode,
   structogramColorsEnabled,
   wordWrap,
-  scopeHighlighting
+  scopeHighlighting,
+  umlFullscreen,
+  editorFullscreen
 }: UseAppMenuStateArgs): AppMenuState =>
   useMemo(
     () => ({
@@ -111,7 +117,9 @@ export const useAppMenuState = ({
       structogramMode: leftPanelViewMode === "structogram",
       structogramColorsEnabled,
       wordWrap,
-      scopeHighlighting
+      scopeHighlighting,
+      umlFullscreen,
+      editorFullscreen
     }),
     [
       busy,
@@ -138,6 +146,8 @@ export const useAppMenuState = ({
       structogramColorsEnabled,
       wordWrap,
       scopeHighlighting,
+      umlFullscreen,
+      editorFullscreen,
       zoomDisabled
     ]
   );

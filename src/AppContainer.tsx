@@ -108,6 +108,7 @@ export default function AppContainer({
   const [content, setContent] = useState("");
   const [lastSavedContent, setLastSavedContent] = useState("");
   const [leftPanelViewMode, setLeftPanelViewMode] = useState<DiagramViewMode>("uml");
+  const [fullscreenMode, setFullscreenMode] = useState<"none" | "uml" | "editor">("none");
   const [editorCaret, setEditorCaret] = useState<{ lineNumber: number; column: number } | null>(
     null
   );
@@ -205,6 +206,8 @@ export default function AppContainer({
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
+  const umlFullscreen = fullscreenMode === "uml";
+  const editorFullscreen = fullscreenMode === "editor";
   const umlNodeLayoutSignature = useMemo(() => {
     if (!umlGraph) {
       return "";
@@ -605,7 +608,9 @@ export default function AppContainer({
     leftPanelViewMode,
     structogramColorsEnabled,
     wordWrap,
-    scopeHighlighting
+    scopeHighlighting,
+    umlFullscreen,
+    editorFullscreen
   });
 
 
@@ -888,6 +893,22 @@ export default function AppContainer({
   const handleOpenSettings = useCallback(() => {
     setSettingsOpen(true);
   }, [setSettingsOpen]);
+  const handleToggleUmlFullscreen = useCallback((value: boolean) => {
+    setFullscreenMode((current) => {
+      if (value) {
+        return "uml";
+      }
+      return current === "uml" ? "none" : current;
+    });
+  }, []);
+  const handleToggleEditorFullscreen = useCallback((value: boolean) => {
+    setFullscreenMode((current) => {
+      if (value) {
+        return "editor";
+      }
+      return current === "editor" ? "none" : current;
+    });
+  }, []);
   const handleOpenAbout = useCallback(() => {
     setAboutOpen(true);
   }, []);
@@ -938,6 +959,8 @@ export default function AppContainer({
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onZoomReset={handleZoomReset}
+        onToggleUmlFullscreen={handleToggleUmlFullscreen}
+        onToggleEditorFullscreen={handleToggleEditorFullscreen}
         onToggleShowPrivate={handleToggleShowPrivate}
         onToggleShowInherited={handleToggleShowInherited}
         onToggleShowStatic={handleToggleShowStatic}
@@ -968,6 +991,7 @@ export default function AppContainer({
         consoleContainerRef={consoleContainerRef}
         splitRatio={splitRatio}
         consoleSplitRatio={consoleSplitRatio}
+        fullscreenMode={fullscreenMode}
         onStartUmlResize={startUmlResize}
         onStartConsoleResize={startConsoleResize}
         objectBenchSectionProps={{

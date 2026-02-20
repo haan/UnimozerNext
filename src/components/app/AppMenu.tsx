@@ -42,6 +42,8 @@ type AppMenuProps = {
   structogramColorsEnabled: boolean;
   wordWrap: boolean;
   scopeHighlighting: boolean;
+  umlFullscreen: boolean;
+  editorFullscreen: boolean;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onRequestOpenFolderProject: () => void;
@@ -61,6 +63,8 @@ type AppMenuProps = {
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
+  onToggleUmlFullscreen: (value: boolean) => void;
+  onToggleEditorFullscreen: (value: boolean) => void;
   onToggleShowPrivate: (value: boolean) => void;
   onToggleShowInherited: (value: boolean) => void;
   onToggleShowStatic: (value: boolean) => void;
@@ -113,6 +117,8 @@ export const AppMenu = ({
   structogramColorsEnabled,
   wordWrap,
   scopeHighlighting,
+  umlFullscreen,
+  editorFullscreen,
   onRequestNewProject,
   onRequestOpenProject,
   onRequestOpenFolderProject,
@@ -132,6 +138,8 @@ export const AppMenu = ({
   onZoomIn,
   onZoomOut,
   onZoomReset,
+  onToggleUmlFullscreen,
+  onToggleEditorFullscreen,
   onToggleShowPrivate,
   onToggleShowInherited,
   onToggleShowStatic,
@@ -267,6 +275,19 @@ export const AppMenu = ({
             <MenubarItem onClick={onZoomReset} disabled={zoomDisabled}>
               Reset Zoom
               <MenubarShortcut>{isMac ? "⌘0" : "Ctrl+0"}</MenubarShortcut>
+            </MenubarItem>
+            <MenubarSeparator />
+            <MenubarItem
+              onClick={() => onToggleUmlFullscreen(!umlFullscreen)}
+            >
+              UML fullscreen
+              {umlFullscreen ? <MenubarShortcut>✓</MenubarShortcut> : null}
+            </MenubarItem>
+            <MenubarItem
+              onClick={() => onToggleEditorFullscreen(!editorFullscreen)}
+            >
+              Editor fullscreen
+              {editorFullscreen ? <MenubarShortcut>✓</MenubarShortcut> : null}
             </MenubarItem>
             <MenubarSeparator />
             <MenubarSub>
