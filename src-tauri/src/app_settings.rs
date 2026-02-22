@@ -258,6 +258,12 @@ impl Default for AppSettings {
 }
 
 impl AppSettings {
+    pub(crate) fn default_with_dark_mode(dark_mode: bool) -> Self {
+        let mut settings = Self::default();
+        settings.general.dark_mode = dark_mode;
+        settings
+    }
+
     pub(crate) fn debug_logging_enabled(&self) -> bool {
         self.advanced.debug_logging
     }

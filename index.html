@@ -22,10 +22,13 @@
       (() => {
         try {
           const storedDarkMode = localStorage.getItem("unimozer.darkMode");
-          if (storedDarkMode !== "1" && storedDarkMode !== "0") {
-            return;
-          }
-          const darkMode = storedDarkMode === "1";
+          const darkMode =
+            storedDarkMode === "1"
+              ? true
+              : storedDarkMode === "0"
+                ? false
+                : typeof window.matchMedia === "function" &&
+                  window.matchMedia("(prefers-color-scheme: dark)").matches;
           document.documentElement.dataset.theme = darkMode ? "dark" : "light";
           document.documentElement.style.colorScheme = darkMode ? "dark" : "light";
         } catch {
