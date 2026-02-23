@@ -411,7 +411,7 @@ export const useLanguageServer = ({
   const logCompletionDebug = useCallback(
     (message: string) => {
       if (!completionDebugEnabled || !onDebugLog) return;
-      onDebugLog(`[LS-Completion] ${new Date().toLocaleTimeString()} ${message}`);
+      onDebugLog(`${new Date().toLocaleTimeString()} [completion] ${message}`);
     },
     [completionDebugEnabled, onDebugLog]
   );

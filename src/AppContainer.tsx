@@ -52,6 +52,7 @@ import {
   EDITOR_MIN_HEIGHT_PX,
   UML_DIAGRAM_MIN_HEIGHT_PX
 } from "./constants/layout";
+import { ensureDebugLogPrefix, type DebugLogCategory } from "./constants/debugLogging";
 import { formatStatusText as formatStatus, trimStatusText as trimStatus } from "./services/status";
 import {
   removeRecentProject as removeRecentProjectFromList,
@@ -159,13 +160,58 @@ export default function AppContainer({
     handleMissingRecentProjectOpenChange
   } = useDialogState();
   const debugLogging = settings.advanced.debugLogging;
+  const debugLogCategories = settings.advanced.debugLogCategories;
   const debugLogSinkRef = useRef<((text: string) => void) | null>(null);
-  const forwardDebugLog = useCallback(
-    (text: string) => {
-      if (!debugLogging) return;
-      debugLogSinkRef.current?.(text);
+  const appendCategorizedDebugOutput = useCallback(
+    (category: DebugLogCategory, text: string) => {
+      if (!debugLogging || !debugLogCategories[category]) {
+        return;
+      }
+      debugLogSinkRef.current?.(ensureDebugLogPrefix(category, text));
     },
-    [debugLogging]
+    [debugLogCategories, debugLogging]
+  );
+  const appendStartupDebugOutput = useCallback(
+    (text: string) => {
+      appendCategorizedDebugOutput("startup", text);
+    },
+    [appendCategorizedDebugOutput]
+  );
+  const appendLaunchDebugOutput = useCallback(
+    (text: string) => {
+      appendCategorizedDebugOutput("launch", text);
+    },
+    [appendCategorizedDebugOutput]
+  );
+  const appendLanguageServerDebugOutput = useCallback(
+    (text: string) => {
+      appendCategorizedDebugOutput("languageServer", text);
+    },
+    [appendCategorizedDebugOutput]
+  );
+  const appendEditorDebugOutput = useCallback(
+    (text: string) => {
+      appendCategorizedDebugOutput("editor", text);
+    },
+    [appendCategorizedDebugOutput]
+  );
+  const appendUmlDebugOutput = useCallback(
+    (text: string) => {
+      appendCategorizedDebugOutput("uml", text);
+    },
+    [appendCategorizedDebugOutput]
+  );
+  const appendStructogramDebugOutput = useCallback(
+    (text: string) => {
+      appendCategorizedDebugOutput("structogram", text);
+    },
+    [appendCategorizedDebugOutput]
+  );
+  const appendJshellDebugOutput = useCallback(
+    (text: string) => {
+      appendCategorizedDebugOutput("jshell", text);
+    },
+    [appendCategorizedDebugOutput]
   );
   const structogramColorsEnabled = settings.advanced.structogramColors;
   const updateChannel = settings.advanced.updateChannel;
@@ -236,7 +282,10 @@ export default function AppContainer({
     projectPath,
     openFilePath,
     openFileContent: content,
-    onDebugLog: forwardDebugLog
+    onDebugLog:
+      debugLogging && debugLogCategories.languageServer
+        ? appendLanguageServerDebugOutput
+        : undefined
   });
   const {
     editorRef,
@@ -330,7 +379,8 @@ export default function AppContainer({
   const {
     lastCompileOutDirRef,
     handleCompileSuccess,
-    onCompileRequested
+    onCompileRequested,
+    waitForJshellReady
   } = useCompileJshellLifecycle({
     projectPath,
     umlGraph,
@@ -392,14 +442,6 @@ export default function AppContainer({
     setStatus
   });
 
-  const appendDebugOutput = useCallback(
-    (text: string) => {
-      if (!debugLogging) return;
-      appendConsoleOutput(text);
-    },
-    [appendConsoleOutput, debugLogging]
-  );
-
 
   useAppAppearanceEffects({
     titlePrefix: "Unimozer Next",
@@ -410,9 +452,7 @@ export default function AppContainer({
     structogramLoopHeaderColor,
     structogramIfHeaderColor,
     structogramSwitchHeaderColor,
-    structogramTryWrapperColor,
-    debugLogging,
-    appendConsoleOutput
+    structogramTryWrapperColor
   });
 
   const { umlStatus, lastGoodGraphRef } = useUmlGraph({
@@ -422,7 +462,7 @@ export default function AppContainer({
     tree,
     fileDrafts: umlParseDrafts,
     setUmlGraph,
-    onDebugLog: debugLogging ? appendDebugOutput : undefined,
+    onDebugLog: debugLogging && debugLogCategories.uml ? appendUmlDebugOutput : undefined,
     formatStatus
   });
 
@@ -434,13 +474,14 @@ export default function AppContainer({
     projectPath,
     umlGraph,
     jshellReady,
+    waitForJshellReady,
     setJshellReady,
     objectBench,
     setObjectBench,
     lastCompileOutDirRef,
     appendConsoleOutput,
     resetConsoleOutput,
-    appendDebugOutput: debugLogging ? appendDebugOutput : undefined,
+    appendDebugOutput: debugLogging && debugLogCategories.jshell ? appendJshellDebugOutput : undefined,
     setStatus,
     setBusy,
     formatStatus,
@@ -524,7 +565,11 @@ export default function AppContainer({
 
   useLaunchBootstrap({
     projectPath,
-    appendDebugOutput,
+    startupDebugEnabled: debugLogging && debugLogCategories.startup,
+    appendStartupDebugOutput:
+      debugLogging && debugLogCategories.startup ? appendStartupDebugOutput : undefined,
+    appendLaunchDebugOutput:
+      debugLogging && debugLogCategories.launch ? appendLaunchDebugOutput : undefined,
     handleOpenPackedProjectPath,
     handleNewProject,
     formatStatus,
@@ -674,7 +719,7 @@ export default function AppContainer({
     setDiagramState,
     requestPackedArchiveSync,
     pendingRevealRef,
-    appendDebugOutput,
+    appendDebugOutput: appendUmlDebugOutput,
     openFileByPath,
     openFilePath,
     applyPendingReveal,
@@ -846,7 +891,7 @@ export default function AppContainer({
     handleCallMethod,
     handleRemoveObject
   } = useObjectBenchActions({
-    jshellReady,
+    compileStatus,
     createObjectTarget,
     createObjectConstructor,
     callMethodTarget,
@@ -1044,7 +1089,10 @@ export default function AppContainer({
           viewMode: leftPanelViewMode,
           activeFilePath: openFilePath,
           caretLineNumber: editorCaret?.lineNumber ?? null,
-          onDebugLog: debugLogging ? appendDebugOutput : undefined,
+          onDebugLog:
+            debugLogging && debugLogCategories.structogram
+              ? appendStructogramDebugOutput
+              : undefined,
           objectBench,
           showPrivate: showPrivateObjectFields,
           showInherited: showInheritedObjectFields,
@@ -1069,8 +1117,9 @@ export default function AppContainer({
           wordWrap: settings.editor.wordWrap,
           scopeHighlighting: settings.editor.scopeHighlighting,
           onChange: handleContentChange,
-          debugLogging,
-          onDebugLog: debugLogging ? appendDebugOutput : undefined,
+          debugLogging: debugLogging && debugLogCategories.editor,
+          onDebugLog:
+            debugLogging && debugLogCategories.editor ? appendEditorDebugOutput : undefined,
           onEditorMount: handleEditorMount,
           onCaretChange: handleEditorCaretChange
         }}

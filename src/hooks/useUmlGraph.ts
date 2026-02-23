@@ -163,7 +163,7 @@ export const useUmlGraph = ({
             const graph = result.graph;
             const debugLog = onDebugLogRef.current;
             if (debugLog) {
-              debugLog(`[UML] ${new Date().toLocaleTimeString()}\n${result.raw}`);
+              debugLog(`${new Date().toLocaleTimeString()}\n${result.raw}`);
             }
             const mergedGraph = mergeWithLastGoodGraph(graph, lastGoodGraphRef.current);
             const withFailedNodes = ensureFailedNodes(

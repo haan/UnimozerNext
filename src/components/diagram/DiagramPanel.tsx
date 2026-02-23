@@ -187,7 +187,7 @@ export const DiagramPanel = ({
         : String(debouncedStructogramInput.caretLineNumber);
     const switchDetail = switchMs === null ? "" : `, switch ${switchMs.toFixed(1)} ms`;
     onDebugLog(
-      `[structogram] resolved ${methodName} at ${sourcePath}:${sourceLine} (lookup ${resolveMs.toFixed(1)} ms${switchDetail})`
+      `resolved ${methodName} at ${sourcePath}:${sourceLine} (lookup ${resolveMs.toFixed(1)} ms${switchDetail})`
     );
   }, [debouncedStructogramInput, graph, onDebugLog, viewMode]);
 

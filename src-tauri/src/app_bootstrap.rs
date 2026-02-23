@@ -3,6 +3,7 @@ use crate::launch_io::parse_launch_umz_arg;
 use crate::launch_io::{collect_startup_umz_paths, queue_launch_open_paths};
 use crate::lifecycle::shutdown_background_processes;
 use crate::project_archive::cleanup_stale_workspace_sessions_async;
+use crate::app_settings::DebugLogCategory;
 use crate::settings_io::load_startup_settings;
 use crate::startup_diagnostics::log_startup_diagnostics;
 
@@ -11,7 +12,7 @@ pub(crate) fn setup_startup(app: &tauri::AppHandle) {
     let launch_paths = collect_startup_umz_paths();
     queue_launch_open_paths(app, launch_paths);
     cleanup_stale_workspace_sessions_async(app.clone());
-    if settings.debug_logging_enabled() {
+    if settings.debug_category_enabled(DebugLogCategory::Startup) {
         log_startup_diagnostics(app);
     }
 }

@@ -20,7 +20,7 @@ type ExecuteMethodCall = (args: {
 }) => Promise<void>;
 
 type UseObjectBenchActionsArgs = {
-  jshellReady: boolean;
+  compileStatus: "success" | "failed" | null;
   createObjectTarget: UmlNode | null;
   createObjectConstructor: UmlConstructor | null;
   callMethodTarget: ObjectInstance | null;
@@ -44,7 +44,7 @@ type UseObjectBenchActionsResult = {
 };
 
 export const useObjectBenchActions = ({
-  jshellReady,
+  compileStatus,
   createObjectTarget,
   createObjectConstructor,
   callMethodTarget,
@@ -60,19 +60,19 @@ export const useObjectBenchActions = ({
 }: UseObjectBenchActionsArgs): UseObjectBenchActionsResult => {
   const handleOpenCreateObject = useCallback(
     (node: UmlNode, constructor: UmlConstructor) => {
-      if (!jshellReady) {
+      if (compileStatus !== "success") {
         setStatus("Compile the project before creating objects.");
         return;
       }
       setSelectedClassId(node.id);
       openCreateObjectDialog(node, constructor);
     },
-    [jshellReady, openCreateObjectDialog, setSelectedClassId, setStatus]
+    [compileStatus, openCreateObjectDialog, setSelectedClassId, setStatus]
   );
 
   const handleOpenCallMethod = useCallback(
     (object: ObjectInstance, method: UmlMethod) => {
-      if (!jshellReady) {
+      if (compileStatus !== "success") {
         setStatus("Compile the project before calling methods.");
         return;
       }
@@ -89,8 +89,8 @@ export const useObjectBenchActions = ({
       openCallMethodDialog(object, method);
     },
     [
+      compileStatus,
       executeMethodCall,
-      jshellReady,
       openCallMethodDialog,
       openMethodReturnDialog,
       setStatus

@@ -14,6 +14,10 @@ import { Switch } from "../ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/tooltip";
 import { cn } from "../../lib/utils";
 import { ChromePicker, type ColorResult } from "react-color";
+import {
+  DEBUG_LOG_CATEGORY_LABELS,
+  DEBUG_LOG_CATEGORY_ORDER
+} from "../../constants/debugLogging";
 import { loadEditorThemeOptions, type ThemeOption } from "../../services/monacoThemes";
 import { readDefaultSettings } from "../../services/settings";
 
@@ -832,25 +836,65 @@ export const SettingsDialog = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">Debug logging</p>
-                    <p className="text-xs text-muted-foreground">
-                      Show internal diagnostics in the console.
-                    </p>
+                <div className="rounded-lg border border-border bg-muted/45 dark:bg-background">
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium">Debug logging</p>
+                      <p className="text-xs text-muted-foreground">
+                        Master switch for all debug diagnostics in the console.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={settings.advanced.debugLogging}
+                      onCheckedChange={(checked) =>
+                        onChange({
+                          ...settings,
+                          advanced: {
+                            ...settings.advanced,
+                            debugLogging: checked
+                          }
+                        })
+                      }
+                    />
                   </div>
-                  <Switch
-                    checked={settings.advanced.debugLogging}
-                    onCheckedChange={(checked) =>
-                      onChange({
-                        ...settings,
-                        advanced: {
-                          ...settings.advanced,
-                          debugLogging: checked
-                        }
-                      })
-                    }
-                  />
+
+                  <div
+                    className={cn(
+                      "space-y-1 border-t border-border/60 px-3 py-2",
+                      !settings.advanced.debugLogging && "opacity-50"
+                    )}
+                  >
+                    {DEBUG_LOG_CATEGORY_ORDER.map((category) => {
+                      const meta = DEBUG_LOG_CATEGORY_LABELS[category];
+                      return (
+                        <div
+                          key={category}
+                          className="ml-2 flex items-center justify-between rounded-md border-l-2 border-border/70 bg-background/60 px-3 py-2"
+                        >
+                          <div>
+                            <p className="text-sm font-medium">{meta.title}</p>
+                            <p className="text-xs text-muted-foreground">{meta.description}</p>
+                          </div>
+                          <Switch
+                            checked={settings.advanced.debugLogCategories[category]}
+                            disabled={!settings.advanced.debugLogging}
+                            onCheckedChange={(checked) =>
+                              onChange({
+                                ...settings,
+                                advanced: {
+                                  ...settings.advanced,
+                                  debugLogCategories: {
+                                    ...settings.advanced.debugLogCategories,
+                                    [category]: checked
+                                  }
+                                }
+                              })
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             ) : (

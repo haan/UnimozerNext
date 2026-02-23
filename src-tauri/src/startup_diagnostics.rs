@@ -84,8 +84,5 @@ pub(crate) fn log_startup_diagnostics(app: &tauri::AppHandle) {
         }
     }
 
-    for line in &lines {
-        println!("{}", line);
-    }
     append_startup_logs(app, &lines);
 }

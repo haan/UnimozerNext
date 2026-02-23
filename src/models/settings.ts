@@ -21,6 +21,15 @@ export type EditorSettings = {
 
 export type AdvancedSettings = {
   debugLogging: boolean;
+  debugLogCategories: {
+    startup: boolean;
+    launch: boolean;
+    languageServer: boolean;
+    editor: boolean;
+    uml: boolean;
+    structogram: boolean;
+    jshell: boolean;
+  };
   structogramColors: boolean;
   updateChannel: "stable" | "prerelease";
 };

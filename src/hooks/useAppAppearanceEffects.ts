@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
 
@@ -55,8 +54,6 @@ type UseAppAppearanceEffectsArgs = {
   structogramIfHeaderColor: string;
   structogramSwitchHeaderColor: string;
   structogramTryWrapperColor: string;
-  debugLogging: boolean;
-  appendConsoleOutput: (text: string) => void;
 };
 
 export const useAppAppearanceEffects = ({
@@ -68,9 +65,7 @@ export const useAppAppearanceEffects = ({
   structogramLoopHeaderColor,
   structogramIfHeaderColor,
   structogramSwitchHeaderColor,
-  structogramTryWrapperColor,
-  debugLogging,
-  appendConsoleOutput
+  structogramTryWrapperColor
 }: UseAppAppearanceEffectsArgs) => {
   useEffect(() => {
     const window = getCurrentWindow();
@@ -155,21 +150,4 @@ export const useAppAppearanceEffects = ({
     structogramTryWrapperColor
   ]);
 
-  useEffect(() => {
-    if (!debugLogging) return;
-    let active = true;
-    const loadStartupLogs = async () => {
-      try {
-        const lines = await invoke<string[]>("take_startup_logs");
-        if (!active || !lines.length) return;
-        lines.forEach((line) => appendConsoleOutput(line));
-      } catch {
-        // Ignore startup log failures.
-      }
-    };
-    void loadStartupLogs();
-    return () => {
-      active = false;
-    };
-  }, [appendConsoleOutput, debugLogging]);
 };

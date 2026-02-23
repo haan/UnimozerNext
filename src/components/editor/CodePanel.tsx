@@ -481,7 +481,7 @@ export const CodePanel = memo(
     const logEvent = useCallback(
       (message: string) => {
         if (!debugEnabled || !onDebugLog) return;
-        onDebugLog(`[Editor] ${new Date().toLocaleTimeString()} ${message}`);
+        onDebugLog(`${new Date().toLocaleTimeString()} ${message}`);
       },
       [debugEnabled, onDebugLog]
     );

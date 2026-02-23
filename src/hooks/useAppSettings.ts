@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
+import { DEFAULT_DEBUG_LOG_CATEGORIES } from "../constants/debugLogging";
 import type { AppSettings, RecentProjectEntry } from "../models/settings";
 import { readSettings, writeSettings } from "../services/settings";
 
@@ -39,6 +40,27 @@ const isRecentProjectEntry = (value: unknown): value is RecentProjectEntry => {
   return typeof candidate.path === "string" && isRecentProjectKind(candidate.kind);
 };
 
+const normalizeDebugLogCategories = (
+  value: unknown
+): AppSettings["advanced"]["debugLogCategories"] => {
+  const source = value as Partial<AppSettings["advanced"]["debugLogCategories"]> | null;
+  return {
+    startup: typeof source?.startup === "boolean" ? source.startup : DEFAULT_DEBUG_LOG_CATEGORIES.startup,
+    launch: typeof source?.launch === "boolean" ? source.launch : DEFAULT_DEBUG_LOG_CATEGORIES.launch,
+    languageServer:
+      typeof source?.languageServer === "boolean"
+        ? source.languageServer
+        : DEFAULT_DEBUG_LOG_CATEGORIES.languageServer,
+    editor: typeof source?.editor === "boolean" ? source.editor : DEFAULT_DEBUG_LOG_CATEGORIES.editor,
+    uml: typeof source?.uml === "boolean" ? source.uml : DEFAULT_DEBUG_LOG_CATEGORIES.uml,
+    structogram:
+      typeof source?.structogram === "boolean"
+        ? source.structogram
+        : DEFAULT_DEBUG_LOG_CATEGORIES.structogram,
+    jshell: typeof source?.jshell === "boolean" ? source.jshell : DEFAULT_DEBUG_LOG_CATEGORIES.jshell
+  };
+};
+
 export const useAppSettings = (): AppSettingsHook => {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [settingsLoading, setSettingsLoading] = useState(true);
@@ -56,6 +78,10 @@ export const useAppSettings = (): AppSettingsHook => {
           : [];
         const nextSettings: AppSettings = {
           ...parsed,
+          advanced: {
+            ...parsed.advanced,
+            debugLogCategories: normalizeDebugLogCategories(parsed.advanced?.debugLogCategories)
+          },
           recentProjects
         };
         if (!cancelled) {

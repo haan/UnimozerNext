@@ -23,6 +23,7 @@ type UseJshellActionsArgs = {
   projectPath: string | null;
   umlGraph: UmlGraph | null;
   jshellReady: boolean;
+  waitForJshellReady: () => Promise<boolean>;
   setJshellReady: (ready: boolean) => void;
   objectBench: ObjectInstance[];
   setObjectBench: (next: ObjectInstance[] | ((prev: ObjectInstance[]) => ObjectInstance[])) => void;
@@ -67,6 +68,7 @@ export const useJshellActions = ({
   projectPath,
   umlGraph,
   jshellReady,
+  waitForJshellReady,
   setJshellReady,
   objectBench,
   setObjectBench,
@@ -191,8 +193,11 @@ export const useJshellActions = ({
         return;
       }
       if (!jshellReady) {
-        setStatus("Compile the project before creating objects.");
-        return;
+        const ready = await waitForJshellReady();
+        if (!ready) {
+          setStatus("Compile the project before creating objects.");
+          return;
+        }
       }
 
       setBusy(true);
@@ -347,6 +352,7 @@ export const useJshellActions = ({
       setJshellReady,
       setObjectBench,
       setStatus,
+      waitForJshellReady,
       trimStatus
     ]
   );
@@ -358,8 +364,11 @@ export const useJshellActions = ({
         return;
       }
       if (!jshellReady) {
-        setStatus("Compile the project before calling methods.");
-        return;
+        const ready = await waitForJshellReady();
+        if (!ready) {
+          setStatus("Compile the project before calling methods.");
+          return;
+        }
       }
 
       const methodName =
@@ -485,6 +494,7 @@ export const useJshellActions = ({
       setJshellReady,
       setObjectBench,
       setStatus,
+      waitForJshellReady,
       trimStatus
     ]
   );

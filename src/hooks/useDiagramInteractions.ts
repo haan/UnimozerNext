@@ -165,7 +165,7 @@ export const useDiagramInteractions = ({
         requestedAtMs: Date.now()
       };
       appendDebugOutput(
-        `[UML] Reveal ${basename(path)} @ ${range.startLine}:${range.startColumn ?? 1}`
+        `Reveal ${basename(path)} @ ${range.startLine}:${range.startColumn ?? 1}`
       );
       if (openFilePath !== path) {
         await openFileByPath(path);
@@ -190,7 +190,7 @@ export const useDiagramInteractions = ({
     (field: UmlNode["fields"][number], node: UmlNode) => {
       setSelectedClassId(node.id);
       appendDebugOutput(
-        `[UML] Field click ${node.name} :: ${field.signature} (${field.range ? "has range" : "no range"})`
+        `Field click ${node.name} :: ${field.signature} (${field.range ? "has range" : "no range"})`
       );
       if (field.range) {
         void queueEditorReveal(node.path, field.range);
@@ -206,7 +206,7 @@ export const useDiagramInteractions = ({
     (method: UmlNode["methods"][number], node: UmlNode) => {
       setSelectedClassId(node.id);
       appendDebugOutput(
-        `[UML] Method click ${node.name} :: ${method.signature} (${method.range ? "has range" : "no range"})`
+        `Method click ${node.name} :: ${method.signature} (${method.range ? "has range" : "no range"})`
       );
       if (method.range) {
         void queueEditorReveal(node.path, method.range);

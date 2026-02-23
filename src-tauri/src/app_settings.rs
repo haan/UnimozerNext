@@ -75,9 +75,44 @@ impl Default for EditorSettings {
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
+struct DebugLogCategories {
+    #[serde(default = "default_true")]
+    startup: bool,
+    #[serde(default = "default_true")]
+    launch: bool,
+    #[serde(default = "default_true")]
+    language_server: bool,
+    #[serde(default = "default_true")]
+    editor: bool,
+    #[serde(default = "default_true")]
+    uml: bool,
+    #[serde(default = "default_true")]
+    structogram: bool,
+    #[serde(default = "default_true")]
+    jshell: bool,
+}
+
+impl Default for DebugLogCategories {
+    fn default() -> Self {
+        Self {
+            startup: default_true(),
+            launch: default_true(),
+            language_server: default_true(),
+            editor: default_true(),
+            uml: default_true(),
+            structogram: default_true(),
+            jshell: default_true(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct AdvancedSettings {
     #[serde(default = "default_false")]
     debug_logging: bool,
+    #[serde(default)]
+    debug_log_categories: DebugLogCategories,
     #[serde(default = "default_true")]
     structogram_colors: bool,
     #[serde(default = "default_update_channel")]
@@ -88,6 +123,7 @@ impl Default for AdvancedSettings {
     fn default() -> Self {
         Self {
             debug_logging: default_false(),
+            debug_log_categories: DebugLogCategories::default(),
             structogram_colors: default_true(),
             update_channel: default_update_channel(),
         }
@@ -238,6 +274,7 @@ impl Default for AppSettings {
             },
             advanced: AdvancedSettings {
                 debug_logging: default_false(),
+                debug_log_categories: DebugLogCategories::default(),
                 structogram_colors: default_true(),
                 update_channel: default_update_channel(),
             },
@@ -267,6 +304,20 @@ impl AppSettings {
     pub(crate) fn debug_logging_enabled(&self) -> bool {
         self.advanced.debug_logging
     }
+
+    pub(crate) fn debug_category_enabled(&self, category: DebugLogCategory) -> bool {
+        if !self.debug_logging_enabled() {
+            return false;
+        }
+        match category {
+            DebugLogCategory::Startup => self.advanced.debug_log_categories.startup,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum DebugLogCategory {
+    Startup,
 }
 
 fn default_font_size() -> u32 {
