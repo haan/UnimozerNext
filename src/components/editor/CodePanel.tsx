@@ -848,9 +848,13 @@ export const CodePanel = memo(
                 scrollBeyondLastLine: false,
                 padding: { top: 8 },
                 wordWrap: wordWrap ? "on" : "off",
-                suggestOnTriggerCharacters: false,
+                suggestOnTriggerCharacters: true,
                 quickSuggestions: false,
                 wordBasedSuggestions: "off",
+                suggest: {
+                  showInlineDetails: false,
+                  showStatusBar: false
+                },
                 glyphMargin: true,
                 contextmenu: false,
                 renderValidationDecorations: "on",

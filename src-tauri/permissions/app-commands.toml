@@ -33,6 +33,7 @@ commands.allow = [
   "ls_did_open",
   "ls_did_change",
   "ls_did_close",
+  "ls_completion",
   "ls_format_document",
   "take_startup_logs",
   "take_launch_open_paths",

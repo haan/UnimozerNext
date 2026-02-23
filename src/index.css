@@ -151,6 +151,32 @@ body,
   display: none !important;
 }
 
+/* Keep the suggest popup empty-state readable and consistent with app theme. */
+.monaco-editor .suggest-widget {
+  border: 1px solid hsl(var(--border) / 0.9) !important;
+  box-shadow: 0 10px 24px hsl(222 47% 11% / 0.2) !important;
+}
+
+.monaco-editor .suggest-widget .message {
+  background-color: hsl(var(--card)) !important;
+  color: hsl(var(--card-foreground)) !important;
+  font-family: var(--editor-font) !important;
+  font-size: 12px !important;
+}
+
+/* Disable Monaco suggest docs/details pane so only the candidate list is shown. */
+.monaco-editor .suggest-details-container,
+.monaco-editor .suggest-details,
+.monaco-editor .suggest-widget .monaco-list .monaco-list-row > .contents > .main > .right > .readMore {
+  display: none !important;
+}
+
+.monaco-editor .suggest-widget.docs-side .tree,
+.monaco-editor .suggest-widget.docs-below .tree,
+.monaco-editor .suggest-widget:not(.docs-side) > .tree {
+  width: 100% !important;
+}
+
 .monaco-editor {
   --scope-indent-step: 4ch;
   --scope-bg-1: #bfe8c5;

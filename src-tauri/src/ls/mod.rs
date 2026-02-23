@@ -333,6 +333,17 @@ fn initialize_ls(client: &LsClient, project_root: &PathBuf) -> Result<(), String
                 },
                 "formatting": {
                     "dynamicRegistration": false
+                },
+                "completion": {
+                    "dynamicRegistration": false,
+                    "contextSupport": true,
+                    "completionItem": {
+                        "snippetSupport": true,
+                        "insertReplaceSupport": true,
+                        "documentationFormat": ["markdown", "plaintext"],
+                        "commitCharactersSupport": true,
+                        "preselectSupport": true
+                    }
                 }
             }
         },
@@ -344,7 +355,22 @@ fn initialize_ls(client: &LsClient, project_root: &PathBuf) -> Result<(), String
         ]
     });
     let _ = client.send_request("initialize", params)?;
-    client.send_notification("initialized", json!({}))
+    client.send_notification("initialized", json!({}))?;
+
+    // Increase completion breadth so members like Math.random are not omitted by the
+    // default small server-side result window.
+    client.send_notification(
+        "workspace/didChangeConfiguration",
+        json!({
+            "settings": {
+                "java": {
+                    "completion": {
+                        "maxResults": 0
+                    }
+                }
+            }
+        }),
+    )
 }
 
 fn stop_process(mut process: LsProcess) -> Result<(), String> {
@@ -559,6 +585,44 @@ pub fn ls_did_close(state: tauri::State<LsState>, uri: String) -> Result<(), Str
     with_client(&state, |client| {
         client.send_notification("textDocument/didClose", params)
     })
+}
+
+#[tauri::command]
+pub fn ls_completion(
+    state: tauri::State<LsState>,
+    uri: String,
+    line: u32,
+    character: u32,
+    trigger_kind: Option<u32>,
+    trigger_character: Option<String>,
+) -> Result<Value, String> {
+    let mut params = json!({
+        "textDocument": {
+            "uri": uri
+        },
+        "position": {
+            "line": line,
+            "character": character
+        }
+    });
+
+    if let Some(kind) = trigger_kind {
+        let mut context = json!({
+            "triggerKind": kind
+        });
+        if let Some(character) = trigger_character {
+            context["triggerCharacter"] = json!(character);
+        }
+        params["context"] = context;
+    }
+
+    let response = with_client(&state, |client| {
+        client.send_request("textDocument/completion", params)
+    })?;
+    if let Some(error) = response.get("error") {
+        return Err(error.to_string());
+    }
+    Ok(response.get("result").cloned().unwrap_or_else(|| json!([])))
 }
 
 #[tauri::command]

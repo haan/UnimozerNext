@@ -33,6 +33,7 @@ pub(crate) fn with_invoke_handlers(
         crate::ls::ls_did_open,
         crate::ls::ls_did_change,
         crate::ls::ls_did_close,
+        crate::ls::ls_completion,
         crate::ls::ls_format_document,
         crate::launch_io::take_startup_logs,
         crate::launch_io::take_launch_open_paths,

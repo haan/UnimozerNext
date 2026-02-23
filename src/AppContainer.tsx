@@ -159,6 +159,14 @@ export default function AppContainer({
     handleMissingRecentProjectOpenChange
   } = useDialogState();
   const debugLogging = settings.advanced.debugLogging;
+  const debugLogSinkRef = useRef<((text: string) => void) | null>(null);
+  const forwardDebugLog = useCallback(
+    (text: string) => {
+      if (!debugLogging) return;
+      debugLogSinkRef.current?.(text);
+    },
+    [debugLogging]
+  );
   const structogramColorsEnabled = settings.advanced.structogramColors;
   const updateChannel = settings.advanced.updateChannel;
   const structogramLoopHeaderColor = settings.structogram.loopHeaderColor;
@@ -227,7 +235,8 @@ export default function AppContainer({
   } = useLanguageServer({
     projectPath,
     openFilePath,
-    openFileContent: content
+    openFileContent: content,
+    onDebugLog: forwardDebugLog
   });
   const {
     editorRef,
@@ -355,6 +364,13 @@ export default function AppContainer({
     onCompileSuccess: handleCompileSuccess,
     onCompileRequested
   });
+
+  useEffect(() => {
+    debugLogSinkRef.current = appendConsoleOutput;
+    return () => {
+      debugLogSinkRef.current = null;
+    };
+  }, [appendConsoleOutput]);
 
   const clearConsole = useCallback(() => {
     resetConsoleOutput();
