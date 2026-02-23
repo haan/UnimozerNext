@@ -3,16 +3,16 @@
   <Fragment>
     <DirectoryRef Id="TARGETDIR">
       <Component Id="UmzFileAssociation" Guid="*">
-        <RegistryKey Root="HKCU" Key="Software\Classes\.umz">
+        <RegistryKey Root="HKLM" Key="Software\Classes\.umz">
           <RegistryValue Type="string" Value="com.unimozer.next.umz" KeyPath="yes" />
         </RegistryKey>
-        <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz">
+        <RegistryKey Root="HKLM" Key="Software\Classes\com.unimozer.next.umz">
           <RegistryValue Type="string" Value="Unimozer Next Project File" />
         </RegistryKey>
-        <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz\DefaultIcon">
+        <RegistryKey Root="HKLM" Key="Software\Classes\com.unimozer.next.umz\DefaultIcon">
           <RegistryValue Type="string" Value="[INSTALLDIR]unimozer-next.exe,0" />
         </RegistryKey>
-        <RegistryKey Root="HKCU" Key="Software\Classes\com.unimozer.next.umz\shell\open\command">
+        <RegistryKey Root="HKLM" Key="Software\Classes\com.unimozer.next.umz\shell\open\command">
           <RegistryValue Type="string" Value="&quot;[INSTALLDIR]unimozer-next.exe&quot; &quot;%1&quot;" />
         </RegistryKey>
       </Component>

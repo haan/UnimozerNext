@@ -17,7 +17,7 @@
     "assets:logo-runtime": "node scripts/generate-logo-runtime-assets.mjs",
     "tauri": "tauri",
     "tauri dev": "tauri dev",
-    "tauri build": "tauri build"
+    "tauri:build": "tauri build --no-sign"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",

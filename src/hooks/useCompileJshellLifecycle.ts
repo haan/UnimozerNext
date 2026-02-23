@@ -25,6 +25,8 @@ type UseCompileJshellLifecycleResult = {
   waitForJshellReady: () => Promise<boolean>;
 };
 
+const JSHELL_WARMUP_TIMEOUT_MS = 10_000;
+
 export const useCompileJshellLifecycle = ({
   projectPath,
   umlGraph,
@@ -84,6 +86,38 @@ export const useCompileJshellLifecycle = ({
       const startToken = jshellStartTokenRef.current + 1;
       jshellStartTokenRef.current = startToken;
 
+      const warmupJshell = async (token: number) => {
+        let timeoutHandle: number | null = window.setTimeout(() => {
+          if (jshellStartTokenRef.current !== token) {
+            return;
+          }
+          setStatus("JShell warmup is taking longer than expected.");
+        }, JSHELL_WARMUP_TIMEOUT_MS);
+
+        try {
+          const warmup = await jshellEval("1 + 1;");
+          if (jshellStartTokenRef.current !== token) {
+            return;
+          }
+          if (!warmup.ok) {
+            const details = trimStatus(
+              warmup.error || warmup.stderr || "Unknown warmup error"
+            );
+            setStatus(`JShell warmup failed: ${details}`);
+          }
+        } catch (error) {
+          if (jshellStartTokenRef.current !== token) {
+            return;
+          }
+          setStatus(`JShell warmup failed: ${trimStatus(formatStatus(error))}`);
+        } finally {
+          if (timeoutHandle !== null) {
+            window.clearTimeout(timeoutHandle);
+            timeoutHandle = null;
+          }
+        }
+      };
+
       const startTask = (async (): Promise<boolean> => {
         try {
           await jshellStop();
@@ -94,13 +128,11 @@ export const useCompileJshellLifecycle = ({
         try {
           await jshellStart(projectPath, outDir);
 
-          // Prime the newly started shell so first user action avoids a cold eval path.
-          await jshellEval("1 + 1;");
-
           if (jshellStartTokenRef.current === startToken) {
             setJshellReady(true);
+            void warmupJshell(startToken);
           }
-          return true;
+          return jshellStartTokenRef.current === startToken;
         } catch (error) {
           if (jshellStartTokenRef.current === startToken) {
             setJshellReady(false);

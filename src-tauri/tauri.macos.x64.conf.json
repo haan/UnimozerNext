@@ -1,6 +1,21 @@
 {
   "bundle": {
     "targets": ["dmg"],
+    "fileAssociations": [
+      {
+        "ext": ["umz"],
+        "name": "Unimozer Next Project",
+        "description": "Unimozer Next Project File",
+        "mimeType": "application/x-unimozer-project",
+        "role": "Editor",
+        "rank": "Owner",
+        "contentTypes": ["com.unimozer.next.project"],
+        "exportedType": {
+          "identifier": "com.unimozer.next.project",
+          "conformsTo": ["public.data"]
+        }
+      }
+    ],
     "resources": {
       "../resources/jdk/mac-x64": "jdk/mac-x64",
       "../resources/java-parser/parser-bridge.jar": "java-parser/parser-bridge.jar",
