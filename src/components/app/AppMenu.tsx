@@ -622,15 +622,20 @@ export const AppMenu = ({
       </div>
 
     {projectName ? (
-      <div className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-center gap-2 text-sm font-medium text-foreground">
-        <span className="max-w-[60vw] truncate">{projectName}</span>
+      <div className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-sm font-medium text-foreground max-[1200px]:left-auto max-[1200px]:right-4 max-[1200px]:translate-x-0">
+        <div
+          className={`relative inline-block max-w-[60vw] max-[1200px]:max-w-[42vw]${
+            hasUnsavedChanges ? " max-[1200px]:pr-4" : ""
+          }`}
+        >
+          <span className="block truncate max-[1200px]:text-right">{projectName}</span>
         {hasUnsavedChanges ? (
           <TooltipProvider delayDuration={100}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <span
                   aria-label="Unsaved changes"
-                  className="pointer-events-auto inline-block h-2 w-2 rounded-full bg-amber-500"
+                  className="pointer-events-auto absolute left-full top-1/2 ml-2 inline-block h-2 w-2 -translate-y-1/2 rounded-full bg-amber-500 max-[1200px]:left-auto max-[1200px]:right-0 max-[1200px]:ml-0"
                 />
               </TooltipTrigger>
               <TooltipContent side="bottom">
@@ -639,6 +644,7 @@ export const AppMenu = ({
             </Tooltip>
           </TooltipProvider>
         ) : null}
+        </div>
       </div>
     ) : null}
     </header>

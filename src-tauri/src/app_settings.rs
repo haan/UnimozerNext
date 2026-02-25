@@ -43,11 +43,11 @@ struct EditorSettings {
     tab_size: u32,
     #[serde(default = "default_insert_spaces")]
     insert_spaces: bool,
-    #[serde(default = "default_false")]
+    #[serde(default = "default_true")]
     auto_close_brackets: bool,
-    #[serde(default = "default_false")]
+    #[serde(default = "default_true")]
     auto_close_quotes: bool,
-    #[serde(default = "default_false")]
+    #[serde(default = "default_true")]
     auto_close_comments: bool,
     #[serde(default = "default_true")]
     word_wrap: bool,
@@ -63,9 +63,9 @@ impl Default for EditorSettings {
             theme: default_editor_theme(),
             tab_size: default_tab_size(),
             insert_spaces: default_insert_spaces(),
-            auto_close_brackets: default_false(),
-            auto_close_quotes: default_false(),
-            auto_close_comments: default_false(),
+            auto_close_brackets: default_true(),
+            auto_close_quotes: default_true(),
+            auto_close_comments: default_true(),
             word_wrap: default_true(),
             scope_highlighting: default_false(),
             auto_format_on_save: default_true(),
@@ -265,9 +265,9 @@ impl Default for AppSettings {
                 theme: default_editor_theme(),
                 tab_size: default_tab_size(),
                 insert_spaces: default_insert_spaces(),
-                auto_close_brackets: default_false(),
-                auto_close_quotes: default_false(),
-                auto_close_comments: default_false(),
+                auto_close_brackets: default_true(),
+                auto_close_quotes: default_true(),
+                auto_close_comments: default_true(),
                 word_wrap: default_true(),
                 scope_highlighting: default_false(),
                 auto_format_on_save: default_true(),
