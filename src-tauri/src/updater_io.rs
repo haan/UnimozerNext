@@ -11,8 +11,10 @@ use crate::lifecycle::shutdown_background_processes;
 const STABLE_ENDPOINT_TEMPLATE: &str =
     "https://github.com/haan/UnimozerNext/releases/latest/download/latest-{target}.json";
 const PRERELEASE_ENDPOINT_TEMPLATE: &str = "https://github.com/haan/UnimozerNext/releases/download/updater-prerelease/latest-{target}.json";
+#[cfg(target_os = "windows")]
 const MSI_UPDATER_DISABLED_MESSAGE: &str =
     "Self-update is disabled for MSI installations. Use the NSIS installer to enable in-app updates.";
+#[cfg(target_os = "windows")]
 const UNKNOWN_INSTALLER_UPDATER_DISABLED_MESSAGE: &str =
     "Self-update is disabled because the installer type could not be detected.";
 
