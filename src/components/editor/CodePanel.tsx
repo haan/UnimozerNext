@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useRef } from "react";
 import type { CSSProperties } from "react";
 
 import { registerMonacoThemes, resolveMonacoTheme } from "../../services/monacoThemes";
+import { registerMonacoJavaTokenizer } from "../../services/monacoJavaTokenizer";
 
 type OpenFile = {
   name: string;
@@ -813,6 +814,7 @@ export const CodePanel = memo(
               keepCurrentModel
               beforeMount={(monaco) => {
                 monacoRef.current = monaco;
+                registerMonacoJavaTokenizer(monaco);
                 void applyTheme(monaco);
               }}
               onMount={(editor) => {
@@ -851,6 +853,7 @@ export const CodePanel = memo(
                 suggestOnTriggerCharacters: true,
                 quickSuggestions: false,
                 wordBasedSuggestions: "off",
+                "semanticHighlighting.enabled": false,
                 suggest: {
                   showInlineDetails: false,
                   showStatusBar: false

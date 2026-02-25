@@ -681,11 +681,12 @@ export const useLanguageServer = ({
   const notifyLsOpen = useCallback((path: string, text: string) => {
     if (!lsReadyRef.current) return;
     if (lsOpenRef.current.has(path)) return;
+    const uri = toFileUri(path);
     lsOpenRef.current.add(path);
     lsVersionRef.current[path] = LS_INITIAL_DOCUMENT_VERSION;
     lsLastSyncedTextRef.current[path] = text;
     void invoke("ls_did_open", {
-      uri: toFileUri(path),
+      uri,
       text,
       languageId: "java"
     }).catch(() => undefined);
@@ -728,14 +729,15 @@ export const useLanguageServer = ({
       return;
     }
 
-    const nextVersion = (lsVersionRef.current[path] ?? LS_INITIAL_DOCUMENT_VERSION) + 1;
-    lsVersionRef.current[path] = nextVersion;
+    const currentVersion = lsVersionRef.current[path] ?? LS_INITIAL_DOCUMENT_VERSION;
+    const nextVersion = currentVersion + 1;
     try {
       await invoke("ls_did_change", {
         uri,
         version: nextVersion,
         text
       });
+      lsVersionRef.current[path] = nextVersion;
       lsLastSyncedTextRef.current[path] = text;
     } catch {
       // Ignore LS sync failures; completion gracefully degrades.
@@ -892,11 +894,13 @@ export const useLanguageServer = ({
 
     const setup = async () => {
       const readyUnlisten = await listen<LsReadyEvent>("ls_ready", (event) => {
+        if (!active) return;
         const currentProjectPath = latestProjectPathRef.current;
         if (!currentProjectPath) return;
         if (event.payload.projectRoot && event.payload.projectRoot !== currentProjectPath) {
           return;
         }
+
         lsReadyRef.current = true;
         const currentOpenFilePath = latestOpenFilePathRef.current;
         if (currentOpenFilePath) {
@@ -952,14 +956,14 @@ export const useLanguageServer = ({
           const markers = diagnostics
             .filter((diag) => diag.severity === LS_DIAGNOSTIC_SEVERITY_ERROR)
             .map((diag) => ({
-            startLineNumber: diag.range.start.line + 1,
-            startColumn: diag.range.start.character + 1,
-            endLineNumber: diag.range.end.line + 1,
-            endColumn: diag.range.end.character + 1,
-            message: diag.message,
-            severity: monacoInstance.MarkerSeverity.Error,
-            source: diag.source ?? "jdtls"
-          }));
+              startLineNumber: diag.range.start.line + 1,
+              startColumn: diag.range.start.character + 1,
+              endLineNumber: diag.range.end.line + 1,
+              endColumn: diag.range.end.character + 1,
+              message: diag.message,
+              severity: monacoInstance.MarkerSeverity.Error,
+              source: diag.source ?? "jdtls"
+            }));
           const fingerprint = [...markers]
             .sort((a, b) => {
               if (a.startLineNumber !== b.startLineNumber) {

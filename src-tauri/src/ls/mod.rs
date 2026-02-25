@@ -354,7 +354,7 @@ fn initialize_ls(client: &LsClient, project_root: &PathBuf) -> Result<(), String
             }
         ]
     });
-    let _ = client.send_request("initialize", params)?;
+    let _initialize_response = client.send_request("initialize", params)?;
     client.send_notification("initialized", json!({}))?;
 
     // Increase completion breadth so members like Math.random are not omitted by the
@@ -370,7 +370,9 @@ fn initialize_ls(client: &LsClient, project_root: &PathBuf) -> Result<(), String
                 }
             }
         }),
-    )
+    )?;
+
+    Ok(())
 }
 
 fn stop_process(mut process: LsProcess) -> Result<(), String> {
