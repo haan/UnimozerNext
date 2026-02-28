@@ -56,6 +56,39 @@ const toCrashSnapshot = (value: unknown): CrashSnapshot => {
   };
 };
 
+const cancellationWords = ["cancel", "canceled", "cancelled", "abort", "aborted"];
+
+const hasCancellationText = (value: string): boolean => {
+  const normalized = value.toLowerCase();
+  return cancellationWords.some((word) => normalized.includes(word));
+};
+
+const shouldIgnoreUnhandledRejection = (reason: unknown): boolean => {
+  if (reason instanceof DOMException) {
+    return reason.name === "AbortError" || hasCancellationText(reason.message);
+  }
+  if (reason instanceof Error) {
+    return hasCancellationText(reason.message) || hasCancellationText(reason.name);
+  }
+  if (typeof reason === "string") {
+    return hasCancellationText(reason);
+  }
+  if (reason && typeof reason === "object") {
+    const candidate = reason as Record<string, unknown>;
+    const type = typeof candidate.type === "string" ? candidate.type : "";
+    const code = typeof candidate.code === "string" ? candidate.code : "";
+    const msg = typeof candidate.msg === "string" ? candidate.msg : "";
+    const message = typeof candidate.message === "string" ? candidate.message : "";
+    if (hasCancellationText(type) || hasCancellationText(code)) {
+      return true;
+    }
+    if (hasCancellationText(msg) || hasCancellationText(message)) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const emitConsoleLines = (lines: string[]) => {
   const normalized = normalizeLines(lines);
   if (!normalized.length) {
@@ -122,6 +155,10 @@ export const installGlobalCrashHandlers = (): void => {
   });
 
   window.addEventListener("unhandledrejection", (event) => {
+    if (shouldIgnoreUnhandledRejection(event.reason)) {
+      event.preventDefault();
+      return;
+    }
     reportFrontendCrash("window.unhandledrejection", event.reason, [
       `href=${window.location.href}`
     ]);

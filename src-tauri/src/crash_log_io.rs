@@ -16,6 +16,12 @@ fn crash_log_path(app: &AppHandle) -> CommandResult<PathBuf> {
     Ok(data_dir.join(FRONTEND_CRASH_LOG_FILE))
 }
 
+#[tauri::command]
+pub fn get_crash_log_path(app: AppHandle) -> CommandResult<String> {
+    let path = crash_log_path(&app)?;
+    Ok(path.to_string_lossy().to_string())
+}
+
 fn rotate_if_needed(path: &Path) -> std::io::Result<()> {
     let metadata = match fs::metadata(path) {
         Ok(metadata) => metadata,
