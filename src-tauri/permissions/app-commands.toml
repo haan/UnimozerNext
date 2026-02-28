@@ -18,6 +18,7 @@ commands.allow = [
   "add_constructor_to_class",
   "add_method_to_class",
   "compile_project",
+  "append_crash_log",
   "jshell_start",
   "jshell_stop",
   "jshell_eval",

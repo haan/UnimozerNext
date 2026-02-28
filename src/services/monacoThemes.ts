@@ -37,6 +37,7 @@ const FALLBACK_LIGHT_KEYWORD_COLOR = "#0000ff";
 const FALLBACK_DARK_KEYWORD_COLOR = "#569cd6";
 const CSS_VAR_EDITOR_TOKEN_KEYWORD_FALLBACK = "--editor-token-keyword-fallback";
 const CSS_VAR_EDITOR_TOKEN_TYPE_FALLBACK = "--editor-token-type-fallback";
+const HEX_COLOR_PATTERN = /^#?([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 
 const TYPE_COLOR_CANDIDATES = [
   "declaration.type",
@@ -140,16 +141,48 @@ export const resolveMonacoTheme = (theme: string | undefined, darkMode: boolean)
 
 const normalizeColor = (value?: string | null) => {
   if (!value) return null;
-  let color = value.trim();
+  const color = value.trim();
   if (!color) return null;
-  if (!color.startsWith("#")) {
-    color = `#${color}`;
+  const match = HEX_COLOR_PATTERN.exec(color);
+  if (!match) {
+    return null;
   }
-  return color;
+  let hex = match[1] ?? "";
+  if (hex.length === 3 || hex.length === 4) {
+    hex = [...hex].map((char) => `${char}${char}`).join("");
+  }
+  return `#${hex.toLowerCase()}`;
 };
 
 const normalizeRuleColor = (rule: ThemeRule | undefined): string | null =>
   normalizeColor(typeof rule?.foreground === "string" ? rule.foreground : null);
+
+const normalizeTokenColor = (value?: string | null): string | null => {
+  const normalized = normalizeColor(value);
+  return normalized ? normalized.slice(1) : null;
+};
+
+const sanitizeThemeRules = (rules: ThemeRule[]): ThemeRule[] =>
+  rules.map((rule) => {
+    const next: ThemeRule = { ...rule };
+    const normalizedForeground = normalizeTokenColor(
+      typeof next.foreground === "string" ? next.foreground : null
+    );
+    if (normalizedForeground) {
+      next.foreground = normalizedForeground;
+    } else {
+      delete next.foreground;
+    }
+    const normalizedBackground = normalizeTokenColor(
+      typeof next.background === "string" ? next.background : null
+    );
+    if (normalizedBackground) {
+      next.background = normalizedBackground;
+    } else {
+      delete next.background;
+    }
+    return next;
+  });
 
 const readCssVarColor = (name: string): string | null => {
   if (typeof window === "undefined" || typeof document === "undefined") {
@@ -205,7 +238,10 @@ const upsertRuleColor = (rules: ThemeRule[], token: string, color: string) => {
   const existingIndex = rules.findIndex(
     (rule) => (rule.token ?? "").trim().toLowerCase() === normalizedToken
   );
-  const normalizedColor = color.replace("#", "");
+  const normalizedColor = normalizeTokenColor(color);
+  if (!normalizedColor) {
+    return;
+  }
   if (existingIndex >= 0) {
     rules[existingIndex] = {
       ...rules[existingIndex],
@@ -219,7 +255,7 @@ const upsertRuleColor = (rules: ThemeRule[], token: string, color: string) => {
 const withJavaDeclarationTokenColors = (
   theme: Monaco.editor.IStandaloneThemeData
 ): Monaco.editor.IStandaloneThemeData => {
-  const rules = Array.isArray(theme.rules) ? [...theme.rules] : [];
+  const rules = Array.isArray(theme.rules) ? sanitizeThemeRules([...theme.rules]) : [];
   const isDark = (theme.base ?? "").toLowerCase().includes("dark");
   const editorForeground = normalizeColor(theme.colors?.["editor.foreground"]);
   const keywordFallback =
@@ -271,7 +307,11 @@ const fetchThemeData = async (themeId: string) => {
   const response = await fetch(entry.url);
   if (!response.ok) return null;
 
-  const theme = (await response.json()) as Monaco.editor.IStandaloneThemeData;
+  const rawTheme = (await response.json()) as Monaco.editor.IStandaloneThemeData;
+  const theme: Monaco.editor.IStandaloneThemeData = {
+    ...rawTheme,
+    rules: sanitizeThemeRules(Array.isArray(rawTheme.rules) ? rawTheme.rules : [])
+  };
   themeDataCache.set(themeId, theme);
   return theme;
 };

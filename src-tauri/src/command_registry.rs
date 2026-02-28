@@ -16,6 +16,7 @@ pub(crate) fn with_invoke_handlers(
         crate::compile_run::compile_project,
         crate::compile_run::run_main,
         crate::compile_run::cancel_run,
+        crate::crash_log_io::append_crash_log,
         crate::jshell_io::jshell_start,
         crate::jshell_io::jshell_stop,
         crate::jshell_io::jshell_eval,

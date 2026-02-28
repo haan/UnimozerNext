@@ -40,7 +40,7 @@ const JAVA_DECLARATION_TOKENIZER_RULES: Monaco.languages.IMonarchLanguageRule[] 
     new RegExp(
       `(^\\s*)((?:(?:public|protected|private|static|final|volatile|transient)\\s+)*)(?:(${JAVA_SIMPLE_TYPE_PATTERN})(\\s+)([A-Za-z_$][\\w$]*))(\\s*)(\\[\\s*\\](?:\\s*\\[\\s*\\])*)(\\s*)(?=[=;,)])`
     ),
-    ["", "keyword", "declaration.type", "", "", "", "declaration.type", "", ""]
+    ["", "keyword", "declaration.type", "", "", "", "declaration.type", ""]
   ],
   [
     new RegExp(
@@ -50,22 +50,132 @@ const JAVA_DECLARATION_TOKENIZER_RULES: Monaco.languages.IMonarchLanguageRule[] 
   ]
 ];
 
+const countCapturingGroups = (regex: RegExp): number => {
+  const source = regex.source;
+  let count = 0;
+  let inCharacterClass = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    if (!char) continue;
+
+    if (char === "\\") {
+      index += 1;
+      continue;
+    }
+
+    if (char === "[") {
+      inCharacterClass = true;
+      continue;
+    }
+
+    if (char === "]") {
+      inCharacterClass = false;
+      continue;
+    }
+
+    if (inCharacterClass || char !== "(") {
+      continue;
+    }
+
+    const next = source[index + 1] ?? "";
+    if (next !== "?") {
+      count += 1;
+      continue;
+    }
+
+    const extension = source[index + 2] ?? "";
+    if (extension === ":" || extension === "=" || extension === "!") {
+      continue;
+    }
+    if (extension === "<") {
+      const lookbehindMarker = source[index + 3] ?? "";
+      if (lookbehindMarker === "=" || lookbehindMarker === "!") {
+        continue;
+      }
+      // `(?<name>...)` named capturing group.
+      count += 1;
+      continue;
+    }
+
+    // Treat unknown `(?...)` forms conservatively as non-capturing.
+  }
+
+  return count;
+};
+
+const getRegexRuleActionCount = (
+  rule: Monaco.languages.IMonarchLanguageRule
+): { regex: RegExp; actionCount: number } | null => {
+  if (!Array.isArray(rule) || rule.length !== 2) {
+    return null;
+  }
+  const candidate = rule as unknown as [unknown, unknown];
+  const [regex, actions] = candidate;
+  if (!(regex instanceof RegExp) || !Array.isArray(actions)) {
+    return null;
+  }
+  return { regex, actionCount: actions.length };
+};
+
+const sanitizeDeclarationTokenizerRules = (
+  rules: Monaco.languages.IMonarchLanguageRule[]
+) => {
+  const sanitized: Monaco.languages.IMonarchLanguageRule[] = [];
+  for (const rule of rules) {
+    const actionInfo = getRegexRuleActionCount(rule);
+    if (!actionInfo) {
+      sanitized.push(rule);
+      continue;
+    }
+
+    const { regex, actionCount } = actionInfo;
+    const groupCount = countCapturingGroups(regex);
+    if (groupCount !== actionCount) {
+      // Prevent runtime tokenizer crashes by dropping malformed custom rules.
+      console.error(
+        `[monaco] dropped invalid java tokenizer rule (groups=${groupCount}, actions=${actionCount}): ${regex.source}`
+      );
+      continue;
+    }
+    sanitized.push(rule);
+  }
+  return sanitized;
+};
+
 export const registerMonacoJavaTokenizer = (monaco: typeof Monaco) => {
   if (javaTokenizerRegistered) {
     return;
   }
 
   const baseTokenizerRoot = javaMonarchLanguage.tokenizer?.root ?? [];
+  const safeDeclarationRules = sanitizeDeclarationTokenizerRules(
+    JAVA_DECLARATION_TOKENIZER_RULES
+  );
   const tokenizer = {
     ...javaMonarchLanguage.tokenizer,
-    root: [...JAVA_DECLARATION_TOKENIZER_RULES, ...baseTokenizerRoot]
+    root: [...safeDeclarationRules, ...baseTokenizerRoot]
   };
 
   monaco.languages.setLanguageConfiguration("java", javaLanguageConf);
-  monaco.languages.setMonarchTokensProvider("java", {
-    ...javaMonarchLanguage,
-    tokenizer
-  });
+  try {
+    monaco.languages.setMonarchTokensProvider("java", {
+      ...javaMonarchLanguage,
+      tokenizer
+    });
+    // Smoke test representative declaration patterns so invalid rules fail fast
+    // and do not blank the app at runtime when opening a Java class.
+    monaco.editor.tokenize("public class Demo {}", "java");
+    monaco.editor.tokenize(
+      "public int test(int min, int max) { return (int) Math.random(); }",
+      "java"
+    );
+    monaco.editor.tokenize("@Override public void run() {}", "java");
+    monaco.editor.tokenize("private int[][] values;", "java");
+  } catch (error) {
+    console.error("[monaco] failed to register custom java tokenizer, falling back", error);
+    monaco.languages.setMonarchTokensProvider("java", javaMonarchLanguage);
+  }
 
   javaTokenizerRegistered = true;
 };

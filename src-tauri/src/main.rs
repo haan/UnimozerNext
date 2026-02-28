@@ -5,6 +5,7 @@ mod app_settings;
 mod command_error;
 mod command_registry;
 mod compile_run;
+mod crash_log_io;
 mod external_links;
 mod fs_io;
 mod java_tools;

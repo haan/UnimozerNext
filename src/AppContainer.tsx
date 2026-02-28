@@ -59,6 +59,11 @@ import {
   upsertRecentProject
 } from "./services/recentProjects";
 import { toDisplayPath } from "./services/paths";
+import {
+  consumePendingCrashConsoleLines,
+  installGlobalCrashHandlers,
+  listenForCrashConsoleLines
+} from "./services/crashLogging";
 
 export type AppContainerProps = {
   settings: AppSettings;
@@ -420,6 +425,19 @@ export default function AppContainer({
     return () => {
       debugLogSinkRef.current = null;
     };
+  }, [appendConsoleOutput]);
+
+  useEffect(() => {
+    installGlobalCrashHandlers();
+  }, []);
+
+  useEffect(() => {
+    consumePendingCrashConsoleLines().forEach((line) => {
+      appendConsoleOutput(line);
+    });
+    return listenForCrashConsoleLines((line) => {
+      appendConsoleOutput(line);
+    });
   }, [appendConsoleOutput]);
 
   const clearConsole = useCallback(() => {
