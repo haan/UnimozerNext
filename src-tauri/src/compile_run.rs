@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::os::windows::process::CommandExt;
 use std::{
     fs,
-    io::{BufRead, BufReader, ErrorKind, Read},
+    io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -92,61 +92,6 @@ fn decode_process_output(bytes: Vec<u8>) -> String {
     }
 }
 
-const OUT_DIR_CLEANUP_RETRIES: usize = 25;
-const OUT_DIR_CLEANUP_RETRY_DELAY_MS: u64 = 120;
-
-fn should_retry_out_dir_cleanup(error: &std::io::Error) -> bool {
-    matches!(
-        error.kind(),
-        ErrorKind::DirectoryNotEmpty | ErrorKind::PermissionDenied | ErrorKind::WouldBlock
-    ) || matches!(error.raw_os_error(), Some(32) | Some(145))
-}
-
-fn recreate_output_dir(out_dir: &Path) -> Result<(), String> {
-    let mut last_error: Option<String> = None;
-    for attempt in 0..=OUT_DIR_CLEANUP_RETRIES {
-        if out_dir.exists() {
-            match fs::remove_dir_all(out_dir) {
-                Ok(()) => {}
-                Err(error) => {
-                    last_error = Some(error.to_string());
-                    if attempt < OUT_DIR_CLEANUP_RETRIES && should_retry_out_dir_cleanup(&error) {
-                        std::thread::sleep(Duration::from_millis(OUT_DIR_CLEANUP_RETRY_DELAY_MS));
-                        continue;
-                    }
-                    return Err(format!(
-                        "Failed to clean output directory {}: {}",
-                        out_dir.display(),
-                        error
-                    ));
-                }
-            }
-        }
-
-        match fs::create_dir_all(out_dir) {
-            Ok(()) => return Ok(()),
-            Err(error) => {
-                last_error = Some(error.to_string());
-                if attempt < OUT_DIR_CLEANUP_RETRIES && should_retry_out_dir_cleanup(&error) {
-                    std::thread::sleep(Duration::from_millis(OUT_DIR_CLEANUP_RETRY_DELAY_MS));
-                    continue;
-                }
-                return Err(format!(
-                    "Failed to create output directory {}: {}",
-                    out_dir.display(),
-                    error
-                ));
-            }
-        }
-    }
-
-    Err(format!(
-        "Failed to prepare output directory {}: {}",
-        out_dir.display(),
-        last_error.unwrap_or_else(|| "unknown error".to_string())
-    ))
-}
-
 #[tauri::command]
 pub fn compile_project(
     app: tauri::AppHandle,
@@ -193,7 +138,7 @@ pub fn compile_project(
 
     let build_dir = root_path.join("build");
     let out_dir = build_dir.join("classes");
-    recreate_output_dir(&out_dir)?;
+    fs::create_dir_all(&out_dir).map_err(crate::command_error::to_command_error)?;
 
     let mut java_files = Vec::new();
     collect_java_files(&src_root_path, &mut java_files)

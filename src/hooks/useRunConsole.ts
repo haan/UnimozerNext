@@ -33,7 +33,8 @@ type UseRunConsoleArgs = {
   setStatus: (status: string) => void;
   formatStatus: (input: unknown) => string;
   preserveConsoleOnCompile?: boolean;
-  onCompileSuccess?: (outDir: string) => void;
+  onCompileInputsSaved?: () => Promise<void>;
+  onCompileSuccess?: (outDir: string) => Promise<void>;
   onCompileRequested?: () => Promise<void> | void;
 };
 
@@ -60,12 +61,14 @@ export const useRunConsole = ({
   setStatus,
   formatStatus,
   preserveConsoleOnCompile = false,
+  onCompileInputsSaved,
   onCompileSuccess,
   onCompileRequested
 }: UseRunConsoleArgs): UseRunConsoleResult => {
   const [runSessionId, setRunSessionId] = useState<number | null>(null);
   const [consoleOutput, setConsoleOutput] = useState("");
   const runSessionRef = useRef<number | null>(null);
+  const compileInFlightRef = useRef(false);
   const consoleLinesRef = useRef<string[]>([]);
   const consoleDroppedRef = useRef(0);
   const consoleFlushRef = useRef<number | null>(null);
@@ -176,6 +179,10 @@ export const useRunConsole = ({
   const runCompile = useCallback(
     async (label?: string) => {
       if (!projectPath) return;
+      if (compileInFlightRef.current) {
+        return;
+      }
+      compileInFlightRef.current = true;
       const overrides = Object.entries(fileDrafts)
         .filter(([, draft]) => draft.content !== draft.lastSavedContent)
         .map(([path, draft]) => ({
@@ -191,9 +198,19 @@ export const useRunConsole = ({
       setCompileStatus(null);
       const labelSuffix = label ? ` for ${label}` : "";
       appendConsole(`[${startedAt}] Compile requested${labelSuffix}`);
+      setStatus("Stopping object bench runtime...");
       await onCompileRequested?.();
+      appendConsole("Phase 1/4: stopping object bench runtime...done.");
       try {
-        await formatAndSaveUmlFiles(false);
+        setStatus("Saving files...");
+        const savedFiles = await formatAndSaveUmlFiles(false);
+        await onCompileInputsSaved?.();
+        appendConsole(
+          `Phase 2/4: saving files...saved ${savedFiles} file${
+            savedFiles === 1 ? "" : "s"
+          } before compile.`
+        );
+        setStatus("Compiling Java sources...");
         const result = await invoke<{
           ok: boolean;
           stdout: string;
@@ -211,13 +228,20 @@ export const useRunConsole = ({
           appendConsole(result.stderr.trim());
         }
         if (result.ok) {
-          appendConsole("Compilation succeeded.");
+          appendConsole("Phase 3/4: compiling Java sources...compilation succeeded.");
           setCompileStatus("success");
           if (result.outDir && onCompileSuccess) {
-            onCompileSuccess(result.outDir);
+            setStatus("Starting object bench runtime...");
+            await onCompileSuccess(result.outDir);
+            appendConsole("Phase 4/4: starting object bench runtime...ready.");
+          } else {
+            appendConsole("Phase 4/4: starting object bench runtime...skipped.");
           }
-        } else if (!result.stderr && !result.stdout) {
-          appendConsole("Compilation failed.");
+        } else {
+          appendConsole("Phase 3/4: compiling Java sources...compilation failed.");
+          if (!result.stderr && !result.stdout) {
+            appendConsole("Compilation failed.");
+          }
         }
         if (!result.ok) {
           setCompileStatus("failed");
@@ -242,6 +266,7 @@ export const useRunConsole = ({
         setStatus("Compile failed.");
       } finally {
         setBusy(false);
+        compileInFlightRef.current = false;
       }
     },
     [
@@ -250,6 +275,7 @@ export const useRunConsole = ({
       formatAndSaveUmlFiles,
       formatStatus,
       onCompileRequested,
+      onCompileInputsSaved,
       onCompileSuccess,
       preserveConsoleOnCompile,
       projectPath,

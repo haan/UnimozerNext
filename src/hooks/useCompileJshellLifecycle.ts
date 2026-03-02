@@ -27,7 +27,6 @@ type UseCompileJshellLifecycleResult = {
 };
 
 const JSHELL_WARMUP_TIMEOUT_MS = 10_000;
-const JSHELL_START_AFTER_COMPILE_DELAY_MS = 1_000;
 const PACKED_SYNC_AFTER_COMPILE_DELAY_MS = 1_500;
 
 export const useCompileJshellLifecycle = ({
@@ -47,8 +46,6 @@ export const useCompileJshellLifecycle = ({
   const lastCompileStatusRef = useRef<"success" | "failed" | null>(null);
   const jshellStartTaskRef = useRef<Promise<boolean> | null>(null);
   const jshellStartTokenRef = useRef(0);
-  const jshellStartDelayRef = useRef<number | null>(null);
-  const pendingJshellStartRef = useRef<{ token: number; outDir: string } | null>(null);
   const logDebug = useCallback(
     (text: string) => {
       appendDebugOutput?.(`[${new Date().toLocaleTimeString()}] ${text}`);
@@ -56,18 +53,11 @@ export const useCompileJshellLifecycle = ({
     [appendDebugOutput]
   );
 
-  const clearDelayedJshellStart = useCallback(() => {
-    if (jshellStartDelayRef.current !== null) {
-      window.clearTimeout(jshellStartDelayRef.current);
-      jshellStartDelayRef.current = null;
-    }
-    pendingJshellStartRef.current = null;
-  }, []);
-
   const startJshellForCompile = useCallback(
     (startToken: number, rootPath: string, outDir: string): Promise<boolean> => {
-      const warmupJshell = async (token: number) => {
+      const warmupJshell = async (token: number): Promise<boolean> => {
         logDebug(`JShell warmup start (token=${token})`);
+        setStatus("Warming up object bench runtime...");
         let timeoutHandle: number | null = window.setTimeout(() => {
           if (jshellStartTokenRef.current !== token) {
             return;
@@ -79,7 +69,7 @@ export const useCompileJshellLifecycle = ({
         try {
           const warmup = await jshellEval("1 + 1;");
           if (jshellStartTokenRef.current !== token) {
-            return;
+            return false;
           }
           if (!warmup.ok) {
             const details = trimStatus(
@@ -87,16 +77,20 @@ export const useCompileJshellLifecycle = ({
             );
             logDebug(`JShell warmup failed (token=${token}): ${details}`);
             setStatus(`JShell warmup failed: ${details}`);
+            return false;
           } else {
             logDebug(`JShell warmup finished (token=${token})`);
             logDebug(`JShell ready (token=${token}, warmup complete)`);
+            setStatus("Object bench runtime ready.");
+            return true;
           }
         } catch (error) {
           if (jshellStartTokenRef.current !== token) {
-            return;
+            return false;
           }
           logDebug(`JShell warmup threw (token=${token}): ${trimStatus(formatStatus(error))}`);
           setStatus(`JShell warmup failed: ${trimStatus(formatStatus(error))}`);
+          return false;
         } finally {
           if (timeoutHandle !== null) {
             window.clearTimeout(timeoutHandle);
@@ -133,7 +127,7 @@ export const useCompileJshellLifecycle = ({
             setJshellReady(true);
             logDebug(`JShell start completed (token=${startToken})`);
             logDebug(`JShell ready (token=${startToken}, warmup pending)`);
-            void warmupJshell(startToken);
+            await warmupJshell(startToken);
           }
           return jshellStartTokenRef.current === startToken;
         } catch (error) {
@@ -160,7 +154,6 @@ export const useCompileJshellLifecycle = ({
 
   useEffect(() => {
     if (!projectPath) {
-      clearDelayedJshellStart();
       jshellStartTaskRef.current = null;
       jshellStartTokenRef.current += 1;
       setObjectBench([]);
@@ -170,7 +163,6 @@ export const useCompileJshellLifecycle = ({
       return;
     }
     return () => {
-      clearDelayedJshellStart();
       jshellStartTaskRef.current = null;
       jshellStartTokenRef.current += 1;
       logDebug("JShell stop on lifecycle cleanup");
@@ -178,7 +170,7 @@ export const useCompileJshellLifecycle = ({
       setObjectBench([]);
       setJshellReady(false);
     };
-  }, [clearDelayedJshellStart, logDebug, projectPath, setJshellReady, setObjectBench]);
+  }, [logDebug, projectPath, setJshellReady, setObjectBench]);
 
   useEffect(() => {
     const signature = getUmlSignature(umlGraph);
@@ -203,32 +195,15 @@ export const useCompileJshellLifecycle = ({
 
       const startToken = jshellStartTokenRef.current + 1;
       jshellStartTokenRef.current = startToken;
-      clearDelayedJshellStart();
-      pendingJshellStartRef.current = {
-        token: startToken,
-        outDir
-      };
-      logDebug(
-        `JShell start scheduled (token=${startToken}, delay=${JSHELL_START_AFTER_COMPILE_DELAY_MS}ms)`
-      );
-
-      jshellStartDelayRef.current = window.setTimeout(() => {
-        jshellStartDelayRef.current = null;
-        const pending = pendingJshellStartRef.current;
-        if (!pending || pending.token !== startToken) {
-          logDebug(`JShell scheduled start canceled (token=${startToken})`);
-          return;
-        }
-        pendingJshellStartRef.current = null;
-        logDebug(`JShell scheduled start executing (token=${startToken})`);
-        void startJshellForCompile(startToken, projectPath, pending.outDir);
-      }, JSHELL_START_AFTER_COMPILE_DELAY_MS);
+      logDebug(`JShell start executing (token=${startToken})`);
+      setStatus("Starting object bench runtime...");
+      await startJshellForCompile(startToken, projectPath, outDir);
     },
     [
-      clearDelayedJshellStart,
       logDebug,
       projectPath,
       requestPackedArchiveSync,
+      setStatus,
       startJshellForCompile,
       setJshellReady,
       setObjectBench,
@@ -238,7 +213,6 @@ export const useCompileJshellLifecycle = ({
   const onCompileRequested = useCallback(async () => {
     logDebug("Compile requested: stop/reset JShell lifecycle");
     jshellStartTokenRef.current += 1;
-    clearDelayedJshellStart();
     jshellStartTaskRef.current = null;
     setJshellReady(false);
     setObjectBench([]);
@@ -250,25 +224,14 @@ export const useCompileJshellLifecycle = ({
       // Ignore failures while preparing compile.
       logDebug("JShell stop failed before compile");
     }
-  }, [clearDelayedJshellStart, logDebug, setJshellReady, setObjectBench]);
+  }, [logDebug, setJshellReady, setObjectBench]);
 
   const waitForJshellReady = useCallback(async (): Promise<boolean> => {
     if (jshellStartTaskRef.current) {
       return jshellStartTaskRef.current;
     }
-
-    const pending = pendingJshellStartRef.current;
-    if (pending && pending.token === jshellStartTokenRef.current) {
-      clearDelayedJshellStart();
-      if (!projectPath) {
-        return false;
-      }
-      logDebug(`JShell immediate start requested by object action (token=${pending.token})`);
-      return startJshellForCompile(pending.token, projectPath, pending.outDir);
-    }
-
     return false;
-  }, [clearDelayedJshellStart, logDebug, projectPath, startJshellForCompile]);
+  }, []);
 
   useEffect(() => {
     if (compileStatus !== "success") {
