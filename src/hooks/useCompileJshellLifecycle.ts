@@ -21,13 +21,39 @@ type UseCompileJshellLifecycleArgs = {
 
 type UseCompileJshellLifecycleResult = {
   lastCompileOutDirRef: MutableRefObject<string | null>;
-  handleCompileSuccess: (outDir: string) => Promise<void>;
+  handleCompileSuccess: (outDir: string) => Promise<{ ready: boolean; reason?: string }>;
   onCompileRequested: () => Promise<void>;
   waitForJshellReady: () => Promise<boolean>;
 };
 
 const JSHELL_WARMUP_TIMEOUT_MS = 10_000;
 const PACKED_SYNC_AFTER_COMPILE_DELAY_MS = 1_500;
+const JSHELL_STOP_TIMEOUT_MS = 5_000;
+const JSHELL_START_TIMEOUT_MS = 5_000;
+
+const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number, message: string) =>
+  new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(message));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
 
 export const useCompileJshellLifecycle = ({
   projectPath,
@@ -107,11 +133,19 @@ export const useCompileJshellLifecycle = ({
 
         logDebug(`JShell stop before restart (token=${startToken})`);
         try {
-          await jshellStop();
+          await withTimeout(
+            jshellStop(),
+            JSHELL_STOP_TIMEOUT_MS,
+            `JShell stop timed out after ${JSHELL_STOP_TIMEOUT_MS}ms`
+          );
           logDebug(`JShell stop completed before restart (token=${startToken})`);
-        } catch {
+        } catch (error) {
           // Ignore failures when restarting JShell.
-          logDebug(`JShell stop failed before restart (token=${startToken})`);
+          logDebug(
+            `JShell stop failed before restart (token=${startToken}): ${trimStatus(
+              formatStatus(error)
+            )}`
+          );
         }
 
         if (jshellStartTokenRef.current !== startToken) {
@@ -121,13 +155,21 @@ export const useCompileJshellLifecycle = ({
 
         try {
           logDebug(`JShell start (token=${startToken}, outDir=${outDir})`);
-          await jshellStart(rootPath, outDir);
+          await withTimeout(
+            jshellStart(rootPath, outDir),
+            JSHELL_START_TIMEOUT_MS,
+            `JShell start timed out after ${JSHELL_START_TIMEOUT_MS}ms`
+          );
 
           if (jshellStartTokenRef.current === startToken) {
             setJshellReady(true);
             logDebug(`JShell start completed (token=${startToken})`);
             logDebug(`JShell ready (token=${startToken}, warmup pending)`);
-            await warmupJshell(startToken);
+            const warmupReady = await warmupJshell(startToken);
+            if (!warmupReady) {
+              setJshellReady(false);
+              return false;
+            }
           }
           return jshellStartTokenRef.current === startToken;
         } catch (error) {
@@ -187,7 +229,9 @@ export const useCompileJshellLifecycle = ({
 
   const handleCompileSuccess = useCallback(
     async (outDir: string) => {
-      if (!projectPath) return;
+      if (!projectPath) {
+        return { ready: false, reason: "Project path missing." };
+      }
       lastCompileOutDirRef.current = outDir;
       requestPackedArchiveSync(PACKED_SYNC_AFTER_COMPILE_DELAY_MS);
       setJshellReady(false);
@@ -197,7 +241,11 @@ export const useCompileJshellLifecycle = ({
       jshellStartTokenRef.current = startToken;
       logDebug(`JShell start executing (token=${startToken})`);
       setStatus("Starting object bench runtime...");
-      await startJshellForCompile(startToken, projectPath, outDir);
+      const ready = await startJshellForCompile(startToken, projectPath, outDir);
+      if (!ready) {
+        return { ready: false, reason: "JShell start or warmup failed." };
+      }
+      return { ready: true };
     },
     [
       logDebug,
@@ -218,13 +266,18 @@ export const useCompileJshellLifecycle = ({
     setObjectBench([]);
     try {
       logDebug("JShell stop before compile");
-      await jshellStop();
+      await withTimeout(
+        jshellStop(),
+        JSHELL_STOP_TIMEOUT_MS,
+        `JShell stop timed out after ${JSHELL_STOP_TIMEOUT_MS}ms`
+      );
       logDebug("JShell stop completed before compile");
-    } catch {
-      // Ignore failures while preparing compile.
-      logDebug("JShell stop failed before compile");
+    } catch (error) {
+      // Continue compile even if stop hangs/fails.
+      logDebug(`JShell stop failed before compile: ${trimStatus(formatStatus(error))}`);
+      setStatus("JShell stop timed out, continuing compile.");
     }
-  }, [logDebug, setJshellReady, setObjectBench]);
+  }, [formatStatus, logDebug, setJshellReady, setObjectBench, setStatus, trimStatus]);
 
   const waitForJshellReady = useCallback(async (): Promise<boolean> => {
     if (jshellStartTaskRef.current) {

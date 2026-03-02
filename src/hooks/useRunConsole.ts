@@ -34,7 +34,7 @@ type UseRunConsoleArgs = {
   formatStatus: (input: unknown) => string;
   preserveConsoleOnCompile?: boolean;
   onCompileInputsSaved?: () => Promise<void>;
-  onCompileSuccess?: (outDir: string) => Promise<void>;
+  onCompileSuccess?: (outDir: string) => Promise<{ ready: boolean; reason?: string }>;
   onCompileRequested?: () => Promise<void> | void;
 };
 
@@ -198,10 +198,10 @@ export const useRunConsole = ({
       setCompileStatus(null);
       const labelSuffix = label ? ` for ${label}` : "";
       appendConsole(`[${startedAt}] Compile requested${labelSuffix}`);
-      setStatus("Stopping object bench runtime...");
-      await onCompileRequested?.();
-      appendConsole("Phase 1/4: stopping object bench runtime...done.");
       try {
+        setStatus("Stopping object bench runtime...");
+        await onCompileRequested?.();
+        appendConsole("Phase 1/4: stopping object bench runtime...done.");
         setStatus("Saving files...");
         const savedFiles = await formatAndSaveUmlFiles(false);
         await onCompileInputsSaved?.();
@@ -227,13 +227,21 @@ export const useRunConsole = ({
         if (result.stderr) {
           appendConsole(result.stderr.trim());
         }
+        let finalStatus = result.ok ? "Compile succeeded." : "Compile failed.";
         if (result.ok) {
           appendConsole("Phase 3/4: compiling Java sources...compilation succeeded.");
           setCompileStatus("success");
           if (result.outDir && onCompileSuccess) {
             setStatus("Starting object bench runtime...");
-            await onCompileSuccess(result.outDir);
-            appendConsole("Phase 4/4: starting object bench runtime...ready.");
+            const runtimeResult = await onCompileSuccess(result.outDir);
+            if (runtimeResult.ready) {
+              appendConsole("Phase 4/4: starting object bench runtime...ready.");
+            } else {
+              appendConsole(
+                `Phase 4/4: starting object bench runtime...failed (${runtimeResult.reason ?? "unknown reason"}).`
+              );
+              finalStatus = `Compile succeeded, but object bench runtime failed: ${runtimeResult.reason ?? "unknown reason"}`;
+            }
           } else {
             appendConsole("Phase 4/4: starting object bench runtime...skipped.");
           }
@@ -246,7 +254,7 @@ export const useRunConsole = ({
         if (!result.ok) {
           setCompileStatus("failed");
         }
-        setStatus(result.ok ? "Compile succeeded." : "Compile failed.");
+        setStatus(finalStatus);
       } catch (error) {
         const formattedError = formatStatus(error);
         appendConsole(`Compile failed: ${formattedError}`);
