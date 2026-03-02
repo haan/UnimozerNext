@@ -32,8 +32,9 @@ type UseRunConsoleArgs = {
   setBusy: (busy: boolean) => void;
   setStatus: (status: string) => void;
   formatStatus: (input: unknown) => string;
+  preserveConsoleOnCompile?: boolean;
   onCompileSuccess?: (outDir: string) => void;
-  onCompileRequested?: () => void;
+  onCompileRequested?: () => Promise<void> | void;
 };
 
 type UseRunConsoleResult = {
@@ -58,6 +59,7 @@ export const useRunConsole = ({
   setBusy,
   setStatus,
   formatStatus,
+  preserveConsoleOnCompile = false,
   onCompileSuccess,
   onCompileRequested
 }: UseRunConsoleArgs): UseRunConsoleResult => {
@@ -183,11 +185,13 @@ export const useRunConsole = ({
 
       setBusy(true);
       const startedAt = new Date().toLocaleTimeString();
-      resetConsole();
+      if (!preserveConsoleOnCompile) {
+        resetConsole();
+      }
       setCompileStatus(null);
-      onCompileRequested?.();
       const labelSuffix = label ? ` for ${label}` : "";
       appendConsole(`[${startedAt}] Compile requested${labelSuffix}`);
+      await onCompileRequested?.();
       try {
         await formatAndSaveUmlFiles(false);
         const result = await invoke<{
@@ -220,7 +224,20 @@ export const useRunConsole = ({
         }
         setStatus(result.ok ? "Compile succeeded." : "Compile failed.");
       } catch (error) {
-        appendConsole(`Compile failed: ${formatStatus(error)}`);
+        const formattedError = formatStatus(error);
+        appendConsole(`Compile failed: ${formattedError}`);
+        if (formattedError === "Unknown error") {
+          try {
+            appendConsole(`Compile failed (raw): ${String(error)}`);
+            const serialized =
+              typeof error === "object" && error !== null ? JSON.stringify(error) : "";
+            if (serialized && serialized !== "{}") {
+              appendConsole(`Compile failed (raw json): ${serialized}`);
+            }
+          } catch {
+            // Ignore secondary formatting failures.
+          }
+        }
         setCompileStatus("failed");
         setStatus("Compile failed.");
       } finally {
@@ -234,6 +251,7 @@ export const useRunConsole = ({
       formatStatus,
       onCompileRequested,
       onCompileSuccess,
+      preserveConsoleOnCompile,
       projectPath,
       resetConsole,
       setBusy,
@@ -257,7 +275,9 @@ export const useRunConsole = ({
     async (node: UmlNode) => {
       if (!projectPath) return;
       const startedAt = new Date().toLocaleTimeString();
-      resetConsole();
+      if (!preserveConsoleOnCompile) {
+        resetConsole();
+      }
       appendConsole(`[${startedAt}] Run main requested for ${node.name}`);
       try {
         if (runSessionRef.current !== null) {
@@ -275,7 +295,15 @@ export const useRunConsole = ({
         setRunSession(null);
       }
     },
-    [appendConsole, formatStatus, projectPath, resetConsole, setRunSession, setStatus]
+    [
+      appendConsole,
+      formatStatus,
+      preserveConsoleOnCompile,
+      projectPath,
+      resetConsole,
+      setRunSession,
+      setStatus
+    ]
   );
 
   const handleCancelRun = useCallback(async () => {

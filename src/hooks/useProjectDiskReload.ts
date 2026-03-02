@@ -25,14 +25,10 @@ type UseProjectDiskReloadResult = {
 
 const reloadScopeKey = (
   mode: ProjectStorageMode | null,
-  projectPath: string | null,
-  packedArchivePath: string | null
+  projectPath: string | null
 ) => {
   if (!mode || !projectPath) {
     return null;
-  }
-  if (mode === "packed") {
-    return packedArchivePath ? `${mode}:${packedArchivePath}` : null;
   }
   if (mode === "folder") {
     return `${mode}:${projectPath}`;
@@ -58,8 +54,8 @@ export const useProjectDiskReload = ({
   const wasBusyRef = useRef(false);
 
   const scopeKey = useMemo(
-    () => reloadScopeKey(projectStorageMode, projectPath, packedArchivePath),
-    [packedArchivePath, projectPath, projectStorageMode]
+    () => reloadScopeKey(projectStorageMode, projectPath),
+    [projectPath, projectStorageMode]
   );
 
   const readDiskToken = useCallback(async (): Promise<string | null> => {

@@ -19,7 +19,7 @@ type UsePackedArchiveSyncArgs = {
 };
 
 type UsePackedArchiveSyncResult = {
-  requestPackedArchiveSync: () => void;
+  requestPackedArchiveSync: (delayMs?: number) => void;
   awaitPackedArchiveSync: () => Promise<void>;
   clearPackedArchiveSyncError: () => void;
 };
@@ -40,10 +40,15 @@ export const usePackedArchiveSync = ({
   const syncPendingRef = useRef(false);
   const syncProjectRootRef = useRef<string | null>(null);
   const syncArchivePathRef = useRef<string | null>(null);
+  const syncDelayTimerRef = useRef<number | null>(null);
   const flushPackedArchiveSyncRef = useRef<() => Promise<void>>(async () => {});
 
   const clearPackedArchiveSyncError = useCallback(() => {
     syncPendingRef.current = false;
+    if (syncDelayTimerRef.current !== null) {
+      window.clearTimeout(syncDelayTimerRef.current);
+      syncDelayTimerRef.current = null;
+    }
     setPackedArchiveSyncFailed(false);
     toast.dismiss(PACKED_SYNC_ERROR_TOAST_ID);
   }, [setPackedArchiveSyncFailed]);
@@ -106,6 +111,10 @@ export const usePackedArchiveSync = ({
   }, [flushPackedArchiveSync]);
 
   const awaitPackedArchiveSync = useCallback(async () => {
+    if (syncDelayTimerRef.current !== null) {
+      window.clearTimeout(syncDelayTimerRef.current);
+      syncDelayTimerRef.current = null;
+    }
     if (syncPendingRef.current && !syncInFlightRef.current) {
       await flushPackedArchiveSync();
       return;
@@ -115,7 +124,7 @@ export const usePackedArchiveSync = ({
     }
   }, [flushPackedArchiveSync]);
 
-  const requestPackedArchiveSync = useCallback(() => {
+  const requestPackedArchiveSync = useCallback((delayMs = 0) => {
     if (projectStorageMode !== "packed" || !projectPath || !packedArchivePath) {
       return;
     }
@@ -127,7 +136,25 @@ export const usePackedArchiveSync = ({
     if (syncInFlightRef.current) {
       return;
     }
-    void flushPackedArchiveSync();
+
+    if (syncDelayTimerRef.current !== null) {
+      window.clearTimeout(syncDelayTimerRef.current);
+      syncDelayTimerRef.current = null;
+    }
+
+    const normalizedDelay = Number.isFinite(delayMs) ? Math.max(0, Math.floor(delayMs)) : 0;
+    if (normalizedDelay === 0) {
+      void flushPackedArchiveSync();
+      return;
+    }
+
+    syncDelayTimerRef.current = window.setTimeout(() => {
+      syncDelayTimerRef.current = null;
+      if (!syncPendingRef.current || syncInFlightRef.current) {
+        return;
+      }
+      void flushPackedArchiveSync();
+    }, normalizedDelay);
   }, [flushPackedArchiveSync, packedArchivePath, projectPath, projectStorageMode]);
 
   useEffect(() => {
@@ -138,6 +165,10 @@ export const usePackedArchiveSync = ({
     }
 
     syncPendingRef.current = false;
+    if (syncDelayTimerRef.current !== null) {
+      window.clearTimeout(syncDelayTimerRef.current);
+      syncDelayTimerRef.current = null;
+    }
     syncProjectRootRef.current = null;
     syncArchivePathRef.current = null;
     const resetTimer = window.setTimeout(() => {

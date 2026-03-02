@@ -3,7 +3,7 @@ use serde::Serialize;
 use std::os::windows::process::CommandExt;
 use std::{
     fs,
-    io::{BufRead, BufReader, Read},
+    io::{BufRead, BufReader, ErrorKind, Read},
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::{
@@ -92,6 +92,61 @@ fn decode_process_output(bytes: Vec<u8>) -> String {
     }
 }
 
+const OUT_DIR_CLEANUP_RETRIES: usize = 25;
+const OUT_DIR_CLEANUP_RETRY_DELAY_MS: u64 = 120;
+
+fn should_retry_out_dir_cleanup(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        ErrorKind::DirectoryNotEmpty | ErrorKind::PermissionDenied | ErrorKind::WouldBlock
+    ) || matches!(error.raw_os_error(), Some(32) | Some(145))
+}
+
+fn recreate_output_dir(out_dir: &Path) -> Result<(), String> {
+    let mut last_error: Option<String> = None;
+    for attempt in 0..=OUT_DIR_CLEANUP_RETRIES {
+        if out_dir.exists() {
+            match fs::remove_dir_all(out_dir) {
+                Ok(()) => {}
+                Err(error) => {
+                    last_error = Some(error.to_string());
+                    if attempt < OUT_DIR_CLEANUP_RETRIES && should_retry_out_dir_cleanup(&error) {
+                        std::thread::sleep(Duration::from_millis(OUT_DIR_CLEANUP_RETRY_DELAY_MS));
+                        continue;
+                    }
+                    return Err(format!(
+                        "Failed to clean output directory {}: {}",
+                        out_dir.display(),
+                        error
+                    ));
+                }
+            }
+        }
+
+        match fs::create_dir_all(out_dir) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                last_error = Some(error.to_string());
+                if attempt < OUT_DIR_CLEANUP_RETRIES && should_retry_out_dir_cleanup(&error) {
+                    std::thread::sleep(Duration::from_millis(OUT_DIR_CLEANUP_RETRY_DELAY_MS));
+                    continue;
+                }
+                return Err(format!(
+                    "Failed to create output directory {}: {}",
+                    out_dir.display(),
+                    error
+                ));
+            }
+        }
+    }
+
+    Err(format!(
+        "Failed to prepare output directory {}: {}",
+        out_dir.display(),
+        last_error.unwrap_or_else(|| "unknown error".to_string())
+    ))
+}
+
 #[tauri::command]
 pub fn compile_project(
     app: tauri::AppHandle,
@@ -105,17 +160,40 @@ pub fn compile_project(
         .ok_or_else(|| "Bundled Java compiler not found".to_string())?;
 
     let root_path = PathBuf::from(&root);
-    let src_root_path = resolve_project_src_root(&root_path, &src_root);
+    let mut src_root_path = resolve_project_src_root(&root_path, &src_root);
+    let fallback_src_root = root_path.join("src");
+
+    if !src_root_path.is_dir() && fallback_src_root.is_dir() {
+        src_root_path = fallback_src_root.clone();
+    }
+
+    // Packed-workspace reload can briefly remove/recreate the extracted project tree.
+    // Retry a short window before failing hard on missing source root.
     if !src_root_path.is_dir() {
-        return Err("Source directory not found".to_string());
+        for _ in 0..20 {
+            std::thread::sleep(Duration::from_millis(100));
+            if src_root_path.is_dir() {
+                break;
+            }
+            if fallback_src_root.is_dir() {
+                src_root_path = fallback_src_root.clone();
+                break;
+            }
+        }
+    }
+
+    if !src_root_path.is_dir() {
+        return Err(format!(
+            "Source directory not found (root={}, resolved={}, fallback={})",
+            root_path.display(),
+            resolve_project_src_root(&root_path, &src_root).display(),
+            fallback_src_root.display()
+        ));
     }
 
     let build_dir = root_path.join("build");
     let out_dir = build_dir.join("classes");
-    if out_dir.exists() {
-        fs::remove_dir_all(&out_dir).map_err(crate::command_error::to_command_error)?;
-    }
-    fs::create_dir_all(&out_dir).map_err(crate::command_error::to_command_error)?;
+    recreate_output_dir(&out_dir)?;
 
     let mut java_files = Vec::new();
     collect_java_files(&src_root_path, &mut java_files)

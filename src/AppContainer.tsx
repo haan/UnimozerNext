@@ -399,7 +399,8 @@ export default function AppContainer({
     setJshellReady,
     setObjectBench,
     formatStatus,
-    trimStatus
+    trimStatus,
+    appendDebugOutput: debugLogging && debugLogCategories.jshell ? appendJshellDebugOutput : undefined
   });
 
   const {
@@ -420,6 +421,7 @@ export default function AppContainer({
     setBusy,
     setStatus,
     formatStatus,
+    preserveConsoleOnCompile: debugLogging,
     onCompileSuccess: handleCompileSuccess,
     onCompileRequested
   });
@@ -445,8 +447,11 @@ export default function AppContainer({
   }, [appendConsoleOutput]);
 
   const clearConsole = useCallback(() => {
+    if (debugLogging) {
+      return;
+    }
     resetConsoleOutput();
-  }, [resetConsoleOutput]);
+  }, [debugLogging, resetConsoleOutput]);
 
   const {
     showUpdateMenuItem,
@@ -503,6 +508,7 @@ export default function AppContainer({
     lastCompileOutDirRef,
     appendConsoleOutput,
     resetConsoleOutput,
+    preserveConsoleOnActions: debugLogging,
     appendDebugOutput: debugLogging && debugLogCategories.jshell ? appendJshellDebugOutput : undefined,
     setStatus,
     setBusy,

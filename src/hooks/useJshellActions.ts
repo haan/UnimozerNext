@@ -30,6 +30,7 @@ type UseJshellActionsArgs = {
   lastCompileOutDirRef: MutableRefObject<string | null>;
   appendConsoleOutput: (text: string) => void;
   resetConsoleOutput: () => void;
+  preserveConsoleOnActions?: boolean;
   appendDebugOutput?: (text: string) => void;
   setStatus: (status: string) => void;
   setBusy: (busy: boolean) => void;
@@ -75,6 +76,7 @@ export const useJshellActions = ({
   lastCompileOutDirRef,
   appendConsoleOutput,
   resetConsoleOutput,
+  preserveConsoleOnActions = false,
   appendDebugOutput,
   setStatus,
   setBusy,
@@ -217,7 +219,9 @@ export const useJshellActions = ({
         : `var ${form.objectName} = new ${target.id}(${args.join(", ")});`;
       logDebug(() => `[${new Date().toLocaleTimeString()}] JShell eval\n${code}`);
       const startedAt = new Date().toLocaleTimeString();
-      resetConsoleOutput();
+      if (!preserveConsoleOnActions) {
+        resetConsoleOutput();
+      }
       appendConsoleOutput(`[${startedAt}] Create object requested for ${form.objectName}`);
 
       const logJshellOutput = (stdout?: string | null, stderr?: string | null) => {
@@ -319,9 +323,12 @@ export const useJshellActions = ({
           const outDir = lastCompileOutDirRef.current;
           if (projectPath && outDir) {
             try {
+              logDebug(() => `[${new Date().toLocaleTimeString()}] JShell restart: stop`);
               await jshellStop();
+              logDebug(() => `[${new Date().toLocaleTimeString()}] JShell restart: start`);
               await jshellStart(projectPath, outDir);
               setJshellReady(true);
+              logDebug(() => `[${new Date().toLocaleTimeString()}] JShell restart completed`);
               const retryOk = await createAndRefresh();
               if (retryOk) return;
             } catch (restartError) {
@@ -346,6 +353,7 @@ export const useJshellActions = ({
       lastCompileOutDirRef,
       logDebug,
       projectPath,
+      preserveConsoleOnActions,
       refreshObjectBench,
       resetConsoleOutput,
       setBusy,
@@ -396,7 +404,9 @@ export const useJshellActions = ({
 
       setBusy(true);
       const startedAt = new Date().toLocaleTimeString();
-      resetConsoleOutput();
+      if (!preserveConsoleOnActions) {
+        resetConsoleOutput();
+      }
       appendConsoleOutput(`[${startedAt}] Call method requested for ${target.name}.${methodName}`);
 
       const handleOutput = (stdout?: string | null, stderr?: string | null) => {
@@ -460,9 +470,12 @@ export const useJshellActions = ({
           const outDir = lastCompileOutDirRef.current;
           if (projectPath && outDir) {
             try {
+              logDebug(() => `[${new Date().toLocaleTimeString()}] JShell restart: stop`);
               await jshellStop();
+              logDebug(() => `[${new Date().toLocaleTimeString()}] JShell restart: start`);
               await jshellStart(projectPath, outDir);
               setJshellReady(true);
+              logDebug(() => `[${new Date().toLocaleTimeString()}] JShell restart completed`);
               const retryOk = await invokeMethod();
               if (retryOk) return;
             } catch (restartError) {
@@ -487,6 +500,7 @@ export const useJshellActions = ({
       lastCompileOutDirRef,
       logDebug,
       projectPath,
+      preserveConsoleOnActions,
       refreshObjectBench,
       resetConsoleOutput,
       resolveUmlNodeForObject,
