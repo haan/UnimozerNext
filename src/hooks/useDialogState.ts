@@ -31,6 +31,8 @@ export const useDialogState = () => {
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
   const [missingRecentProjectOpen, setMissingRecentProjectOpen] = useState(false);
   const [missingRecentProjectPath, setMissingRecentProjectPath] = useState<string | null>(null);
+  const [folderProjectErrorOpen, setFolderProjectErrorOpen] = useState(false);
+  const [folderProjectErrorMessage, setFolderProjectErrorMessage] = useState<string | null>(null);
 
   const openAddClassDialog = useCallback(() => {
     setAddClassOpen(true);
@@ -143,6 +145,18 @@ export const useDialogState = () => {
     }
   }, []);
 
+  const openFolderProjectErrorDialog = useCallback((message: string) => {
+    setFolderProjectErrorMessage(message);
+    setFolderProjectErrorOpen(true);
+  }, []);
+
+  const handleFolderProjectErrorOpenChange = useCallback((open: boolean) => {
+    setFolderProjectErrorOpen(open);
+    if (!open) {
+      setFolderProjectErrorMessage(null);
+    }
+  }, []);
+
   return {
     addClassOpen,
     setAddClassOpen,
@@ -162,6 +176,8 @@ export const useDialogState = () => {
     removeTarget,
     missingRecentProjectOpen,
     missingRecentProjectPath,
+    folderProjectErrorOpen,
+    folderProjectErrorMessage,
     fieldTarget,
     constructorTarget,
     methodTarget,
@@ -182,7 +198,9 @@ export const useDialogState = () => {
     handleRemoveClassOpenChange,
     closeRemoveClassDialog,
     openMissingRecentProjectDialog,
-    handleMissingRecentProjectOpenChange
+    handleMissingRecentProjectOpenChange,
+    openFolderProjectErrorDialog,
+    handleFolderProjectErrorOpenChange
   };
 };
 

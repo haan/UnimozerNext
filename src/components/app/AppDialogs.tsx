@@ -73,6 +73,9 @@ type AppDialogsProps = {
   missingRecentProjectOpen: boolean;
   missingRecentProjectPath: string | null;
   onMissingRecentProjectOpenChange: (open: boolean) => void;
+  folderProjectErrorOpen: boolean;
+  folderProjectErrorMessage: string | null;
+  onFolderProjectErrorOpenChange: (open: boolean) => void;
   reloadFromDiskDialogOpen: boolean;
   onReloadFromDiskDialogOpenChange: (open: boolean) => void;
   onConfirmReloadFromDisk: () => void;
@@ -141,6 +144,9 @@ export const AppDialogs = ({
   missingRecentProjectOpen,
   missingRecentProjectPath,
   onMissingRecentProjectOpenChange,
+  folderProjectErrorOpen,
+  folderProjectErrorMessage,
+  onFolderProjectErrorOpenChange,
   reloadFromDiskDialogOpen,
   onReloadFromDiskDialogOpenChange,
   onConfirmReloadFromDisk,
@@ -345,6 +351,23 @@ export const AppDialogs = ({
             {missingRecentProjectPath}
           </div>
         ) : null}
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogAction className="w-full">OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog
+      open={folderProjectErrorOpen}
+      onOpenChange={onFolderProjectErrorOpenChange}
+    >
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Invalid folder project</AlertDialogTitle>
+          <AlertDialogDescription className="text-center">
+            {folderProjectErrorMessage ??
+              "Selected folder is not a NetBeans project root. Required folders: src/ and nbproject/."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
         <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
           <AlertDialogAction className="w-full">OK</AlertDialogAction>
         </AlertDialogFooter>

@@ -162,7 +162,11 @@ export default function AppContainer({
     missingRecentProjectOpen,
     missingRecentProjectPath,
     openMissingRecentProjectDialog,
-    handleMissingRecentProjectOpenChange
+    handleMissingRecentProjectOpenChange,
+    folderProjectErrorOpen,
+    folderProjectErrorMessage,
+    openFolderProjectErrorDialog,
+    handleFolderProjectErrorOpenChange
   } = useDialogState();
   const debugLogging = settings.advanced.debugLogging;
   const debugLogCategories = settings.advanced.debugLogCategories;
@@ -578,7 +582,8 @@ export default function AppContainer({
     setJshellReady,
     recordRecentProject,
     removeRecentProject,
-    onMissingRecentProject: (path) => openMissingRecentProjectDialog(toDisplayPath(path))
+    onMissingRecentProject: (path) => openMissingRecentProjectDialog(toDisplayPath(path)),
+    onFolderProjectOpenError: (message) => openFolderProjectErrorDialog(message)
   });
 
   useLaunchBootstrap({
@@ -1211,6 +1216,9 @@ export default function AppContainer({
         missingRecentProjectOpen={missingRecentProjectOpen}
         missingRecentProjectPath={missingRecentProjectPath}
         onMissingRecentProjectOpenChange={handleMissingRecentProjectOpenChange}
+        folderProjectErrorOpen={folderProjectErrorOpen}
+        folderProjectErrorMessage={folderProjectErrorMessage}
+        onFolderProjectErrorOpenChange={handleFolderProjectErrorOpenChange}
         reloadFromDiskDialogOpen={reloadFromDiskDialogOpen}
         onReloadFromDiskDialogOpenChange={onReloadFromDiskDialogOpenChange}
         onConfirmReloadFromDisk={confirmReloadFromDisk}

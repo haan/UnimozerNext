@@ -66,6 +66,7 @@ type UseProjectIOArgs = {
   recordRecentProject: (entry: RecentProjectEntry) => void;
   removeRecentProject: (entry: RecentProjectEntry) => void;
   onMissingRecentProject: (path: string) => void;
+  onFolderProjectOpenError?: (message: string) => void;
 };
 
 type UseProjectIOResult = {
@@ -124,7 +125,8 @@ export const useProjectIO = ({
   formatStatus,
   recordRecentProject,
   removeRecentProject,
-  onMissingRecentProject
+  onMissingRecentProject,
+  onFolderProjectOpenError
 }: UseProjectIOArgs): UseProjectIOResult => {
   const ensureUmzPath = useCallback((path: string) => {
     const extension = `.${PACKED_PROJECT_EXTENSION}`;
@@ -424,13 +426,23 @@ export const useProjectIO = ({
     async (path: string, options?: { clearConsole?: boolean }) => {
       setStatus("Opening folder project...");
       try {
+        await invoke("validate_folder_project_root", { root: path });
+      } catch (error) {
+        const detail = formatStatus(error);
+        setStatus(`Failed to open folder project: ${detail}`);
+        onFolderProjectOpenError?.(detail);
+        return;
+      }
+      try {
         await openFolderProjectByPath(path, options);
         setStatus(`Project loaded: ${toDisplayPath(path)}`);
       } catch (error) {
-        setStatus(`Failed to open folder project: ${formatStatus(error)}`);
+        const detail = formatStatus(error);
+        setStatus(`Failed to open folder project: ${detail}`);
+        onFolderProjectOpenError?.(detail);
       }
     },
-    [formatStatus, openFolderProjectByPath, setStatus]
+    [formatStatus, onFolderProjectOpenError, openFolderProjectByPath, setStatus]
   );
 
   const handleOpenFolderProject = useCallback(async () => {

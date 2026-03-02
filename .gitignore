@@ -73,3 +73,6 @@ Thumbs.db
 !/src-tauri/icons/128x128.png
 !/src-tauri/icons/256x256.png
 !/src-tauri/icons/icon.icns
+
+# misc
+tmp/

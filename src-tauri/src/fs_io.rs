@@ -47,6 +47,33 @@ pub fn list_project_tree(root: String) -> CommandResult<FileNode> {
 }
 
 #[tauri::command]
+pub fn validate_folder_project_root(root: String) -> CommandResult<()> {
+    let root_path = PathBuf::from(&root);
+    if !root_path.exists() {
+        return Err("Selected folder does not exist.".to_string());
+    }
+    if !root_path.is_dir() {
+        return Err("Selected path is not a directory.".to_string());
+    }
+
+    let mut missing = Vec::new();
+    if !root_path.join("src").is_dir() {
+        missing.push("src/");
+    }
+    if !root_path.join("nbproject").is_dir() {
+        missing.push("nbproject/");
+    }
+    if missing.is_empty() {
+        return Ok(());
+    }
+
+    Err(format!(
+        "Selected folder is not a NetBeans project root. Missing required folders: {}",
+        missing.join(", ")
+    ))
+}
+
+#[tauri::command]
 pub fn read_text_file(path: String) -> CommandResult<String> {
     fs::read_to_string(path).map_err(to_command_error)
 }
