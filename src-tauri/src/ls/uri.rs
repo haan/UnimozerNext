@@ -52,25 +52,184 @@ fn hex_value(byte: u8) -> Option<u8> {
     }
 }
 
+#[cfg(target_os = "windows")]
+fn normalize_windows_extended_path(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        return format!(r"\\{}", rest);
+    }
+    if let Some(rest) = path.strip_prefix(r"\\?\") {
+        return rest.to_string();
+    }
+    path.to_string()
+}
+
 pub fn path_to_uri(path: &Path) -> String {
-    let mut path_str = path.to_string_lossy().replace('\\', "/");
-    if path_str.len() >= 2 && path_str.as_bytes()[1] == b':' {
-        path_str = format!("/{}", path_str);
+    #[cfg(target_os = "windows")]
+    {
+        let raw = path.to_string_lossy().to_string();
+        let mut normalized = normalize_windows_extended_path(&raw).replace('\\', "/");
+
+        if normalized.len() >= 3
+            && normalized.as_bytes()[1] == b':'
+            && normalized.as_bytes()[2] == b'/'
+        {
+            normalized = format!("/{}", normalized);
+            return format!("file://{}", percent_encode(&normalized));
+        }
+
+        if normalized.starts_with("//") {
+            let without_prefix = normalized.trim_start_matches('/');
+            let mut parts = without_prefix.splitn(2, '/');
+            let authority = parts.next().unwrap_or_default();
+            let path_part = format!("/{}", parts.next().unwrap_or_default());
+            return format!("file://{}{}", authority, percent_encode(&path_part));
+        }
+
+        if normalized.starts_with('/') {
+            return format!("file://{}", percent_encode(&normalized));
+        }
+
+        return format!("file://{}", percent_encode(&format!("/{}", normalized)));
     }
-    if path_str.starts_with("//") {
-        path_str = format!("/{}", path_str);
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let path_str = path.to_string_lossy().replace('\\', "/");
+        if path_str.starts_with('/') {
+            format!("file://{}", percent_encode(&path_str))
+        } else {
+            format!("file://{}", percent_encode(&format!("/{}", path_str)))
+        }
     }
-    format!("file://{}", percent_encode(&path_str))
 }
 
 pub fn uri_to_path(uri: &str) -> PathBuf {
-    let stripped = uri.trim_start_matches("file://");
-    let decoded = percent_decode(stripped);
-    let normalized =
-        if decoded.starts_with('/') && decoded.len() > 3 && decoded.as_bytes()[2] == b':' {
-            decoded.trim_start_matches('/').to_string()
+    let prefix = "file://";
+    let stripped = match uri.get(..prefix.len()) {
+        Some(candidate) if candidate.eq_ignore_ascii_case(prefix) => &uri[prefix.len()..],
+        _ => return PathBuf::from(uri),
+    };
+    let body = stripped
+        .split('#')
+        .next()
+        .unwrap_or(stripped)
+        .split('?')
+        .next()
+        .unwrap_or(stripped);
+
+    #[cfg(target_os = "windows")]
+    {
+        if body.starts_with('/') {
+            if body.starts_with("//") {
+                let decoded = percent_decode(body.trim_start_matches('/'));
+                return PathBuf::from(format!(r"\\{}", decoded.replace('/', "\\")));
+            }
+
+            let decoded = percent_decode(body);
+            if decoded.len() >= 3
+                && decoded.as_bytes()[0] == b'/'
+                && decoded.as_bytes()[2] == b':'
+            {
+                return PathBuf::from(decoded.trim_start_matches('/').replace('/', "\\"));
+            }
+            return PathBuf::from(decoded.replace('/', "\\"));
+        }
+
+        let mut parts = body.splitn(2, '/');
+        let authority = parts.next().unwrap_or_default();
+        let path_part = parts.next().unwrap_or_default();
+
+        if authority.is_empty() || authority.eq_ignore_ascii_case("localhost") {
+            let prefixed = format!("/{}", path_part);
+            let decoded = percent_decode(&prefixed);
+            if decoded.len() >= 3
+                && decoded.as_bytes()[0] == b'/'
+                && decoded.as_bytes()[2] == b':'
+            {
+                return PathBuf::from(decoded.trim_start_matches('/').replace('/', "\\"));
+            }
+            return PathBuf::from(decoded.replace('/', "\\"));
+        }
+
+        let joined = if path_part.is_empty() {
+            authority.to_string()
         } else {
-            decoded
+            format!("{authority}/{path_part}")
         };
-    PathBuf::from(normalized)
+        let decoded = percent_decode(&joined);
+        PathBuf::from(format!(r"\\{}", decoded.replace('/', "\\")))
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        if body.starts_with('/') {
+            return PathBuf::from(percent_decode(body));
+        }
+
+        let mut parts = body.splitn(2, '/');
+        let authority = parts.next().unwrap_or_default();
+        let path_part = parts.next().unwrap_or_default();
+        if authority.is_empty() || authority.eq_ignore_ascii_case("localhost") {
+            PathBuf::from(percent_decode(&format!("/{}", path_part)))
+        } else {
+            PathBuf::from(percent_decode(&format!("//{authority}/{path_part}")))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{path_to_uri, uri_to_path};
+    use std::path::Path;
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_drive_path_to_uri() {
+        let uri = path_to_uri(Path::new(r"Z:\NetBeansProjects\mikado\src\Main.java"));
+        assert_eq!(uri, "file:///Z:/NetBeansProjects/mikado/src/Main.java");
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_unc_path_to_uri() {
+        let uri = path_to_uri(Path::new(
+            r"\\ltesch.local\users$\home\teachers\INFOTEACH\HAAN_LAURENT\NetBeansProjects\mikado",
+        ));
+        assert_eq!(
+            uri,
+            "file://ltesch.local/users%24/home/teachers/INFOTEACH/HAAN_LAURENT/NetBeansProjects/mikado"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_uri_to_path_drive() {
+        let path = uri_to_path("file:///Z:/NetBeansProjects/mikado/src/Main.java");
+        assert_eq!(
+            path.to_string_lossy(),
+            r"Z:\NetBeansProjects\mikado\src\Main.java"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_uri_to_path_unc() {
+        let path = uri_to_path(
+            "file://ltesch.local/users$/home/teachers/INFOTEACH/HAAN_LAURENT/NetBeansProjects/mikado",
+        );
+        assert_eq!(
+            path.to_string_lossy(),
+            r"\\ltesch.local\users$\home\teachers\INFOTEACH\HAAN_LAURENT\NetBeansProjects\mikado"
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn windows_uri_to_path_localhost_drive() {
+        let path = uri_to_path("file://localhost/Z:/NetBeansProjects/mikado/src/Main.java");
+        assert_eq!(
+            path.to_string_lossy(),
+            r"Z:\NetBeansProjects\mikado\src\Main.java"
+        );
+    }
 }
