@@ -48,6 +48,8 @@ java -jar jshell-bridge.jar --classpath "E:\Projects\Test1\build\classes"
 
 - `--classpath` (or `--class-path`) is optional. It can be a directory, JAR, or a path-separator
   separated list.
+- `--remote-vm-option <option>` can be repeated to pass JVM options to the JShell execution VM
+  (for example `-Duser.home=...`).
 
 ## Protocol
 

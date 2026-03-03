@@ -24,6 +24,7 @@ pub(crate) fn with_invoke_handlers(
         crate::jshell_io::jshell_eval,
         crate::jshell_io::jshell_inspect,
         crate::jshell_io::jshell_vars,
+        crate::jshell_io::jshell_warmup_diagnostic,
         crate::settings_io::read_settings,
         crate::settings_io::read_default_settings,
         crate::settings_io::write_settings,

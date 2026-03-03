@@ -25,15 +25,18 @@ public final class JshellBridge {
     private static final String RESPONSE_PREFIX = "__UNIMOZER_BRIDGE__:";
     private final ObjectMapper mapper = new ObjectMapper();
     private final String classpath;
+    private final List<String> remoteVmOptions;
     private JShell jshell;
 
-    private JshellBridge(String classpath) {
+    private JshellBridge(String classpath, List<String> remoteVmOptions) {
         this.classpath = classpath;
-        this.jshell = createShell(classpath);
+        this.remoteVmOptions = List.copyOf(remoteVmOptions);
+        this.jshell = createShell(classpath, this.remoteVmOptions);
     }
 
     public static void main(String[] args) throws Exception {
         String classpath = null;
+        List<String> remoteVmOptions = new ArrayList<>();
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
             if ("--classpath".equals(arg) || "--class-path".equals(arg)) {
@@ -41,15 +44,24 @@ public final class JshellBridge {
                     classpath = args[i + 1];
                     i++;
                 }
+            } else if ("--remote-vm-option".equals(arg)) {
+                if (i + 1 < args.length) {
+                    remoteVmOptions.add(args[i + 1]);
+                    i++;
+                }
             }
         }
 
-        JshellBridge bridge = new JshellBridge(classpath);
+        JshellBridge bridge = new JshellBridge(classpath, remoteVmOptions);
         bridge.run();
     }
 
-    private JShell createShell(String classpath) {
-        JShell shell = JShell.builder().build();
+    private JShell createShell(String classpath, List<String> remoteVmOptions) {
+        JShell.Builder builder = JShell.builder();
+        if (!remoteVmOptions.isEmpty()) {
+            builder.remoteVMOptions(remoteVmOptions.toArray(new String[0]));
+        }
+        JShell shell = builder.build();
         addBridgeClasspath(shell);
         if (classpath != null && !classpath.isBlank()) {
             shell.addToClasspath(classpath);
@@ -183,7 +195,7 @@ public final class JshellBridge {
     private ObjectNode handleReset() {
         try {
             jshell.close();
-            jshell = createShell(classpath);
+            jshell = createShell(classpath, remoteVmOptions);
             return mapper.createObjectNode().put("ok", true);
         } catch (Exception error) {
             return errorResponse(error.getMessage());

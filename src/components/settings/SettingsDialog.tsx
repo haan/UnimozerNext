@@ -26,6 +26,9 @@ type SettingsDialogProps = {
   onOpenChange: (open: boolean) => void;
   settings: AppSettings;
   onChange: (next: AppSettings) => void;
+  onRunJshellWarmupDiagnostic?: () => void;
+  jshellWarmupDiagnosticRunning?: boolean;
+  jshellWarmupDiagnosticEnabled?: boolean;
 };
 
 const groups = [
@@ -42,7 +45,10 @@ export const SettingsDialog = ({
   open,
   onOpenChange,
   settings,
-  onChange
+  onChange,
+  onRunJshellWarmupDiagnostic,
+  jshellWarmupDiagnosticRunning = false,
+  jshellWarmupDiagnosticEnabled = false
 }: SettingsDialogProps) => {
   const [activeGroup, setActiveGroup] = useState<SettingsGroup>("General");
   const [themeOptions, setThemeOptions] = useState<ThemeOption[]>([
@@ -895,6 +901,28 @@ export const SettingsDialog = ({
                       );
                     })}
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">JShell warmup diagnostic</p>
+                    <p className="text-xs text-muted-foreground">
+                      Run a one-shot benchmark from baseline to aggressive overrides and print
+                      timing details in the console.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={onRunJshellWarmupDiagnostic}
+                    disabled={
+                      !onRunJshellWarmupDiagnostic ||
+                      !jshellWarmupDiagnosticEnabled ||
+                      jshellWarmupDiagnosticRunning
+                    }
+                  >
+                    {jshellWarmupDiagnosticRunning ? "Running..." : "Run diagnostic"}
+                  </button>
                 </div>
               </div>
             ) : (

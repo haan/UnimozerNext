@@ -56,21 +56,11 @@ pub fn validate_folder_project_root(root: String) -> CommandResult<()> {
         return Err("Selected path is not a directory.".to_string());
     }
 
-    let mut missing = Vec::new();
-    if !root_path.join("src").is_dir() {
-        missing.push("src/");
-    }
-    if !root_path.join("nbproject").is_dir() {
-        missing.push("nbproject/");
-    }
-    if missing.is_empty() {
+    if root_path.join("src").is_dir() {
         return Ok(());
     }
 
-    Err(format!(
-        "Selected folder is not a NetBeans project root. Missing required folders: {}",
-        missing.join(", ")
-    ))
+    Err("Selected folder is not a NetBeans project root. Missing required folder: src/".to_string())
 }
 
 #[tauri::command]

@@ -2,11 +2,13 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::{
+    collections::HashMap,
     fs,
     io::{BufRead, BufReader, Write},
     path::PathBuf,
     process::{Command, Stdio},
     sync::{Arc, Mutex},
+    time::Instant,
 };
 use tauri::State;
 
@@ -109,6 +111,52 @@ impl Drop for JshellSession {
 #[derive(Default)]
 pub struct JshellState {
     current: Arc<Mutex<Option<JshellSession>>>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct JshellStartOptions {
+    #[serde(default)]
+    jvm_args: Vec<String>,
+    #[serde(default)]
+    remote_vm_options: Vec<String>,
+    #[serde(default)]
+    env_remove: Vec<String>,
+    #[serde(default)]
+    env_set: HashMap<String, String>,
+    #[serde(default)]
+    user_home: Option<String>,
+    #[serde(default)]
+    prefs_user_root: Option<String>,
+    #[serde(default)]
+    prefs_system_root: Option<String>,
+    #[serde(default)]
+    temp_dir: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JshellWarmupDiagnosticProfile {
+    profile: String,
+    description: String,
+    ok: bool,
+    start_ms: u64,
+    warmup_ms: Option<u64>,
+    details: Vec<String>,
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JshellWarmupDiagnosticResult {
+    diagnostic_root: String,
+    steps: Vec<JshellWarmupDiagnosticProfile>,
+}
+
+struct JshellWarmupDiagnosticStep {
+    profile: &'static str,
+    description: &'static str,
+    options: JshellStartOptions,
 }
 
 fn jshell_send<T: for<'de> Deserialize<'de>>(
@@ -287,41 +335,124 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
     serde_json::from_value::<T>(value).map_err(crate::command_error::to_command_error)
 }
 
-#[tauri::command]
-pub fn jshell_start(
-    app: tauri::AppHandle,
-    state: State<JshellState>,
-    root: String,
-    classpath: String,
-) -> Result<(), String> {
-    let java_rel = java_executable_name();
-    let java_path = resolve_resource(&app, &java_rel)
-        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
-    let jar_path = resolve_resource(&app, "jshell-bridge/jshell-bridge.jar")
-        .ok_or_else(|| "JShell bridge not found".to_string())?;
-
+fn stop_current_session(state: &JshellState) {
     if let Ok(mut guard) = state.current.lock() {
         if let Some(mut session) = guard.take() {
             let _ = session.child.kill();
+            let _ = session.child.wait();
         }
     }
+}
 
-    let out_dir = fs::canonicalize(&classpath).unwrap_or_else(|_| PathBuf::from(&classpath));
+fn non_empty_option(value: &Option<String>) -> Option<String> {
+    value
+        .as_ref()
+        .map(|entry| entry.trim())
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| entry.to_string())
+}
+
+fn ensure_directory(path: &str, label: &str) -> Result<String, String> {
+    fs::create_dir_all(path).map_err(|error| format!("Failed to prepare {label}: {error}"))?;
+    Ok(path.to_string())
+}
+
+fn start_jshell_session(
+    app: &tauri::AppHandle,
+    state: &JshellState,
+    root: &str,
+    classpath: &str,
+    options: &JshellStartOptions,
+) -> Result<(), String> {
+    let java_rel = java_executable_name();
+    let java_path = resolve_resource(app, &java_rel)
+        .ok_or_else(|| "Bundled Java runtime not found".to_string())?;
+    let jar_path = resolve_resource(app, "jshell-bridge/jshell-bridge.jar")
+        .ok_or_else(|| "JShell bridge not found".to_string())?;
+
+    stop_current_session(state);
+
+    let out_dir = fs::canonicalize(classpath).unwrap_or_else(|_| PathBuf::from(classpath));
     let mut command = Command::new(java_path);
+    let mut remote_vm_options: Vec<String> = Vec::new();
     command
         .arg("-Dfile.encoding=UTF-8")
         .arg("-Dstdout.encoding=UTF-8")
         .arg("-Dstderr.encoding=UTF-8")
         .arg("-Dsun.stdout.encoding=UTF-8")
-        .arg("-Dsun.stderr.encoding=UTF-8")
+        .arg("-Dsun.stderr.encoding=UTF-8");
+
+    if let Some(user_home) = non_empty_option(&options.user_home) {
+        let prepared = ensure_directory(&user_home, "JShell user.home")?;
+        let property = format!("-Duser.home={prepared}");
+        command.arg(&property);
+        remote_vm_options.push(property);
+    }
+    if let Some(prefs_user_root) = non_empty_option(&options.prefs_user_root) {
+        let prepared = ensure_directory(&prefs_user_root, "JShell prefs user root")?;
+        let property = format!("-Djava.util.prefs.userRoot={prepared}");
+        command.arg(&property);
+        remote_vm_options.push(property);
+    }
+    if let Some(prefs_system_root) = non_empty_option(&options.prefs_system_root) {
+        let prepared = ensure_directory(&prefs_system_root, "JShell prefs system root")?;
+        let property = format!("-Djava.util.prefs.systemRoot={prepared}");
+        command.arg(&property);
+        remote_vm_options.push(property);
+    }
+    if let Some(temp_dir) = non_empty_option(&options.temp_dir) {
+        let prepared = ensure_directory(&temp_dir, "JShell temp directory")?;
+        let property = format!("-Djava.io.tmpdir={prepared}");
+        command.arg(&property);
+        remote_vm_options.push(property);
+    }
+
+    for argument in &options.jvm_args {
+        let trimmed = argument.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        command.arg(trimmed);
+    }
+
+    for option in &options.remote_vm_options {
+        let trimmed = option.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        remote_vm_options.push(trimmed.to_string());
+    }
+
+    command
         .arg("-jar")
         .arg(jar_path)
         .arg("--classpath")
-        .arg(out_dir.to_string_lossy().to_string())
-        .current_dir(&root)
+        .arg(out_dir.to_string_lossy().to_string());
+
+    for option in &remote_vm_options {
+        command.arg("--remote-vm-option").arg(option);
+    }
+
+    command
+        .current_dir(root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+
+    for key in &options.env_remove {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        command.env_remove(trimmed);
+    }
+    for (key, value) in &options.env_set {
+        let trimmed = key.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        command.env(trimmed, value);
+    }
 
     #[cfg(target_os = "windows")]
     {
@@ -378,19 +509,7 @@ pub fn jshell_start(
     Ok(())
 }
 
-#[tauri::command]
-pub fn jshell_stop(state: State<JshellState>) -> Result<(), String> {
-    if let Ok(mut guard) = state.current.lock() {
-        if let Some(mut session) = guard.take() {
-            let _ = session.child.kill();
-            let _ = session.child.wait();
-        }
-    }
-    Ok(())
-}
-
-#[tauri::command]
-pub fn jshell_eval(state: State<JshellState>, code: String) -> Result<JshellEvalResponse, String> {
+fn jshell_eval_internal(state: &JshellState, code: &str) -> Result<JshellEvalResponse, String> {
     let mut guard = state
         .current
         .lock()
@@ -405,6 +524,245 @@ pub fn jshell_eval(state: State<JshellState>, code: String) -> Result<JshellEval
             "code": code
         }),
     )
+}
+
+fn flatten_eval_success(response: JshellEvalResponse) -> Result<String, String> {
+    if !response.ok {
+        return Err(
+            response
+                .error
+                .or(response.stderr)
+                .unwrap_or_else(|| "JShell eval failed".to_string()),
+        );
+    }
+    Ok(response
+        .value
+        .or(response.stdout)
+        .unwrap_or_else(|| "<no-eval-value>".to_string()))
+}
+
+fn trim_jshell_value(value: String) -> String {
+    let trimmed = value.trim().to_string();
+    if trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2 {
+        return trimmed[1..trimmed.len() - 1].to_string();
+    }
+    trimmed
+}
+
+fn diagnostic_steps(diagnostic_root: &PathBuf) -> Vec<JshellWarmupDiagnosticStep> {
+    let env_clean = vec![
+        "JAVA_TOOL_OPTIONS".to_string(),
+        "JDK_JAVA_OPTIONS".to_string(),
+        "_JAVA_OPTIONS".to_string(),
+        "JAVA_OPTIONS".to_string(),
+        "CLASSPATH".to_string(),
+    ];
+    let mut env_aggressive = env_clean.clone();
+    env_aggressive.extend_from_slice(&[
+        "JAVA_HOME".to_string(),
+        "JDK_HOME".to_string(),
+        "HOME".to_string(),
+        "USERPROFILE".to_string(),
+        "HOMEDRIVE".to_string(),
+        "HOMEPATH".to_string(),
+    ]);
+
+    let local_prefs_user = diagnostic_root.join("local-prefs").join("prefs-user");
+    let local_prefs_system = diagnostic_root.join("local-prefs").join("prefs-system");
+    let local_home = diagnostic_root.join("local-home").join("home");
+    let local_home_prefs_user = diagnostic_root.join("local-home").join("prefs-user");
+    let local_home_prefs_system = diagnostic_root.join("local-home").join("prefs-system");
+    let local_home_tmp = diagnostic_root.join("local-home").join("tmp");
+    let aggressive_home = diagnostic_root.join("aggressive").join("home");
+    let aggressive_prefs_user = diagnostic_root.join("aggressive").join("prefs-user");
+    let aggressive_prefs_system = diagnostic_root.join("aggressive").join("prefs-system");
+    let aggressive_tmp = diagnostic_root.join("aggressive").join("tmp");
+
+    vec![
+        JshellWarmupDiagnosticStep {
+            profile: "baseline",
+            description: "No overrides",
+            options: JshellStartOptions::default(),
+        },
+        JshellWarmupDiagnosticStep {
+            profile: "env-clean",
+            description: "Remove Java option/env injections",
+            options: JshellStartOptions {
+                env_remove: env_clean.clone(),
+                ..JshellStartOptions::default()
+            },
+        },
+        JshellWarmupDiagnosticStep {
+            profile: "local-prefs",
+            description: "env-clean + local java.util.prefs roots",
+            options: JshellStartOptions {
+                env_remove: env_clean.clone(),
+                prefs_user_root: Some(local_prefs_user.to_string_lossy().to_string()),
+                prefs_system_root: Some(local_prefs_system.to_string_lossy().to_string()),
+                ..JshellStartOptions::default()
+            },
+        },
+        JshellWarmupDiagnosticStep {
+            profile: "local-home",
+            description: "local-prefs + local user.home + local java.io.tmpdir",
+            options: JshellStartOptions {
+                env_remove: env_clean,
+                user_home: Some(local_home.to_string_lossy().to_string()),
+                prefs_user_root: Some(local_home_prefs_user.to_string_lossy().to_string()),
+                prefs_system_root: Some(local_home_prefs_system.to_string_lossy().to_string()),
+                temp_dir: Some(local_home_tmp.to_string_lossy().to_string()),
+                ..JshellStartOptions::default()
+            },
+        },
+        JshellWarmupDiagnosticStep {
+            profile: "aggressive",
+            description: "Max overrides (env + local dirs + JVM property hardening)",
+            options: JshellStartOptions {
+                env_remove: env_aggressive,
+                user_home: Some(aggressive_home.to_string_lossy().to_string()),
+                prefs_user_root: Some(aggressive_prefs_user.to_string_lossy().to_string()),
+                prefs_system_root: Some(aggressive_prefs_system.to_string_lossy().to_string()),
+                temp_dir: Some(aggressive_tmp.to_string_lossy().to_string()),
+                remote_vm_options: vec![
+                    "-Djava.net.useSystemProxies=false".to_string(),
+                    "-Duser.language=en".to_string(),
+                    "-Duser.country=US".to_string(),
+                    "-Duser.timezone=UTC".to_string(),
+                    "-Djava.locale.providers=COMPAT,CLDR".to_string(),
+                    "-Djdk.http.auth.tunneling.disabledSchemes=".to_string(),
+                    "-Djdk.http.auth.proxying.disabledSchemes=".to_string(),
+                    "-Dsun.net.client.defaultConnectTimeout=5000".to_string(),
+                    "-Dsun.net.client.defaultReadTimeout=5000".to_string(),
+                ],
+                ..JshellStartOptions::default()
+            },
+        },
+    ]
+}
+
+#[tauri::command]
+pub fn jshell_start(
+    app: tauri::AppHandle,
+    state: State<JshellState>,
+    root: String,
+    classpath: String,
+    options: Option<JshellStartOptions>,
+) -> Result<(), String> {
+    let resolved_options = options.unwrap_or_default();
+    start_jshell_session(&app, state.inner(), &root, &classpath, &resolved_options)
+}
+
+#[tauri::command]
+pub fn jshell_warmup_diagnostic(
+    app: tauri::AppHandle,
+    state: State<JshellState>,
+    root: String,
+    classpath: String,
+) -> Result<JshellWarmupDiagnosticResult, String> {
+    let diagnostic_root = std::env::temp_dir().join("unimozer-next-jshell-diagnostic");
+    fs::create_dir_all(&diagnostic_root)
+        .map_err(|error| format!("Failed to prepare diagnostic root: {error}"))?;
+
+    let snapshot_code = r#"
+"user.home=" + String.valueOf(System.getProperty("user.home")) +
+" | prefs.userRoot=" + String.valueOf(System.getProperty("java.util.prefs.userRoot")) +
+" | prefs.systemRoot=" + String.valueOf(System.getProperty("java.util.prefs.systemRoot")) +
+" | java.io.tmpdir=" + String.valueOf(System.getProperty("java.io.tmpdir")) +
+" | JAVA_TOOL_OPTIONS=" + String.valueOf(System.getenv("JAVA_TOOL_OPTIONS")) +
+" | JDK_JAVA_OPTIONS=" + String.valueOf(System.getenv("JDK_JAVA_OPTIONS")) +
+" | _JAVA_OPTIONS=" + String.valueOf(System.getenv("_JAVA_OPTIONS"))
+"#;
+
+    let mut results = Vec::new();
+    for step in diagnostic_steps(&diagnostic_root) {
+        let mut details = Vec::new();
+        let start_begin = Instant::now();
+        let started =
+            start_jshell_session(&app, state.inner(), &root, &classpath, &step.options);
+        let start_ms = start_begin.elapsed().as_millis() as u64;
+        match started {
+            Err(error) => {
+                results.push(JshellWarmupDiagnosticProfile {
+                    profile: step.profile.to_string(),
+                    description: step.description.to_string(),
+                    ok: false,
+                    start_ms,
+                    warmup_ms: None,
+                    details,
+                    error: Some(error),
+                });
+                stop_current_session(state.inner());
+                continue;
+            }
+            Ok(()) => {
+                details.push(format!("Start succeeded in {start_ms}ms"));
+            }
+        }
+
+        match jshell_eval_internal(state.inner(), snapshot_code).and_then(flatten_eval_success) {
+            Ok(snapshot) => {
+                details.push(format!(
+                    "Runtime snapshot: {}",
+                    trim_jshell_value(snapshot)
+                ));
+            }
+            Err(error) => {
+                details.push(format!("Runtime snapshot failed: {error}"));
+            }
+        }
+
+        let warmup_begin = Instant::now();
+        let warmup_result =
+            jshell_eval_internal(state.inner(), "1 + 1;").and_then(flatten_eval_success);
+        let warmup_ms = warmup_begin.elapsed().as_millis() as u64;
+        match warmup_result {
+            Ok(value) => {
+                details.push(format!(
+                    "Warmup succeeded in {warmup_ms}ms (value: {})",
+                    trim_jshell_value(value)
+                ));
+                results.push(JshellWarmupDiagnosticProfile {
+                    profile: step.profile.to_string(),
+                    description: step.description.to_string(),
+                    ok: true,
+                    start_ms,
+                    warmup_ms: Some(warmup_ms),
+                    details,
+                    error: None,
+                });
+            }
+            Err(error) => {
+                details.push(format!("Warmup failed after {warmup_ms}ms: {error}"));
+                results.push(JshellWarmupDiagnosticProfile {
+                    profile: step.profile.to_string(),
+                    description: step.description.to_string(),
+                    ok: false,
+                    start_ms,
+                    warmup_ms: Some(warmup_ms),
+                    details,
+                    error: Some(error),
+                });
+            }
+        }
+        stop_current_session(state.inner());
+    }
+    stop_current_session(state.inner());
+
+    Ok(JshellWarmupDiagnosticResult {
+        diagnostic_root: diagnostic_root.to_string_lossy().to_string(),
+        steps: results,
+    })
+}
+
+#[tauri::command]
+pub fn jshell_stop(state: State<JshellState>) -> Result<(), String> {
+    stop_current_session(state.inner());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn jshell_eval(state: State<JshellState>, code: String) -> Result<JshellEvalResponse, String> {
+    jshell_eval_internal(state.inner(), &code)
 }
 
 #[tauri::command]

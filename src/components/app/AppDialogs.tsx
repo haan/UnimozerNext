@@ -31,6 +31,9 @@ type AppDialogsProps = {
   onSettingsOpenChange: (open: boolean) => void;
   settings: AppSettings;
   onSettingsChange: (settings: AppSettings) => void;
+  onRunJshellWarmupDiagnostic: () => void;
+  jshellWarmupDiagnosticRunning: boolean;
+  jshellWarmupDiagnosticEnabled: boolean;
   addClassOpen: boolean;
   onAddClassOpenChange: (open: boolean) => void;
   onCreateClass: (form: AddClassForm) => void;
@@ -102,6 +105,9 @@ export const AppDialogs = ({
   onSettingsOpenChange,
   settings,
   onSettingsChange,
+  onRunJshellWarmupDiagnostic,
+  jshellWarmupDiagnosticRunning,
+  jshellWarmupDiagnosticEnabled,
   addClassOpen,
   onAddClassOpenChange,
   onCreateClass,
@@ -172,6 +178,9 @@ export const AppDialogs = ({
       onOpenChange={onSettingsOpenChange}
       settings={settings}
       onChange={onSettingsChange}
+      onRunJshellWarmupDiagnostic={onRunJshellWarmupDiagnostic}
+      jshellWarmupDiagnosticRunning={jshellWarmupDiagnosticRunning}
+      jshellWarmupDiagnosticEnabled={jshellWarmupDiagnosticEnabled}
     />
     <AddClassDialog
       open={addClassOpen}
@@ -363,10 +372,10 @@ export const AppDialogs = ({
       <AlertDialogContent size="sm">
         <AlertDialogHeader className="items-center text-center">
           <AlertDialogTitle>Invalid folder project</AlertDialogTitle>
-          <AlertDialogDescription className="text-center">
-            {folderProjectErrorMessage ??
-              "Selected folder is not a NetBeans project root. Required folders: src/ and nbproject/."}
-          </AlertDialogDescription>
+            <AlertDialogDescription className="text-center">
+              {folderProjectErrorMessage ??
+              "Selected folder is not a NetBeans project root. Required folder: src/."}
+            </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
           <AlertDialogAction className="w-full">OK</AlertDialogAction>

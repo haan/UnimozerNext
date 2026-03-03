@@ -47,6 +47,7 @@ import { useWorkspaceUiControllers } from "./hooks/useWorkspaceUiControllers";
 import { useProjectDiskReload } from "./hooks/useProjectDiskReload";
 import { useWebviewGuard } from "./hooks/useWebviewGuard";
 import { useAppUpdater } from "./hooks/useAppUpdater";
+import { jshellWarmupDiagnostic } from "./services/jshell";
 import {
   CONSOLE_MIN_HEIGHT_PX,
   EDITOR_MIN_HEIGHT_PX,
@@ -58,7 +59,7 @@ import {
   removeRecentProject as removeRecentProjectFromList,
   upsertRecentProject
 } from "./services/recentProjects";
-import { toDisplayPath } from "./services/paths";
+import { joinPath, toDisplayPath } from "./services/paths";
 import {
   consumePendingCrashConsoleLines,
   installGlobalCrashHandlers,
@@ -120,6 +121,7 @@ export default function AppContainer({
   );
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
+  const [jshellDiagnosticRunning, setJshellDiagnosticRunning] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const fontSizeRef = useRef(settings.general.fontSize);
@@ -455,6 +457,89 @@ export default function AppContainer({
     }
     resetConsoleOutput();
   }, [debugLogging, resetConsoleOutput]);
+
+  const handleRunJshellWarmupDiagnostic = useCallback(async () => {
+    if (!projectPath) {
+      setStatus("Open a project before running JShell diagnostics.");
+      return;
+    }
+    if (busy || jshellDiagnosticRunning) {
+      return;
+    }
+
+    setBusy(true);
+    setJshellDiagnosticRunning(true);
+    setJshellReady(false);
+    setObjectBench([]);
+
+    const startedAt = new Date().toLocaleTimeString();
+    appendConsoleOutput(`[${startedAt}] JShell warmup diagnostic requested`);
+    const classpath =
+      lastCompileOutDirRef.current?.trim() || joinPath(projectPath, "build/classes");
+    appendConsoleOutput(`Diagnostic classpath: ${classpath}`);
+
+    try {
+      await onCompileRequested();
+      setStatus("Running JShell warmup diagnostic...");
+      const report = await jshellWarmupDiagnostic(projectPath, classpath);
+
+      appendConsoleOutput(
+        `JShell diagnostic temp root: ${toDisplayPath(report.diagnosticRoot)}`
+      );
+      report.steps.forEach((step, index) => {
+        const warmupText =
+          typeof step.warmupMs === "number" ? `${step.warmupMs}ms` : "n/a";
+        appendConsoleOutput(
+          `Step ${index + 1}/${report.steps.length} [${step.profile}] ${step.description}`
+        );
+        appendConsoleOutput(
+          `  Result: ${step.ok ? "OK" : "FAILED"} | start=${step.startMs}ms | warmup=${warmupText}`
+        );
+        step.details.forEach((detail) => {
+          appendConsoleOutput(`  ${detail}`);
+        });
+        if (step.error) {
+          appendConsoleOutput(`  Error: ${step.error}`);
+        }
+      });
+
+      const successfulWarmups = report.steps
+        .filter((step) => step.ok && typeof step.warmupMs === "number")
+        .map((step) => ({ profile: step.profile, warmupMs: step.warmupMs as number }));
+      if (successfulWarmups.length > 0) {
+        const best = successfulWarmups.reduce((currentBest, entry) =>
+          entry.warmupMs < currentBest.warmupMs ? entry : currentBest
+        );
+        appendConsoleOutput(
+          `Best warmup profile: ${best.profile} (${best.warmupMs}ms)`
+        );
+      } else {
+        appendConsoleOutput("No successful warmup profile detected.");
+      }
+
+      setStatus("JShell warmup diagnostic completed.");
+    } catch (error) {
+      const message = formatStatus(error);
+      appendConsoleOutput(`JShell diagnostic failed: ${message}`);
+      setStatus("JShell warmup diagnostic failed.");
+    } finally {
+      setBusy(false);
+      setJshellDiagnosticRunning(false);
+      setJshellReady(false);
+      setObjectBench([]);
+    }
+  }, [
+    appendConsoleOutput,
+    busy,
+    jshellDiagnosticRunning,
+    lastCompileOutDirRef,
+    onCompileRequested,
+    projectPath,
+    setBusy,
+    setStatus,
+    setJshellReady,
+    setObjectBench
+  ]);
 
   const {
     showUpdateMenuItem,
@@ -1177,6 +1262,11 @@ export default function AppContainer({
         onSettingsOpenChange={setSettingsOpen}
         settings={settings}
         onSettingsChange={handleSettingsChange}
+        onRunJshellWarmupDiagnostic={() => {
+          void handleRunJshellWarmupDiagnostic();
+        }}
+        jshellWarmupDiagnosticRunning={jshellDiagnosticRunning}
+        jshellWarmupDiagnosticEnabled={Boolean(projectPath) && !busy}
         addClassOpen={addClassOpen}
         onAddClassOpenChange={setAddClassOpen}
         onCreateClass={handleCreateClass}

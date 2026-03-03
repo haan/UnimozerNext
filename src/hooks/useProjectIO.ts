@@ -312,14 +312,15 @@ export const useProjectIO = ({
         const response = await invoke<OpenPackedProjectResponse>("open_packed_project", {
           archivePath
         });
+        const userFacingArchivePath = toDisplayPath(archivePath);
         await refreshTree(response.projectRoot);
         setProjectPath(response.projectRoot);
         setProjectStorageMode("packed");
-        setPackedArchivePath(response.archivePath);
+        setPackedArchivePath(userFacingArchivePath);
         resetProjectSession();
         await restartLsIfSameProjectRoot(response.projectRoot);
         recordRecentProject({
-          path: response.archivePath,
+          path: userFacingArchivePath,
           kind: "packed"
         });
         return response.projectRoot;
@@ -725,7 +726,7 @@ export const useProjectIO = ({
         await refreshTree(response.projectRoot);
         setProjectPath(response.projectRoot);
         setProjectStorageMode("packed");
-        setPackedArchivePath(response.archivePath);
+        setPackedArchivePath(packedArchivePath);
         const nextProjectRoot = response.projectRoot;
         setFileDrafts({});
         await restoreOpenFile(nextProjectRoot);

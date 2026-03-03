@@ -127,10 +127,49 @@ export const normalizeCompletionResponse = (
   return { isIncomplete: false, items: [] };
 };
 
+const encodeUriPath = (value: string): string =>
+  encodeURI(value).replace(/\?/g, "%3F").replace(/#/g, "%23");
+
+const normalizeWindowsExtendedPath = (path: string): string => {
+  const trimmed = path.trim();
+
+  const extendedUncMatch = /^\\\\\?\\UNC\\(.+)$/i.exec(trimmed);
+  if (extendedUncMatch) {
+    return `\\\\${extendedUncMatch[1]}`;
+  }
+
+  const extendedLocalMatch = /^\\\\\?\\([A-Za-z]:\\.+)$/.exec(trimmed);
+  if (extendedLocalMatch) {
+    return extendedLocalMatch[1];
+  }
+
+  return trimmed;
+};
+
 export const toFileUri = (path: string) => {
-  const normalized = path.replace(/\\/g, "/");
-  const withSlash = /^[a-zA-Z]:/.test(normalized) ? `/${normalized}` : normalized;
-  return `file://${encodeURI(withSlash)}`;
+  const normalizedPath = normalizeWindowsExtendedPath(path).replace(/\\/g, "/");
+
+  // Windows drive path, e.g. C:/project/src/Main.java
+  if (/^[a-zA-Z]:\//.test(normalizedPath)) {
+    return `file:///${encodeUriPath(normalizedPath)}`;
+  }
+
+  // UNC path, e.g. //server/share/project/src/Main.java
+  if (/^\/\/[^/]/.test(normalizedPath)) {
+    const withoutPrefix = normalizedPath.replace(/^\/+/, "");
+    const firstSlash = withoutPrefix.indexOf("/");
+    const authority = firstSlash >= 0 ? withoutPrefix.slice(0, firstSlash) : withoutPrefix;
+    const pathPart = firstSlash >= 0 ? withoutPrefix.slice(firstSlash) : "/";
+    return `file://${authority}${encodeUriPath(pathPart)}`;
+  }
+
+  // POSIX absolute path
+  if (normalizedPath.startsWith("/")) {
+    return `file://${encodeUriPath(normalizedPath)}`;
+  }
+
+  // Fallback for relative/unknown input; produce an absolute-like file URI.
+  return `file://${encodeUriPath(`/${normalizedPath}`)}`;
 };
 
 export const sortTextEditsDescending = (a: LspTextEdit, b: LspTextEdit) => {
