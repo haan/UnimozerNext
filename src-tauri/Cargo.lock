@@ -4488,6 +4488,7 @@ name = "unimozer-next"
 version = "0.13.3"
 dependencies = [
  "base64 0.22.1",
+ "dunce",
  "serde",
  "serde_json",
  "tauri",
@@ -4496,6 +4497,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "url",
  "winreg",
  "zip 2.4.2",
 ]
