@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter};
 
 mod jdtls;
 mod jsonrpc;
-mod uri;
+pub(crate) mod uri;
 
 // Maximum recursion depth when expanding nested `${property}` values.
 const LS_PROPERTY_RESOLUTION_MAX_DEPTH: usize = 8;

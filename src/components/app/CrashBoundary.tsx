@@ -1,7 +1,7 @@
 import React from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { reportFrontendCrash } from "../../services/crashLogging";
 import { Button } from "../ui/button";
+import { invokeValidated, stringSchema } from "../../services/tauriValidation";
 
 type CrashBoundaryProps = {
   children: React.ReactNode;
@@ -59,7 +59,11 @@ export class CrashBoundary extends React.Component<CrashBoundaryProps, CrashBoun
 
   private async loadCrashLogPath(): Promise<void> {
     try {
-      const crashLogPath = await invoke<string>("get_crash_log_path");
+      const crashLogPath = await invokeValidated(
+        "get_crash_log_path",
+        stringSchema,
+        "get_crash_log_path response"
+      );
       this.setState({ crashLogPath });
     } catch {
       // Keep fallback hint when backend path lookup fails.

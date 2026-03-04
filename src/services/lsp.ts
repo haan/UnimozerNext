@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { invokeValidated, stringSchema } from "./tauriValidation";
 
 export type LspPosition = {
   line: number;
@@ -213,6 +214,18 @@ const normalizeWindowsExtendedPath = (path: string): string => {
   return trimmed;
 };
 
+const normalizeInternalUriCacheKey = (path: string): string => {
+  const normalized = normalizeWindowsExtendedPath(path).trim();
+
+  // Windows local and UNC paths are case-insensitive in practice.
+  if (/^[a-zA-Z]:[\\/]/.test(normalized) || /^\\\\[^\\]/.test(normalized)) {
+    return normalized.replace(/\//g, "\\").toLowerCase();
+  }
+
+  // Keep POSIX paths case-sensitive.
+  return normalized.replace(/\\/g, "/");
+};
+
 export const toFileUri = (path: string) => {
   const normalizedPath = normalizeWindowsExtendedPath(path).replace(/\\/g, "/");
 
@@ -237,6 +250,34 @@ export const toFileUri = (path: string) => {
 
   // Fallback for relative/unknown input; produce an absolute-like file URI.
   return `file://${encodeUriPath(`/${normalizedPath}`)}`;
+};
+
+const resolvedInternalUriByPath = new Map<string, string>();
+
+export const getCachedInternalFileUri = (path: string): string =>
+  resolvedInternalUriByPath.get(normalizeInternalUriCacheKey(path)) ?? toFileUri(path);
+
+export const resolveInternalFileUri = async (path: string): Promise<string> => {
+  const cacheKey = normalizeInternalUriCacheKey(path);
+  const cached = resolvedInternalUriByPath.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const resolved = await invokeValidated(
+      "resolve_file_uri",
+      stringSchema,
+      "resolve_file_uri response",
+      { path }
+    );
+    resolvedInternalUriByPath.set(cacheKey, resolved);
+    return resolved;
+  } catch {
+    const fallback = toFileUri(path);
+    resolvedInternalUriByPath.set(cacheKey, fallback);
+    return fallback;
+  }
 };
 
 export const sortTextEditsDescending = (a: LspTextEdit, b: LspTextEdit) => {

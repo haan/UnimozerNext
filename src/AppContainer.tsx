@@ -17,7 +17,6 @@ import { useSplitRatios } from "./hooks/useSplitRatios";
 import { useVerticalSplit } from "./hooks/useVerticalSplit";
 import { useRunConsole } from "./hooks/useRunConsole";
 import { useLanguageServer } from "./hooks/useLanguageServer";
-import { toFileUri } from "./services/lsp";
 import { useDrafts } from "./hooks/useDrafts";
 import { useUmlGraph } from "./hooks/useUmlGraph";
 import { useJshellActions } from "./hooks/useJshellActions";
@@ -282,6 +281,8 @@ export default function AppContainer({
   const {
     monacoRef,
     lsReadyRef,
+    getInternalFileUri,
+    resolveInternalFileUri,
     isLsOpen,
     notifyLsOpen,
     notifyLsClose,
@@ -297,6 +298,12 @@ export default function AppContainer({
         ? appendLanguageServerDebugOutput
         : undefined
   });
+
+  useEffect(() => {
+    if (openFilePath) {
+      void resolveInternalFileUri(openFilePath);
+    }
+  }, [openFilePath, resolveInternalFileUri]);
   const {
     editorRef,
     pendingRevealRef,
@@ -353,6 +360,8 @@ export default function AppContainer({
     notifyLsOpen,
     notifyLsChangeImmediate,
     notifyLsClose,
+    resolveInternalFileUri,
+    getInternalFileUri,
     setStatus
   });
   const umlParseDrafts = useUmlParseDrafts({
@@ -855,6 +864,7 @@ export default function AppContainer({
     removeTarget,
     requestPackedArchiveSync,
     monacoRef,
+    getInternalFileUri,
     notifyLsClose,
     closeRemoveClassDialog,
     setTree,
@@ -1219,7 +1229,7 @@ export default function AppContainer({
         }}
         codePanelProps={{
           openFile,
-          fileUri: openFilePath ? toFileUri(openFilePath) : null,
+          fileUri: openFilePath ? getInternalFileUri(openFilePath) : null,
           content,
           dirty,
           darkMode,

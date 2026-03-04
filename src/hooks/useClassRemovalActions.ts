@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
 import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { Monaco } from "@monaco-editor/react";
@@ -8,7 +7,11 @@ import type { FileDraft } from "../models/drafts";
 import type { OpenFile } from "../models/openFile";
 import type { UmlNode } from "../models/uml";
 import { basename } from "../services/paths";
-import { toFileUri } from "../services/lsp";
+import {
+  fileNodeSchema,
+  invokeValidated,
+  voidResponseSchema
+} from "../services/tauriValidation";
 
 type UseClassRemovalActionsArgs = {
   projectPath: string | null;
@@ -17,6 +20,7 @@ type UseClassRemovalActionsArgs = {
   removeTarget: UmlNode | null;
   requestPackedArchiveSync: () => void;
   monacoRef: RefObject<Monaco | null>;
+  getInternalFileUri: (path: string) => string;
   notifyLsClose: (path: string) => void;
   closeRemoveClassDialog: () => void;
   setTree: Dispatch<SetStateAction<FileNode | null>>;
@@ -42,6 +46,7 @@ export const useClassRemovalActions = ({
   removeTarget,
   requestPackedArchiveSync,
   monacoRef,
+  getInternalFileUri,
   notifyLsClose,
   closeRemoveClassDialog,
   setTree,
@@ -65,17 +70,24 @@ export const useClassRemovalActions = ({
       setBusy(true);
       try {
         const name = basename(node.path);
-        await invoke("remove_text_file", { path: node.path });
+        await invokeValidated("remove_text_file", voidResponseSchema, "remove_text_file response", {
+          path: node.path
+        });
         notifyLsClose(node.path);
         const monaco = monacoRef.current;
         if (monaco) {
-          const uri = toFileUri(node.path);
+          const uri = getInternalFileUri(node.path);
           const model = monaco.editor.getModel(monaco.Uri.parse(uri));
           if (model) {
             model.dispose();
           }
         }
-        const nextTree = await invoke<FileNode>("list_project_tree", { root: projectPath });
+        const nextTree = await invokeValidated(
+          "list_project_tree",
+          fileNodeSchema,
+          "list_project_tree response",
+          { root: projectPath }
+        );
         setTree(nextTree);
 
         if (openFilePath && openFilePath === node.path) {
@@ -105,6 +117,7 @@ export const useClassRemovalActions = ({
     [
       formatStatus,
       monacoRef,
+      getInternalFileUri,
       notifyLsClose,
       openFilePath,
       projectPath,

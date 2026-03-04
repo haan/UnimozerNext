@@ -4499,6 +4499,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "url",
  "walkdir",
+ "windows-sys 0.61.2",
  "winreg",
  "zip 2.4.2",
 ]

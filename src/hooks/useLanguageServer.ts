@@ -22,13 +22,16 @@ import {
   isTextEdit,
   parseLsDiagnosticsEvent,
   normalizeCompletionResponse,
-  toFileUri
+  getCachedInternalFileUri,
+  resolveInternalFileUri as resolveInternalFileUriFromBackend
 } from "../services/lsp";
 import {
+  invokeValidated,
   lsCrashedEventSchema,
   lsErrorEventSchema,
   lsReadyEventSchema,
-  parseSchemaOrNull
+  parseSchemaOrNull,
+  stringSchema
 } from "../services/tauriValidation";
 
 const COMPLETION_MAX_RESULTS = 60;
@@ -360,7 +363,14 @@ const mapLspCompletionKind = (
 };
 
 const normalizeDiagnosticPath = (path: string): string => {
-  const normalized = path.replace(/\\/g, "/");
+  const decoded = (() => {
+    try {
+      return decodeURIComponent(path);
+    } catch {
+      return path;
+    }
+  })();
+  const normalized = decoded.replace(/\\/g, "/");
   const withoutLeadingSlash = normalized.replace(/^\/+/, "");
   const withDrive = /^[A-Za-z]:\//.test(withoutLeadingSlash)
     ? withoutLeadingSlash
@@ -369,7 +379,49 @@ const normalizeDiagnosticPath = (path: string): string => {
   return trimmedTrailing.toLowerCase();
 };
 
-const resolveDiagnosticModel = (monacoInstance: Monaco, uri: string) => {
+const basenameFromNormalizedPath = (path: string): string => {
+  const trimmed = path.replace(/\/+$/, "");
+  if (!trimmed) return "";
+  const segments = trimmed.split("/");
+  return segments[segments.length - 1] ?? "";
+};
+
+const projectNameFromPath = (projectPath: string | null): string | null => {
+  if (!projectPath) return null;
+  const normalized = projectPath.replace(/\\/g, "/").replace(/\/+$/, "");
+  const parts = normalized.split("/").filter((part) => part.length > 0);
+  if (parts.length === 0) return null;
+  return parts[parts.length - 1]?.toLowerCase() ?? null;
+};
+
+const comparablePathTail = (normalizedPath: string, projectName: string | null): string => {
+  if (projectName) {
+    const marker = `/${projectName}/`;
+    const markerIndex = normalizedPath.lastIndexOf(marker);
+    if (markerIndex >= 0) {
+      return normalizedPath.slice(markerIndex);
+    }
+    if (normalizedPath.endsWith(`/${projectName}`)) {
+      return `/${projectName}`;
+    }
+  }
+
+  const fallbackAnchors = ["/src/", "/test/", "/nbproject/"];
+  for (const anchor of fallbackAnchors) {
+    const anchorIndex = normalizedPath.lastIndexOf(anchor);
+    if (anchorIndex >= 0) {
+      return normalizedPath.slice(anchorIndex);
+    }
+  }
+
+  return normalizedPath;
+};
+
+const resolveDiagnosticModel = (
+  monacoInstance: Monaco,
+  uri: string,
+  projectPath: string | null
+) => {
   let parsedUri: ReturnType<Monaco["Uri"]["parse"]>;
   try {
     parsedUri = monacoInstance.Uri.parse(uri);
@@ -390,6 +442,12 @@ const resolveDiagnosticModel = (monacoInstance: Monaco, uri: string) => {
   if (!parsedPath) {
     return null;
   }
+  const parsedFileName = basenameFromNormalizedPath(parsedPath);
+  if (!parsedFileName.toLowerCase().endsWith(".java")) {
+    return null;
+  }
+  const projectName = projectNameFromPath(projectPath);
+  const parsedComparableTail = comparablePathTail(parsedPath, projectName);
 
   const candidates = monacoInstance.editor.getModels();
   for (const candidate of candidates) {
@@ -398,6 +456,12 @@ const resolveDiagnosticModel = (monacoInstance: Monaco, uri: string) => {
     }
     const candidatePath = normalizeDiagnosticPath(candidate.uri.fsPath || candidate.uri.path);
     if (candidatePath === parsedPath) {
+      return candidate;
+    }
+    if (basenameFromNormalizedPath(candidatePath) !== parsedFileName) {
+      continue;
+    }
+    if (comparablePathTail(candidatePath, projectName) === parsedComparableTail) {
       return candidate;
     }
   }
@@ -414,6 +478,8 @@ type UseLanguageServerArgs = {
 type UseLanguageServerResult = {
   monacoRef: RefObject<Monaco | null>;
   lsReadyRef: MutableRefObject<boolean>;
+  getInternalFileUri: (path: string) => string;
+  resolveInternalFileUri: (path: string) => Promise<string>;
   isLsOpen: (path: string) => boolean;
   notifyLsOpen: (path: string, text: string) => void;
   notifyLsClose: (path: string) => void;
@@ -445,14 +511,22 @@ export const useLanguageServer = ({
   const latestOpenFilePathRef = useRef<string | null>(openFilePath);
   const latestOpenFileContentRef = useRef(openFileContent);
   const lsReadyRef = useRef(false);
-  const completionDebugEnabled = Boolean(onDebugLog);
+  const languageServerDebugEnabled = Boolean(onDebugLog);
+
+  const logLsDebug = useCallback(
+    (message: string) => {
+      if (!languageServerDebugEnabled || !onDebugLog) return;
+      onDebugLog(`${new Date().toLocaleTimeString()} ${message}`);
+    },
+    [languageServerDebugEnabled, onDebugLog]
+  );
 
   const logCompletionDebug = useCallback(
     (message: string) => {
-      if (!completionDebugEnabled || !onDebugLog) return;
+      if (!languageServerDebugEnabled || !onDebugLog) return;
       onDebugLog(`${new Date().toLocaleTimeString()} [completion] ${message}`);
     },
-    [completionDebugEnabled, onDebugLog]
+    [languageServerDebugEnabled, onDebugLog]
   );
 
   useEffect(() => {
@@ -715,21 +789,46 @@ export const useLanguageServer = ({
   useEffect(() => {
     latestOpenFilePathRef.current = openFilePath;
     latestOpenFileContentRef.current = openFileContent;
+    if (openFilePath) {
+      void resolveInternalFileUriFromBackend(openFilePath);
+    }
   }, [openFileContent, openFilePath]);
 
+  const resolveInternalUriForPath = useCallback(
+    async (path: string) => resolveInternalFileUriFromBackend(path),
+    []
+  );
+
+  const getInternalUriForPath = useCallback((path: string) => getCachedInternalFileUri(path), []);
+
   const notifyLsOpen = useCallback((path: string, text: string) => {
-    if (!lsReadyRef.current) return;
-    if (lsOpenRef.current.has(path)) return;
-    const uri = toFileUri(path);
+    if (!lsReadyRef.current) {
+      logLsDebug(`skip didOpen (not ready) path=${path}`);
+      return;
+    }
+    if (lsOpenRef.current.has(path)) {
+      logLsDebug(`skip didOpen (already open) path=${path}`);
+      return;
+    }
     lsOpenRef.current.add(path);
     lsVersionRef.current[path] = LS_INITIAL_DOCUMENT_VERSION;
     lsLastSyncedTextRef.current[path] = text;
-    void invoke("ls_did_open", {
-      uri,
-      text,
-      languageId: "java"
-    }).catch(() => undefined);
-  }, []);
+    void (async () => {
+      const uri = await resolveInternalUriForPath(path);
+      logLsDebug(
+        `didOpen uri=${uri} version=${LS_INITIAL_DOCUMENT_VERSION} textLen=${text.length}`
+      );
+      void invoke("ls_did_open", {
+        uri,
+        text,
+        languageId: "java"
+      }).catch((error) => {
+        const reason =
+          error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+        logLsDebug(`didOpen failed uri=${uri} error=${reason}`);
+      });
+    })();
+  }, [logLsDebug, resolveInternalUriForPath]);
 
   const clearPendingLsChange = useCallback((path: string) => {
     const timer = lsPendingTimerRef.current[path];
@@ -749,12 +848,18 @@ export const useLanguageServer = ({
   }, []);
 
   const sendLsDidChange = useCallback(async (path: string, text: string) => {
-    if (!lsReadyRef.current) return;
-    const uri = toFileUri(path);
+    if (!lsReadyRef.current) {
+      logLsDebug(`skip didChange (not ready) path=${path}`);
+      return;
+    }
+    const uri = await resolveInternalUriForPath(path);
 
     if (!lsOpenRef.current.has(path)) {
       lsOpenRef.current.add(path);
       lsVersionRef.current[path] = LS_INITIAL_DOCUMENT_VERSION;
+      logLsDebug(
+        `didOpen(sync) uri=${uri} version=${LS_INITIAL_DOCUMENT_VERSION} textLen=${text.length}`
+      );
       try {
         await invoke("ls_did_open", {
           uri,
@@ -762,7 +867,10 @@ export const useLanguageServer = ({
           languageId: "java"
         });
         lsLastSyncedTextRef.current[path] = text;
-      } catch {
+      } catch (error) {
+        const reason =
+          error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+        logLsDebug(`didOpen(sync) failed uri=${uri} error=${reason}`);
         // Ignore LS sync failures; next change/completion will retry.
       }
       return;
@@ -770,6 +878,7 @@ export const useLanguageServer = ({
 
     const currentVersion = lsVersionRef.current[path] ?? LS_INITIAL_DOCUMENT_VERSION;
     const nextVersion = currentVersion + 1;
+    logLsDebug(`didChange uri=${uri} version=${nextVersion} textLen=${text.length}`);
     try {
       await invoke("ls_did_change", {
         uri,
@@ -778,10 +887,13 @@ export const useLanguageServer = ({
       });
       lsVersionRef.current[path] = nextVersion;
       lsLastSyncedTextRef.current[path] = text;
-    } catch {
+    } catch (error) {
+      const reason =
+        error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+      logLsDebug(`didChange failed uri=${uri} version=${nextVersion} error=${reason}`);
       // Ignore LS sync failures; completion gracefully degrades.
     }
-  }, []);
+  }, [logLsDebug, resolveInternalUriForPath]);
 
   useEffect(() => {
     sendLsDidChangeRef.current = sendLsDidChange;
@@ -805,13 +917,24 @@ export const useLanguageServer = ({
 
   const notifyLsClose = useCallback((path: string) => {
     clearPendingLsChange(path);
-    const uri = toFileUri(path);
+    const uri = getInternalUriForPath(path);
     delete lsLastSyncedTextRef.current[path];
-    if (!lsReadyRef.current) return;
-    if (!lsOpenRef.current.has(path)) return;
+    if (!lsReadyRef.current) {
+      logLsDebug(`skip didClose (not ready) path=${path}`);
+      return;
+    }
+    if (!lsOpenRef.current.has(path)) {
+      logLsDebug(`skip didClose (not open) path=${path}`);
+      return;
+    }
     lsOpenRef.current.delete(path);
     delete lsVersionRef.current[path];
-    void invoke("ls_did_close", { uri }).catch(() => undefined);
+    logLsDebug(`didClose uri=${uri}`);
+    void invoke("ls_did_close", { uri }).catch((error) => {
+      const reason =
+        error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+      logLsDebug(`didClose failed uri=${uri} error=${reason}`);
+    });
     const monacoInstance = monacoRef.current;
     if (monacoInstance) {
       const model = monacoInstance.editor.getModel(monacoInstance.Uri.parse(uri));
@@ -825,7 +948,7 @@ export const useLanguageServer = ({
       delete lsGlyphRef.current[uri];
       delete lsDiagnosticFingerprintRef.current[uri];
     }
-  }, [clearPendingLsChange]);
+  }, [clearPendingLsChange, getInternalUriForPath, logLsDebug]);
 
   const notifyLsChange = useCallback(
     (path: string, text: string) => {
@@ -890,12 +1013,24 @@ export const useLanguageServer = ({
     if (!projectPath) return;
     clearAllPendingLsChanges();
     lsReadyRef.current = false;
-    void invoke<string>("ls_start", { projectRoot: projectPath }).catch(() => undefined);
+    logLsDebug(`ls_start requested projectRoot=${projectPath}`);
+    void invokeValidated("ls_start", stringSchema, "ls_start response", {
+      projectRoot: projectPath
+    }).catch((error) => {
+      const reason =
+        error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+      logLsDebug(`ls_start failed projectRoot=${projectPath} error=${reason}`);
+    });
     return () => {
       clearAllPendingLsChanges();
-      void invoke("ls_stop").catch(() => undefined);
+      logLsDebug("ls_stop requested (cleanup)");
+      void invoke("ls_stop").catch((error) => {
+        const reason =
+          error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+        logLsDebug(`ls_stop failed (cleanup) error=${reason}`);
+      });
     };
-  }, [clearAllPendingLsChanges, projectPath]);
+  }, [clearAllPendingLsChanges, logLsDebug, projectPath]);
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
@@ -905,15 +1040,28 @@ export const useLanguageServer = ({
       const crashUnlisten = await listen("ls_crashed", (event) => {
         const payload = parseSchemaOrNull(lsCrashedEventSchema, event.payload);
         if (!payload) {
+          logLsDebug("ls_crashed payload parse failed");
           return;
         }
         if (!active) return;
+        logLsDebug(
+          `ls_crashed projectRoot=${payload.projectRoot} code=${
+            payload.code === undefined ? "null" : String(payload.code)
+          }`
+        );
         const currentProjectPath = latestProjectPathRef.current;
         if (currentProjectPath && payload.projectRoot === currentProjectPath) {
+          logLsDebug(`ls_crashed restart requested projectRoot=${currentProjectPath}`);
           resetLsState();
-          void invoke<string>("ls_start", { projectRoot: currentProjectPath }).catch(
-            () => undefined
-          );
+          void invokeValidated("ls_start", stringSchema, "ls_start response", {
+            projectRoot: currentProjectPath
+          }).catch((error) => {
+            const reason =
+              error instanceof Error ? error.message : typeof error === "string" ? error : "unknown";
+            logLsDebug(
+              `ls_crashed restart failed projectRoot=${currentProjectPath} error=${reason}`
+            );
+          });
         }
       });
       if (!active) {
@@ -928,7 +1076,7 @@ export const useLanguageServer = ({
       active = false;
       if (unlisten) unlisten();
     };
-  }, [resetLsState]);
+  }, [logLsDebug, resetLsState]);
 
   useEffect(() => {
     let unlistenReady: (() => void) | null = null;
@@ -939,18 +1087,24 @@ export const useLanguageServer = ({
       const readyUnlisten = await listen("ls_ready", (event) => {
         const payload = parseSchemaOrNull(lsReadyEventSchema, event.payload);
         if (!payload) {
+          logLsDebug("ls_ready payload parse failed");
           return;
         }
         if (!active) return;
         const currentProjectPath = latestProjectPathRef.current;
         if (!currentProjectPath) return;
         if (payload.projectRoot && payload.projectRoot !== currentProjectPath) {
+          logLsDebug(
+            `ls_ready ignored (root mismatch) eventRoot=${payload.projectRoot} currentRoot=${currentProjectPath}`
+          );
           return;
         }
 
         lsReadyRef.current = true;
+        logLsDebug(`ls_ready projectRoot=${payload.projectRoot ?? currentProjectPath}`);
         const currentOpenFilePath = latestOpenFilePathRef.current;
         if (currentOpenFilePath) {
+          logLsDebug(`ls_ready opening current document path=${currentOpenFilePath}`);
           notifyLsOpen(currentOpenFilePath, latestOpenFileContentRef.current);
         }
       });
@@ -963,6 +1117,7 @@ export const useLanguageServer = ({
       const errorUnlisten = await listen("ls_error", (event) => {
         const payload = parseSchemaOrNull(lsErrorEventSchema, event.payload);
         if (!payload) {
+          logLsDebug("ls_error payload parse failed");
           return;
         }
         const currentProjectPath = latestProjectPathRef.current;
@@ -971,9 +1126,13 @@ export const useLanguageServer = ({
           payload.projectRoot &&
           payload.projectRoot !== currentProjectPath
         ) {
+          logLsDebug(
+            `ls_error ignored (root mismatch) eventRoot=${payload.projectRoot} currentRoot=${currentProjectPath}`
+          );
           return;
         }
         lsReadyRef.current = false;
+        logLsDebug(`ls_error projectRoot=${payload.projectRoot ?? currentProjectPath ?? "<none>"}`);
       });
       if (!active) {
         errorUnlisten();
@@ -988,7 +1147,7 @@ export const useLanguageServer = ({
       if (unlistenReady) unlistenReady();
       if (unlistenError) unlistenError();
     };
-  }, [notifyLsOpen]);
+  }, [logLsDebug, notifyLsOpen]);
 
   useEffect(() => {
     let unlistenDiagnostics: (() => void) | null = null;
@@ -1000,12 +1159,23 @@ export const useLanguageServer = ({
         (event) => {
           const payload = parseLsDiagnosticsEvent(event.payload);
           if (!payload) {
+            logLsDebug("ls_diagnostics payload parse failed");
             return;
           }
           const monacoInstance = monacoRef.current;
-          if (!monacoInstance) return;
-          const model = resolveDiagnosticModel(monacoInstance, payload.uri);
-          if (!model) return;
+          if (!monacoInstance) {
+            logLsDebug(`ls_diagnostics dropped (no monaco instance) uri=${payload.uri}`);
+            return;
+          }
+          const model = resolveDiagnosticModel(
+            monacoInstance,
+            payload.uri,
+            latestProjectPathRef.current
+          );
+          if (!model) {
+            logLsDebug(`ls_diagnostics dropped (no matching model) uri=${payload.uri}`);
+            return;
+          }
           const markerUri = model.uri.toString();
           const diagnostics = payload.diagnostics ?? [];
           const markers = diagnostics
@@ -1045,6 +1215,9 @@ export const useLanguageServer = ({
             .join("\n");
           const previousFingerprint = lsDiagnosticFingerprintRef.current[markerUri];
           if (previousFingerprint === fingerprint) {
+            logLsDebug(
+              `ls_diagnostics unchanged uri=${payload.uri} model=${markerUri} diagnostics=${diagnostics.length} markers=${markers.length}`
+            );
             return;
           }
           lsDiagnosticFingerprintRef.current[markerUri] = fingerprint;
@@ -1065,6 +1238,9 @@ export const useLanguageServer = ({
           }));
           const next = model.deltaDecorations(existing, glyphDecorations);
           lsGlyphRef.current[markerUri] = next;
+          logLsDebug(
+            `ls_diagnostics applied uri=${payload.uri} model=${markerUri} diagnostics=${diagnostics.length} markers=${markers.length}`
+          );
         }
       );
       if (!active) {
@@ -1079,11 +1255,13 @@ export const useLanguageServer = ({
       active = false;
       if (unlistenDiagnostics) unlistenDiagnostics();
     };
-  }, []);
+  }, [logLsDebug]);
 
   return {
     monacoRef,
     lsReadyRef,
+    getInternalFileUri: getInternalUriForPath,
+    resolveInternalFileUri: resolveInternalUriForPath,
     isLsOpen,
     notifyLsOpen,
     notifyLsClose,

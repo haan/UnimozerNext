@@ -22,9 +22,12 @@ import {
 } from "../constants/project";
 import {
   fileNodeSchema,
+  invokeValidated,
   openPackedProjectResponseSchema,
   openScratchProjectResponseSchema,
-  parseSchemaOrThrow
+  parseSchemaOrThrow,
+  stringSchema,
+  voidResponseSchema
 } from "../services/tauriValidation";
 
 export type ProjectStorageMode = "folder" | "packed" | "scratch";
@@ -193,7 +196,12 @@ export const useProjectIO = ({
       let stateWasNormalized = false;
 
       try {
-        const text = await invoke<string>("read_text_file", { path: diagramFile });
+        const text = await invokeValidated(
+          "read_text_file",
+          stringSchema,
+          "read_text_file response",
+          { path: diagramFile }
+        );
         const parsed = JSON.parse(text) as unknown;
         const normalized = normalizeDiagramState(parsed);
         baseState = normalized;
@@ -205,9 +213,12 @@ export const useProjectIO = ({
 
       if (!baseState) {
         try {
-          const legacyText = await invoke<string>("read_text_file", {
-            path: joinPath(root, "unimozer.pck")
-          });
+          const legacyText = await invokeValidated(
+            "read_text_file",
+            stringSchema,
+            "read_text_file response",
+            { path: joinPath(root, "unimozer.pck") }
+          );
           const legacyNodes = parseLegacyPck(legacyText);
           if (Object.keys(legacyNodes).length > 0) {
             baseState = {
@@ -232,7 +243,7 @@ export const useProjectIO = ({
       setDiagramPath(diagramFile);
 
       if (!loadedFromDisk || merged.added || stateWasNormalized) {
-        await invoke("write_text_file", {
+        await invokeValidated("write_text_file", voidResponseSchema, "write_text_file response", {
           path: diagramFile,
           contents: JSON.stringify(merged.state, null, 2)
         });
@@ -265,7 +276,12 @@ export const useProjectIO = ({
             setStatus(`Opened ${name}`);
           }
         } else {
-          const text = await invoke<string>("read_text_file", { path });
+          const text = await invokeValidated(
+            "read_text_file",
+            stringSchema,
+            "read_text_file response",
+            { path }
+          );
           setOpenFile({ name, path });
           setContent(text);
           setLastSavedContent(text);
@@ -466,7 +482,12 @@ export const useProjectIO = ({
   const handleOpenRecentProject = useCallback(
     async (entry: RecentProjectEntry, options?: { clearConsole?: boolean }) => {
       try {
-        const token = await invoke<string>("file_change_token", { path: entry.path });
+        const token = await invokeValidated(
+          "file_change_token",
+          stringSchema,
+          "file_change_token response",
+          { path: entry.path }
+        );
         if (token === "missing") {
           removeRecentProject(entry);
           onMissingRecentProject(entry.path);

@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useCallback } from "react";
 import type { Dispatch, SetStateAction } from "react";
 
@@ -12,6 +11,12 @@ import type { OpenFile } from "../models/openFile";
 import type { UmlNode } from "../models/uml";
 import { buildClassSource } from "../services/javaCodegen";
 import { basename, joinPath } from "../services/paths";
+import {
+  fileNodeSchema,
+  invokeValidated,
+  stringSchema,
+  voidResponseSchema
+} from "../services/tauriValidation";
 
 type UseClassEditActionsArgs = {
   projectPath: string | null;
@@ -114,15 +119,25 @@ export const useClassEditActions = ({
       setBusy(true);
       try {
         try {
-          await invoke<string>("read_text_file", { path: filePath });
+          await invokeValidated("read_text_file", stringSchema, "read_text_file response", {
+            path: filePath
+          });
           setStatus(`Class already exists: ${name}.java`);
           return;
         } catch {
           // File does not exist, continue.
         }
 
-        await invoke("write_text_file", { path: filePath, contents: source });
-        const nextTree = await invoke<FileNode>("list_project_tree", { root: projectPath });
+        await invokeValidated("write_text_file", voidResponseSchema, "write_text_file response", {
+          path: filePath,
+          contents: source
+        });
+        const nextTree = await invokeValidated(
+          "list_project_tree",
+          fileNodeSchema,
+          "list_project_tree response",
+          { root: projectPath }
+        );
         setTree(nextTree);
         setCompileStatus(null);
         clearPendingReveal();
@@ -169,7 +184,9 @@ export const useClassEditActions = ({
         const existingDraft = fileDrafts[target.path];
         const originalContent = existingDraft
           ? existingDraft.content
-          : await invoke<string>("read_text_file", { path: target.path });
+          : await invokeValidated("read_text_file", stringSchema, "read_text_file response", {
+              path: target.path
+            });
         const savedBaseline = existingDraft?.lastSavedContent ?? originalContent;
         const payload = {
           action: "addField",
@@ -190,7 +207,12 @@ export const useClassEditActions = ({
           includeJavadoc: form.includeJavadoc
         };
 
-        const updated = await invoke<string>("add_field_to_class", { request: payload });
+        const updated = await invokeValidated(
+          "add_field_to_class",
+          stringSchema,
+          "add_field_to_class response",
+          { request: payload }
+        );
         applyUpdatedClassDraft(target.path, updated, savedBaseline);
         setCompileStatus(null);
         setStatus(`Added field to ${basename(target.path)}`);
@@ -230,7 +252,9 @@ export const useClassEditActions = ({
         const existingDraft = fileDrafts[target.path];
         const originalContent = existingDraft
           ? existingDraft.content
-          : await invoke<string>("read_text_file", { path: target.path });
+          : await invokeValidated("read_text_file", stringSchema, "read_text_file response", {
+              path: target.path
+            });
         const savedBaseline = existingDraft?.lastSavedContent ?? originalContent;
         const payload = {
           action: "addConstructor",
@@ -244,7 +268,12 @@ export const useClassEditActions = ({
           includeJavadoc: form.includeJavadoc
         };
 
-        const updated = await invoke<string>("add_constructor_to_class", { request: payload });
+        const updated = await invokeValidated(
+          "add_constructor_to_class",
+          stringSchema,
+          "add_constructor_to_class response",
+          { request: payload }
+        );
         applyUpdatedClassDraft(target.path, updated, savedBaseline);
         setCompileStatus(null);
         setStatus(`Added constructor to ${basename(target.path)}`);
@@ -284,7 +313,9 @@ export const useClassEditActions = ({
         const existingDraft = fileDrafts[target.path];
         const originalContent = existingDraft
           ? existingDraft.content
-          : await invoke<string>("read_text_file", { path: target.path });
+          : await invokeValidated("read_text_file", stringSchema, "read_text_file response", {
+              path: target.path
+            });
         const savedBaseline = existingDraft?.lastSavedContent ?? originalContent;
         const payload = {
           action: "addMethod",
@@ -305,7 +336,12 @@ export const useClassEditActions = ({
           }))
         };
 
-        const updated = await invoke<string>("add_method_to_class", { request: payload });
+        const updated = await invokeValidated(
+          "add_method_to_class",
+          stringSchema,
+          "add_method_to_class response",
+          { request: payload }
+        );
         applyUpdatedClassDraft(target.path, updated, savedBaseline);
         setCompileStatus(null);
         setStatus(`Added method to ${basename(target.path)}`);

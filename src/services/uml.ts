@@ -1,6 +1,9 @@
 import type { FileNode } from "../models/files";
 import type { UmlGraph, UmlNode } from "../models/uml";
-import { invoke } from "@tauri-apps/api/core";
+import {
+  invokeValidated,
+  parseUmlGraphResponseSchema
+} from "./tauriValidation";
 
 const stripJavaExtension = (name: string) => name.replace(/\.java$/i, "");
 
@@ -61,9 +64,14 @@ export const parseUmlGraph = async (
   overrides: UmlOverride[],
   includeStructogramIr = false
 ): Promise<{ graph: UmlGraph; raw: string }> =>
-  invoke<{ graph: UmlGraph; raw: string }>("parse_uml_graph", {
-    root,
-    srcRoot,
-    overrides,
-    includeStructogramIr
-  });
+  invokeValidated(
+    "parse_uml_graph",
+    parseUmlGraphResponseSchema,
+    "parse_uml_graph response",
+    {
+      root,
+      srcRoot,
+      overrides,
+      includeStructogramIr
+    }
+  );

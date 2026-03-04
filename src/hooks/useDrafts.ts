@@ -1,4 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useMemo, useState } from "react";
 import type { RefObject } from "react";
 import type { MutableRefObject } from "react";
@@ -7,7 +6,13 @@ import type { AppSettings } from "../models/settings";
 import type { FileDraft } from "../models/drafts";
 import type { UmlGraph } from "../models/uml";
 import type { LspTextEdit } from "../services/lsp";
-import { applyTextEdits, sortTextEditsDescending, toFileUri } from "../services/lsp";
+import { applyTextEdits, sortTextEditsDescending } from "../services/lsp";
+import {
+  invokeValidated,
+  lspTextEditArraySchema,
+  stringSchema,
+  voidResponseSchema
+} from "../services/tauriValidation";
 import type { Monaco } from "@monaco-editor/react";
 
 type UseDraftsArgs = {
@@ -22,6 +27,8 @@ type UseDraftsArgs = {
   notifyLsOpen: (path: string, text: string) => void;
   notifyLsChangeImmediate: (path: string, text: string) => void;
   notifyLsClose: (path: string) => void;
+  resolveInternalFileUri: (path: string) => Promise<string>;
+  getInternalFileUri: (path: string) => string;
   setStatus: (status: string) => void;
 };
 
@@ -45,6 +52,8 @@ export const useDrafts = ({
   notifyLsOpen,
   notifyLsChangeImmediate,
   notifyLsClose,
+  resolveInternalFileUri,
+  getInternalFileUri,
   setStatus
 }: UseDraftsArgs): UseDraftsResult => {
   const [fileDrafts, setFileDrafts] = useState<Record<string, FileDraft>>({});
@@ -96,7 +105,12 @@ export const useDrafts = ({
           continue;
         }
         try {
-          const text = await invoke<string>("read_text_file", { path });
+          const text = await invokeValidated(
+            "read_text_file",
+            stringSchema,
+            "read_text_file response",
+            { path }
+          );
           entries.push({ path, content: text, hasDraft: false });
         } catch {
           // Skip files we cannot read.
@@ -123,19 +137,26 @@ export const useDrafts = ({
         for (const entry of entries) {
           const path = entry.path;
           const draftContent = entry.content;
-          const uri = toFileUri(path);
+          const uri = await resolveInternalFileUri(path);
           const model = monacoInstance
-            ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(uri))
+            ? monacoInstance.editor.getModel(
+                monacoInstance.Uri.parse(getInternalFileUri(path))
+              )
             : null;
           const tabSize = settingsEditor.tabSize;
           const insertSpaces = settingsEditor.insertSpaces;
 
           try {
-            const edits = await invoke<LspTextEdit[]>("ls_format_document", {
-              uri,
-              tabSize,
-              insertSpaces
-            });
+            const edits = await invokeValidated<LspTextEdit[]>(
+              "ls_format_document",
+              lspTextEditArraySchema,
+              "ls_format_document response",
+              {
+                uri,
+                tabSize,
+                insertSpaces
+              }
+            );
             if (edits && edits.length > 0) {
               let next = draftContent;
               const editedOpenModel = Boolean(model && openFilePath === path);
@@ -180,7 +201,10 @@ export const useDrafts = ({
       for (const entry of entries) {
         const path = entry.path;
         const contents = formatted[path] ?? entry.content;
-        await invoke("write_text_file", { path, contents });
+        await invokeValidated("write_text_file", voidResponseSchema, "write_text_file response", {
+          path,
+          contents
+        });
         if (entry.hasDraft) {
           updateDraftForPath(path, contents, contents);
         }
@@ -211,7 +235,9 @@ export const useDrafts = ({
       setStatus,
       settingsEditor,
       umlGraph,
-      updateDraftForPath
+      updateDraftForPath,
+      getInternalFileUri,
+      resolveInternalFileUri
     ]
   );
 

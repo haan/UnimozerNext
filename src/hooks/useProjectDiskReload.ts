@@ -1,8 +1,8 @@
-import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { DISK_RELOAD_POLL_INTERVAL_MS } from "../constants/project";
 import type { ProjectStorageMode } from "./useProjectIO";
+import { invokeValidated, stringSchema } from "../services/tauriValidation";
 
 type UseProjectDiskReloadArgs = {
   projectPath: string | null;
@@ -63,10 +63,17 @@ export const useProjectDiskReload = ({
       return null;
     }
     if (projectStorageMode === "folder" && projectPath) {
-      return invoke<string>("folder_java_files_change_token", { root: projectPath });
+      return invokeValidated(
+        "folder_java_files_change_token",
+        stringSchema,
+        "folder_java_files_change_token response",
+        { root: projectPath }
+      );
     }
     if (projectStorageMode === "packed" && packedArchivePath) {
-      return invoke<string>("file_change_token", { path: packedArchivePath });
+      return invokeValidated("file_change_token", stringSchema, "file_change_token response", {
+        path: packedArchivePath
+      });
     }
     return null;
   }, [packedArchivePath, projectPath, projectStorageMode, scopeKey]);

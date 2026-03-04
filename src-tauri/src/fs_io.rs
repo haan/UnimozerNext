@@ -138,6 +138,16 @@ pub fn file_change_token(path: String) -> CommandResult<String> {
     Ok(format!("{hash:016x}"))
 }
 
+#[tauri::command]
+pub fn resolve_file_uri(path: String) -> CommandResult<String> {
+    let input_path = PathBuf::from(path);
+    if input_path.as_os_str().is_empty() {
+        return Err("Path is empty".to_string());
+    }
+    let canonical = fs::canonicalize(&input_path).unwrap_or(input_path);
+    Ok(crate::ls::uri::path_to_uri(&canonical))
+}
+
 fn build_tree(
     path: &Path,
     is_root: bool,
