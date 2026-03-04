@@ -4,18 +4,9 @@ import {
   invokeValidated,
   parseUmlGraphResponseSchema
 } from "./tauriValidation";
+import { toRelativePath } from "./paths";
 
 const stripJavaExtension = (name: string) => name.replace(/\.java$/i, "");
-
-const toRelativePath = (fullPath: string, rootPath: string) => {
-  const normalizedRoot = rootPath.replace(/[\\/]+$/, "").toLowerCase();
-  const normalizedFull = fullPath.toLowerCase();
-  if (normalizedFull.startsWith(normalizedRoot)) {
-    const sliced = fullPath.slice(normalizedRoot.length).replace(/^[\\/]/, "");
-    return sliced.length ? sliced : fullPath;
-  }
-  return fullPath;
-};
 
 const pathToFqn = (relativePath: string) =>
   stripJavaExtension(relativePath).replace(/[\\/]+/g, ".");

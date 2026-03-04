@@ -26,13 +26,35 @@ export const toDisplayPath = (path: string) => {
   return path;
 };
 
+const isLikelyWindowsPath = (path: string) =>
+  /^[A-Za-z]:[\\/]/.test(path) ||
+  path.startsWith("\\\\") ||
+  path.startsWith("//") ||
+  path.startsWith("\\\\?\\");
+
 export const toRelativePath = (fullPath: string, rootPath: string) => {
-  const normalizedRoot = rootPath.replace(/[\\/]+$/, "").toLowerCase();
-  const normalizedFull = fullPath.toLowerCase();
-  if (normalizedFull.startsWith(normalizedRoot)) {
-    const sliced = fullPath.slice(normalizedRoot.length).replace(/^[\\/]/, "");
+  const normalizedRoot = rootPath.replace(/[\\/]+$/, "");
+  if (!normalizedRoot) {
+    return fullPath;
+  }
+
+  const windowsLike = isLikelyWindowsPath(fullPath) || isLikelyWindowsPath(normalizedRoot);
+  const separator = windowsLike ? "\\" : "/";
+  const alignedFull = windowsLike ? fullPath.replace(/\//g, "\\") : fullPath.replace(/\\/g, "/");
+  const alignedRoot = windowsLike
+    ? normalizedRoot.replace(/\//g, "\\")
+    : normalizedRoot.replace(/\\/g, "/");
+
+  const compareFull = windowsLike ? alignedFull.toLowerCase() : alignedFull;
+  const compareRoot = windowsLike ? alignedRoot.toLowerCase() : alignedRoot;
+  const hasMatchingPrefix =
+    compareFull === compareRoot || compareFull.startsWith(`${compareRoot}${separator}`);
+
+  if (hasMatchingPrefix) {
+    const sliced = alignedFull.slice(alignedRoot.length).replace(/^[\\/]/, "");
     return sliced.length ? sliced : fullPath;
   }
+
   return fullPath;
 };
 
