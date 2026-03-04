@@ -20,22 +20,16 @@ import type {
 import {
   isInsertReplaceEdit,
   isTextEdit,
+  parseLsDiagnosticsEvent,
   normalizeCompletionResponse,
   toFileUri
 } from "../services/lsp";
-
-type LsCrashedEvent = {
-  projectRoot: string;
-  code?: number | null;
-};
-
-type LsReadyEvent = {
-  projectRoot?: string;
-};
-
-type LsErrorEvent = {
-  projectRoot?: string;
-};
+import {
+  lsCrashedEventSchema,
+  lsErrorEventSchema,
+  lsReadyEventSchema,
+  parseSchemaOrNull
+} from "../services/tauriValidation";
 
 const COMPLETION_MAX_RESULTS = 60;
 const COMPLETION_MAX_RESULTS_SHORT_PREFIX = 400;
@@ -363,6 +357,51 @@ const mapLspCompletionKind = (
     default:
       return monacoKinds.Text;
   }
+};
+
+const normalizeDiagnosticPath = (path: string): string => {
+  const normalized = path.replace(/\\/g, "/");
+  const withoutLeadingSlash = normalized.replace(/^\/+/, "");
+  const withDrive = /^[A-Za-z]:\//.test(withoutLeadingSlash)
+    ? withoutLeadingSlash
+    : normalized;
+  const trimmedTrailing = withDrive.replace(/\/+$/, "");
+  return trimmedTrailing.toLowerCase();
+};
+
+const resolveDiagnosticModel = (monacoInstance: Monaco, uri: string) => {
+  let parsedUri: ReturnType<Monaco["Uri"]["parse"]>;
+  try {
+    parsedUri = monacoInstance.Uri.parse(uri);
+  } catch {
+    return null;
+  }
+
+  const direct = monacoInstance.editor.getModel(parsedUri);
+  if (direct) {
+    return direct;
+  }
+
+  if (parsedUri.scheme !== "file") {
+    return null;
+  }
+
+  const parsedPath = normalizeDiagnosticPath(parsedUri.fsPath || parsedUri.path);
+  if (!parsedPath) {
+    return null;
+  }
+
+  const candidates = monacoInstance.editor.getModels();
+  for (const candidate of candidates) {
+    if (candidate.uri.scheme !== "file") {
+      continue;
+    }
+    const candidatePath = normalizeDiagnosticPath(candidate.uri.fsPath || candidate.uri.path);
+    if (candidatePath === parsedPath) {
+      return candidate;
+    }
+  }
+  return null;
 };
 
 type UseLanguageServerArgs = {
@@ -863,10 +902,14 @@ export const useLanguageServer = ({
     let active = true;
 
     const setup = async () => {
-      const crashUnlisten = await listen<LsCrashedEvent>("ls_crashed", (event) => {
+      const crashUnlisten = await listen("ls_crashed", (event) => {
+        const payload = parseSchemaOrNull(lsCrashedEventSchema, event.payload);
+        if (!payload) {
+          return;
+        }
         if (!active) return;
         const currentProjectPath = latestProjectPathRef.current;
-        if (currentProjectPath && event.payload.projectRoot === currentProjectPath) {
+        if (currentProjectPath && payload.projectRoot === currentProjectPath) {
           resetLsState();
           void invoke<string>("ls_start", { projectRoot: currentProjectPath }).catch(
             () => undefined
@@ -893,11 +936,15 @@ export const useLanguageServer = ({
     let active = true;
 
     const setup = async () => {
-      const readyUnlisten = await listen<LsReadyEvent>("ls_ready", (event) => {
+      const readyUnlisten = await listen("ls_ready", (event) => {
+        const payload = parseSchemaOrNull(lsReadyEventSchema, event.payload);
+        if (!payload) {
+          return;
+        }
         if (!active) return;
         const currentProjectPath = latestProjectPathRef.current;
         if (!currentProjectPath) return;
-        if (event.payload.projectRoot && event.payload.projectRoot !== currentProjectPath) {
+        if (payload.projectRoot && payload.projectRoot !== currentProjectPath) {
           return;
         }
 
@@ -913,12 +960,16 @@ export const useLanguageServer = ({
       }
       unlistenReady = readyUnlisten;
 
-      const errorUnlisten = await listen<LsErrorEvent>("ls_error", (event) => {
+      const errorUnlisten = await listen("ls_error", (event) => {
+        const payload = parseSchemaOrNull(lsErrorEventSchema, event.payload);
+        if (!payload) {
+          return;
+        }
         const currentProjectPath = latestProjectPathRef.current;
         if (
           currentProjectPath &&
-          event.payload.projectRoot &&
-          event.payload.projectRoot !== currentProjectPath
+          payload.projectRoot &&
+          payload.projectRoot !== currentProjectPath
         ) {
           return;
         }
@@ -947,14 +998,22 @@ export const useLanguageServer = ({
       const diagnosticsUnlisten = await listen<LsDiagnosticsEvent>(
         "ls_diagnostics",
         (event) => {
+          const payload = parseLsDiagnosticsEvent(event.payload);
+          if (!payload) {
+            return;
+          }
           const monacoInstance = monacoRef.current;
           if (!monacoInstance) return;
-          const uri = event.payload.uri;
-          const model = monacoInstance.editor.getModel(monacoInstance.Uri.parse(uri));
+          const model = resolveDiagnosticModel(monacoInstance, payload.uri);
           if (!model) return;
-          const diagnostics = event.payload.diagnostics ?? [];
+          const markerUri = model.uri.toString();
+          const diagnostics = payload.diagnostics ?? [];
           const markers = diagnostics
-            .filter((diag) => diag.severity === LS_DIAGNOSTIC_SEVERITY_ERROR)
+            .filter(
+              (diag) =>
+                (diag.severity ?? LS_DIAGNOSTIC_SEVERITY_ERROR) ===
+                LS_DIAGNOSTIC_SEVERITY_ERROR
+            )
             .map((diag) => ({
               startLineNumber: diag.range.start.line + 1,
               startColumn: diag.range.start.character + 1,
@@ -984,13 +1043,13 @@ export const useLanguageServer = ({
               `${marker.startLineNumber}:${marker.startColumn}-${marker.endLineNumber}:${marker.endColumn}|${marker.source}|${marker.message}`
             )
             .join("\n");
-          const previousFingerprint = lsDiagnosticFingerprintRef.current[uri];
+          const previousFingerprint = lsDiagnosticFingerprintRef.current[markerUri];
           if (previousFingerprint === fingerprint) {
             return;
           }
-          lsDiagnosticFingerprintRef.current[uri] = fingerprint;
+          lsDiagnosticFingerprintRef.current[markerUri] = fingerprint;
           monacoInstance.editor.setModelMarkers(model, "jdtls", markers);
-          const existing = lsGlyphRef.current[uri] ?? [];
+          const existing = lsGlyphRef.current[markerUri] ?? [];
           const glyphDecorations = markers.map((marker) => ({
             range: new monacoInstance.Range(
               marker.startLineNumber,
@@ -1005,7 +1064,7 @@ export const useLanguageServer = ({
             }
           }));
           const next = model.deltaDecorations(existing, glyphDecorations);
-          lsGlyphRef.current[uri] = next;
+          lsGlyphRef.current[markerUri] = next;
         }
       );
       if (!active) {

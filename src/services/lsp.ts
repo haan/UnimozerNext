@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 export type LspPosition = {
   line: number;
   character: number;
@@ -64,63 +66,128 @@ export type LspCompletionList = {
   items: LspCompletionItem[];
 };
 
-const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const lspPositionSchema = z
+  .object({
+    line: z.number(),
+    character: z.number()
+  })
+  .loose();
 
-const isPosition = (value: unknown): value is LspPosition => {
-  if (!isObjectRecord(value)) return false;
-  return typeof value.line === "number" && typeof value.character === "number";
-};
+const lspRangeSchema = z
+  .object({
+    start: lspPositionSchema,
+    end: lspPositionSchema
+  })
+  .loose();
 
-const isRange = (value: unknown): value is LspRange => {
-  if (!isObjectRecord(value)) return false;
-  return isPosition(value.start) && isPosition(value.end);
-};
+const lspDiagnosticSchema = z
+  .object({
+    range: lspRangeSchema,
+    severity: z.number().nullish().transform((value) => value ?? undefined),
+    message: z.string(),
+    source: z.string().nullish().transform((value) => value ?? undefined)
+  })
+  .loose();
 
-const isCompletionLabel = (value: unknown): value is string | LspCompletionItemLabel => {
-  if (typeof value === "string") return true;
-  if (!isObjectRecord(value)) return false;
-  return typeof value.label === "string";
-};
+const lsDiagnosticsEventSchema = z
+  .object({
+    uri: z.string(),
+    diagnostics: z.array(lspDiagnosticSchema)
+  })
+  .loose();
 
-const isCompletionItem = (value: unknown): value is LspCompletionItem => {
-  if (!isObjectRecord(value)) return false;
-  return isCompletionLabel(value.label);
-};
+const lspTextEditSchema = z
+  .object({
+    range: lspRangeSchema,
+    newText: z.string()
+  })
+  .loose();
 
-export const isTextEdit = (value: unknown): value is LspTextEdit => {
-  if (!isObjectRecord(value)) return false;
-  return isRange(value.range) && typeof value.newText === "string";
-};
+const lspMarkupContentSchema = z
+  .object({
+    kind: z.string(),
+    value: z.string()
+  })
+  .loose();
 
-export const isInsertReplaceEdit = (value: unknown): value is LspInsertReplaceEdit => {
-  if (!isObjectRecord(value)) return false;
-  return (
-    typeof value.newText === "string" &&
-    isRange(value.insert) &&
-    isRange(value.replace)
-  );
-};
+const lspInsertReplaceEditSchema = z
+  .object({
+    newText: z.string(),
+    insert: lspRangeSchema,
+    replace: lspRangeSchema
+  })
+  .loose();
 
-export const isCompletionList = (value: unknown): value is LspCompletionList => {
-  if (!isObjectRecord(value)) return false;
-  return Array.isArray(value.items);
+const lspCompletionItemLabelSchema = z
+  .object({
+    label: z.string(),
+    detail: z.string().optional(),
+    description: z.string().optional()
+  })
+  .loose();
+
+const lspCompletionLabelSchema = z.union([z.string(), lspCompletionItemLabelSchema]);
+
+const lspCompletionItemSchema = z
+  .object({
+    label: lspCompletionLabelSchema,
+    kind: z.number().optional(),
+    detail: z.string().optional(),
+    documentation: z.union([z.string(), lspMarkupContentSchema]).optional(),
+    sortText: z.string().optional(),
+    filterText: z.string().optional(),
+    insertText: z.string().optional(),
+    insertTextFormat: z.number().optional(),
+    textEdit: z.union([lspTextEditSchema, lspInsertReplaceEditSchema]).optional(),
+    additionalTextEdits: z.array(lspTextEditSchema).optional(),
+    commitCharacters: z.array(z.string()).optional(),
+    preselect: z.boolean().optional()
+  })
+  .loose();
+
+const lspCompletionListSchema = z
+  .object({
+    isIncomplete: z.boolean().optional(),
+    items: z.array(lspCompletionItemSchema)
+  })
+  .loose();
+
+export const isTextEdit = (value: unknown): value is LspTextEdit =>
+  lspTextEditSchema.safeParse(value).success;
+
+export const isInsertReplaceEdit = (value: unknown): value is LspInsertReplaceEdit =>
+  lspInsertReplaceEditSchema.safeParse(value).success;
+
+export const isCompletionList = (value: unknown): value is LspCompletionList =>
+  lspCompletionListSchema.safeParse(value).success;
+
+export const parseLsDiagnosticsEvent = (value: unknown): LsDiagnosticsEvent | null => {
+  const parsed = lsDiagnosticsEventSchema.safeParse(value);
+  return parsed.success ? parsed.data : null;
 };
 
 export const normalizeCompletionResponse = (
   result: unknown
 ): { isIncomplete: boolean; items: LspCompletionItem[] } => {
-  if (isCompletionList(result)) {
+  const parsedList = lspCompletionListSchema.safeParse(result);
+  if (parsedList.success) {
     return {
-      isIncomplete: result.isIncomplete === true,
-      items: result.items.filter((item) => isCompletionItem(item))
+      isIncomplete: parsedList.data.isIncomplete === true,
+      items: parsedList.data.items
     };
   }
 
   if (Array.isArray(result)) {
+    const items: LspCompletionItem[] = [];
+    result.forEach((item) => {
+      const parsed = lspCompletionItemSchema.safeParse(item);
+      if (parsed.success) {
+        items.push(parsed.data);
+      }
+    });
     return {
       isIncomplete: false,
-      items: result.filter((item): item is LspCompletionItem => isCompletionItem(item))
+      items
     };
   }
 

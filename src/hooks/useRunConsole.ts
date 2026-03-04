@@ -3,25 +3,17 @@ import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import { CONSOLE_FLUSH_DELAY_MS, CONSOLE_MAX_LINES } from "../constants/console";
+import {
+  compileProjectResultSchema,
+  parseSchemaOrNull,
+  parseSchemaOrThrow,
+  runCompleteEventSchema,
+  runOutputEventSchema,
+  runStartEventSchema
+} from "../services/tauriValidation";
 
 import type { UmlNode } from "../models/uml";
 import type { FileDraft } from "../models/drafts";
-
-type RunStartEvent = {
-  runId: number;
-};
-
-type RunOutputEvent = {
-  runId: number;
-  stream: string;
-  line: string;
-};
-
-type RunCompleteEvent = {
-  runId: number;
-  ok: boolean;
-  code?: number | null;
-};
 
 type UseRunConsoleArgs = {
   projectPath: string | null;
@@ -127,8 +119,12 @@ export const useRunConsole = ({
     let unlistenComplete: (() => void) | null = null;
 
     const setup = async () => {
-      const startUnlisten = await listen<RunStartEvent>("run-start", (event) => {
-        setRunSession(event.payload.runId);
+      const startUnlisten = await listen("run-start", (event) => {
+        const payload = parseSchemaOrNull(runStartEventSchema, event.payload);
+        if (!payload) {
+          return;
+        }
+        setRunSession(payload.runId);
       });
       if (!active) {
         startUnlisten();
@@ -136,12 +132,16 @@ export const useRunConsole = ({
       }
       unlistenStart = startUnlisten;
 
-      const outputUnlisten = await listen<RunOutputEvent>("run-output", (event) => {
+      const outputUnlisten = await listen("run-output", (event) => {
+        const payload = parseSchemaOrNull(runOutputEventSchema, event.payload);
+        if (!payload) {
+          return;
+        }
         const activeId = runSessionRef.current;
-        if (activeId === null || event.payload.runId !== activeId) return;
-        const prefix = event.payload.stream === "stderr" ? "[stderr] " : "";
-        if (event.payload.line) {
-          appendConsole(`${prefix}${event.payload.line}`);
+        if (activeId === null || payload.runId !== activeId) return;
+        const prefix = payload.stream === "stderr" ? "[stderr] " : "";
+        if (payload.line) {
+          appendConsole(`${prefix}${payload.line}`);
         }
       });
       if (!active) {
@@ -150,14 +150,16 @@ export const useRunConsole = ({
       }
       unlistenOutput = outputUnlisten;
 
-      const completeUnlisten = await listen<RunCompleteEvent>("run-complete", (event) => {
+      const completeUnlisten = await listen("run-complete", (event) => {
+        const payload = parseSchemaOrNull(runCompleteEventSchema, event.payload);
+        if (!payload) {
+          return;
+        }
         const activeId = runSessionRef.current;
-        if (activeId === null || event.payload.runId !== activeId) return;
-        const exitLabel = event.payload.ok
-          ? "Run finished."
-          : `Run failed (exit ${event.payload.code ?? "?"}).`;
+        if (activeId === null || payload.runId !== activeId) return;
+        const exitLabel = payload.ok ? "Run finished." : `Run failed (exit ${payload.code ?? "?"}).`;
         appendConsole(exitLabel);
-        setStatus(event.payload.ok ? "Run main succeeded." : "Run main failed.");
+        setStatus(payload.ok ? "Run main succeeded." : "Run main failed.");
         setRunSession(null);
       });
       if (!active) {
@@ -211,16 +213,16 @@ export const useRunConsole = ({
           } before compile.`
         );
         setStatus("Compiling Java sources...");
-        const result = await invoke<{
-          ok: boolean;
-          stdout: string;
-          stderr: string;
-          outDir: string;
-        }>("compile_project", {
+        const resultRaw = await invoke<unknown>("compile_project", {
           root: projectPath,
           srcRoot: "src",
           overrides
         });
+        const result = parseSchemaOrThrow(
+          compileProjectResultSchema,
+          resultRaw,
+          "compile_project response"
+        );
         if (result.stdout) {
           appendConsole(result.stdout.trim());
         }

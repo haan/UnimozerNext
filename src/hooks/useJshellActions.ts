@@ -160,7 +160,7 @@ export const useJshellActions = ({
               name: method.name,
               returnType: method.returnType ?? "",
               paramTypes: method.paramTypes ?? [],
-              visibility: method.visibility,
+              visibility: method.visibility ?? undefined,
               isStatic: method.isStatic,
               declaringClass: group.className
             }))
@@ -278,7 +278,7 @@ export const useJshellActions = ({
               name: method.name,
               returnType: method.returnType ?? "",
               paramTypes: method.paramTypes ?? [],
-              visibility: method.visibility,
+              visibility: method.visibility ?? undefined,
               isStatic: method.isStatic,
               declaringClass: group.className
             }))

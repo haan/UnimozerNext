@@ -1,43 +1,65 @@
 import { invoke } from "@tauri-apps/api/core";
+import { z } from "zod";
+import { parseSchemaOrThrow } from "./tauriValidation";
 
-export type UpdateChannel = "stable" | "prerelease";
+const updateChannelSchema = z.enum(["stable", "prerelease"]);
+const updateInstallabilitySchema = z.object({
+  installable: z.boolean(),
+  reason: z.string().nullable().optional(),
+  installPath: z.string()
+});
+const updateSummarySchema = z.object({
+  currentVersion: z.string(),
+  version: z.string(),
+  notes: z.string().nullable().optional(),
+  pubDate: z.string().nullable().optional(),
+  target: z.string(),
+  downloadUrl: z.string()
+});
+const updateCheckResultSchema = z.object({
+  channel: updateChannelSchema,
+  target: z.string(),
+  update: updateSummarySchema.nullable().optional(),
+  installability: updateInstallabilitySchema
+});
+const updateInstallResultSchema = z.object({
+  installed: z.boolean(),
+  version: z.string().nullable().optional(),
+  message: z.string().nullable().optional()
+});
+const windowsInstallerKindSchema = z.enum(["msi", "nsis", "unknown"]);
 
-export type UpdateInstallability = {
-  installable: boolean;
-  reason?: string | null;
-  installPath: string;
+export type UpdateChannel = z.infer<typeof updateChannelSchema>;
+export type UpdateInstallability = z.infer<typeof updateInstallabilitySchema>;
+export type UpdateSummary = z.infer<typeof updateSummarySchema>;
+export type UpdateCheckResult = z.infer<typeof updateCheckResultSchema>;
+export type UpdateInstallResult = z.infer<typeof updateInstallResultSchema>;
+
+export const updaterCheck = async (channel: UpdateChannel): Promise<UpdateCheckResult> => {
+  const raw = await invoke<unknown>("updater_check", { channel });
+  return parseSchemaOrThrow(updateCheckResultSchema, raw, "updater_check response");
 };
 
-export type UpdateSummary = {
-  currentVersion: string;
-  version: string;
-  notes?: string | null;
-  pubDate?: string | null;
-  target: string;
-  downloadUrl: string;
+export const updaterInstall = async (channel: UpdateChannel): Promise<UpdateInstallResult> => {
+  const raw = await invoke<unknown>("updater_install", { channel });
+  return parseSchemaOrThrow(updateInstallResultSchema, raw, "updater_install response");
 };
 
-export type UpdateCheckResult = {
-  channel: UpdateChannel;
-  target: string;
-  update?: UpdateSummary | null;
-  installability: UpdateInstallability;
+export const updaterInstallability = async (): Promise<UpdateInstallability> => {
+  const raw = await invoke<unknown>("updater_installability");
+  return parseSchemaOrThrow(
+    updateInstallabilitySchema,
+    raw,
+    "updater_installability response"
+  );
 };
 
-export type UpdateInstallResult = {
-  installed: boolean;
-  version?: string | null;
-  message?: string | null;
+export const detectWindowsInstallerKind = async (): Promise<"msi" | "nsis" | "unknown"> => {
+  const raw = await invoke<unknown>("detect_windows_installer_kind");
+  return parseSchemaOrThrow(
+    windowsInstallerKindSchema,
+    raw,
+    "detect_windows_installer_kind response"
+  );
 };
 
-export const updaterCheck = (channel: UpdateChannel) =>
-  invoke<UpdateCheckResult>("updater_check", { channel });
-
-export const updaterInstall = (channel: UpdateChannel) =>
-  invoke<UpdateInstallResult>("updater_install", { channel });
-
-export const updaterInstallability = () =>
-  invoke<UpdateInstallability>("updater_installability");
-
-export const detectWindowsInstallerKind = () =>
-  invoke<"msi" | "nsis" | "unknown">("detect_windows_installer_kind");

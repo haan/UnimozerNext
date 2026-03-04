@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
+import { parseSchemaOrNull, stringArraySchema } from "../services/tauriValidation";
 
 type UseLaunchBootstrapArgs = {
   projectPath: string | null;
@@ -59,8 +60,9 @@ export const useLaunchBootstrap = ({
     let active = true;
     const loadStartupLogs = async () => {
       try {
-        const lines = await invoke<string[]>("take_startup_logs");
-        if (!active || !lines.length) return;
+        const raw = await invoke<unknown>("take_startup_logs");
+        const lines = parseSchemaOrNull(stringArraySchema, raw);
+        if (!active || !lines || !lines.length) return;
         lines.forEach((line) => appendStartupDebugOutputRef.current?.(line));
       } catch {
         // Ignore startup log failures.
@@ -75,7 +77,8 @@ export const useLaunchBootstrap = ({
   const consumeQueuedLaunchPaths = useCallback(async (): Promise<boolean> => {
     const startedAt = performance.now();
     try {
-      const launchPaths = await invoke<string[]>("take_launch_open_paths");
+      const raw = await invoke<unknown>("take_launch_open_paths");
+      const launchPaths = parseSchemaOrNull(stringArraySchema, raw) ?? [];
       logLaunch(`[launch] queued paths: ${JSON.stringify(launchPaths)}`);
       const packedPath = launchPaths.find((path) => path.toLowerCase().endsWith(".umz"));
       if (packedPath) {

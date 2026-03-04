@@ -20,18 +20,12 @@ import {
   DEFAULT_NEW_PROJECT_FILE_NAME,
   PACKED_PROJECT_EXTENSION
 } from "../constants/project";
-
-type OpenPackedProjectResponse = {
-  archivePath: string;
-  workspaceDir: string;
-  projectRoot: string;
-  projectName: string;
-};
-
-type OpenScratchProjectResponse = {
-  projectRoot: string;
-  projectName: string;
-};
+import {
+  fileNodeSchema,
+  openPackedProjectResponseSchema,
+  openScratchProjectResponseSchema,
+  parseSchemaOrThrow
+} from "../services/tauriValidation";
 
 export type ProjectStorageMode = "folder" | "packed" | "scratch";
 
@@ -135,7 +129,8 @@ export const useProjectIO = ({
 
   const refreshTree = useCallback(
     async (root: string) => {
-      const result = await invoke<FileNode>("list_project_tree", { root });
+      const raw = await invoke<unknown>("list_project_tree", { root });
+      const result = parseSchemaOrThrow(fileNodeSchema, raw, "list_project_tree response");
       setTree(result);
     },
     [setTree]
@@ -309,9 +304,14 @@ export const useProjectIO = ({
       await prepareProjectSwitch();
       setBusy(true);
       try {
-        const response = await invoke<OpenPackedProjectResponse>("open_packed_project", {
+        const responseRaw = await invoke<unknown>("open_packed_project", {
           archivePath
         });
+        const response = parseSchemaOrThrow(
+          openPackedProjectResponseSchema,
+          responseRaw,
+          "open_packed_project response"
+        );
         const userFacingArchivePath = toDisplayPath(archivePath);
         await refreshTree(response.projectRoot);
         setProjectPath(response.projectRoot);
@@ -501,7 +501,12 @@ export const useProjectIO = ({
     }
     await prepareProjectSwitch();
     try {
-      const response = await invoke<OpenScratchProjectResponse>("create_scratch_project");
+      const responseRaw = await invoke<unknown>("create_scratch_project");
+      const response = parseSchemaOrThrow(
+        openScratchProjectResponseSchema,
+        responseRaw,
+        "create_scratch_project response"
+      );
       await refreshTree(response.projectRoot);
       setProjectPath(response.projectRoot);
       setProjectStorageMode("scratch");
@@ -716,12 +721,17 @@ export const useProjectIO = ({
       }
       setBusy(true);
       try {
-        const response = await invoke<OpenPackedProjectResponse>(
+        const responseRaw = await invoke<unknown>(
           "reload_packed_project_in_place",
           {
             archivePath: packedArchivePath,
             projectRoot: projectPath
           }
+        );
+        const response = parseSchemaOrThrow(
+          openPackedProjectResponseSchema,
+          responseRaw,
+          "reload_packed_project_in_place response"
         );
         await refreshTree(response.projectRoot);
         setProjectPath(response.projectRoot);
