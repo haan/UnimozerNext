@@ -4,6 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use tauri::Manager;
+use walkdir::WalkDir;
 
 // Maximum recursion depth when expanding property placeholders like `${key}`.
 const PROPERTY_RESOLUTION_MAX_DEPTH: usize = 8;
@@ -308,13 +309,12 @@ pub(crate) fn collect_java_files(path: &Path, acc: &mut Vec<PathBuf>) -> io::Res
     if !path.is_dir() {
         return Ok(());
     }
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let child = entry.path();
-        if child.is_dir() {
-            collect_java_files(&child, acc)?;
-        } else if child.extension().and_then(|ext| ext.to_str()) == Some("java") {
-            acc.push(child);
+    for entry in WalkDir::new(path) {
+        let entry = entry.map_err(io::Error::other)?;
+        if entry.file_type().is_file()
+            && entry.path().extension().and_then(|ext| ext.to_str()) == Some("java")
+        {
+            acc.push(entry.path().to_path_buf());
         }
     }
     Ok(())

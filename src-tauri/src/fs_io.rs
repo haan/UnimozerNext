@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
     time::UNIX_EPOCH,
 };
+use walkdir::WalkDir;
 
 const SKIP_DIRS: [&str; 8] = [
     "node_modules",
@@ -109,16 +110,7 @@ pub fn folder_java_files_change_token(root: String) -> CommandResult<String> {
     }
 
     let mut entries: Vec<(String, u64, u128)> = Vec::new();
-    let mut active_dirs = HashSet::new();
-    collect_java_fingerprint_entries(
-        &root_path,
-        &root_path,
-        true,
-        0,
-        &mut entries,
-        &mut active_dirs,
-    )
-    .map_err(to_command_error)?;
+    collect_java_fingerprint_entries(&root_path, &mut entries).map_err(to_command_error)?;
     entries.sort_by(|a, b| a.0.cmp(&b.0));
 
     let mut hash = FNV64_OFFSET_BASIS;
@@ -248,65 +240,46 @@ fn modified_timestamp_ms(metadata: &fs::Metadata) -> u128 {
 
 fn collect_java_fingerprint_entries(
     root: &Path,
-    path: &Path,
-    is_root: bool,
-    depth: usize,
     entries: &mut Vec<(String, u64, u128)>,
-    active_dirs: &mut HashSet<PathBuf>,
 ) -> io::Result<()> {
-    let metadata = fs::metadata(path)?;
-    if metadata.is_dir() {
-        if depth > DIRECTORY_TRAVERSAL_MAX_DEPTH {
-            return Ok(());
-        }
-        if !is_root && should_skip_dir(path) {
-            return Ok(());
-        }
-
-        let visit_key = directory_visit_key(path)?;
-        if active_dirs.contains(&visit_key) {
-            return Ok(());
-        }
-        active_dirs.insert(visit_key.clone());
-
-        let result = (|| -> io::Result<()> {
-            for child in fs::read_dir(path)? {
-                let child = child?;
-                collect_java_fingerprint_entries(
-                    root,
-                    &child.path(),
-                    false,
-                    depth + 1,
-                    entries,
-                    active_dirs,
-                )?;
+    let walker = WalkDir::new(root)
+        .max_depth(DIRECTORY_TRAVERSAL_MAX_DEPTH)
+        .into_iter()
+        .filter_entry(|entry| {
+            if entry.depth() == 0 {
+                return true;
             }
-            Ok(())
-        })();
+            if entry.file_type().is_dir() {
+                return !should_skip_dir(entry.path());
+            }
+            true
+        });
 
-        active_dirs.remove(&visit_key);
-        return result;
+    for entry in walker {
+        let entry = entry.map_err(io::Error::other)?;
+        if !entry.file_type().is_file() {
+            continue;
+        }
+
+        let path = entry.path();
+        let is_java = path
+            .extension()
+            .and_then(|ext| ext.to_str())
+            .map(|ext| ext.eq_ignore_ascii_case("java"))
+            .unwrap_or(false);
+        if !is_java {
+            continue;
+        }
+
+        let metadata = entry.metadata().map_err(io::Error::other)?;
+        let relative = path
+            .strip_prefix(root)
+            .unwrap_or(path)
+            .to_string_lossy()
+            .to_string();
+        entries.push((relative, metadata.len(), modified_timestamp_ms(&metadata)));
     }
 
-    if !metadata.is_file() {
-        return Ok(());
-    }
-
-    let is_java = path
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .map(|ext| ext.eq_ignore_ascii_case("java"))
-        .unwrap_or(false);
-    if !is_java {
-        return Ok(());
-    }
-
-    let relative = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .to_string();
-    entries.push((relative, metadata.len(), modified_timestamp_ms(&metadata)));
     Ok(())
 }
 

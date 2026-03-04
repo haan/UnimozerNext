@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use tauri::{AppHandle, Manager};
+use walkdir::WalkDir;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -48,14 +49,20 @@ fn copy_dir_all(src: &Path, dest: &Path) -> Result<(), String> {
         return Err(format!("JDT LS config dir not found: {}", src.display()));
     }
     fs::create_dir_all(dest).map_err(crate::command_error::to_command_error)?;
-    for entry in fs::read_dir(src).map_err(crate::command_error::to_command_error)? {
+    for entry in WalkDir::new(src).min_depth(1) {
         let entry = entry.map_err(crate::command_error::to_command_error)?;
-        let path = entry.path();
-        let target = dest.join(entry.file_name());
-        if path.is_dir() {
-            copy_dir_all(&path, &target)?;
+        let relative = entry
+            .path()
+            .strip_prefix(src)
+            .map_err(crate::command_error::to_command_error)?;
+        let target = dest.join(relative);
+        if entry.file_type().is_dir() {
+            fs::create_dir_all(&target).map_err(crate::command_error::to_command_error)?;
         } else {
-            fs::copy(&path, &target).map_err(crate::command_error::to_command_error)?;
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent).map_err(crate::command_error::to_command_error)?;
+            }
+            fs::copy(entry.path(), &target).map_err(crate::command_error::to_command_error)?;
         }
     }
     Ok(())

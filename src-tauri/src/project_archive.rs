@@ -5,6 +5,7 @@ use std::{
 };
 
 use tauri::{AppHandle, Manager};
+use walkdir::WalkDir;
 use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
 
 use crate::command_error::{to_command_error, CommandResult};
@@ -288,23 +289,22 @@ fn collect_pack_paths(
     current: &Path,
     out: &mut Vec<PathBuf>,
 ) -> io::Result<()> {
-    let relative = current.strip_prefix(base_parent).unwrap_or(current);
-    if should_skip_packed_relative(relative) {
-        return Ok(());
+    let walker = WalkDir::new(current)
+        .contents_first(false)
+        .sort_by(|left, right| {
+            normalize_for_compare(left.path()).cmp(&normalize_for_compare(right.path()))
+        })
+        .into_iter()
+        .filter_entry(|entry| {
+            let relative = entry.path().strip_prefix(base_parent).unwrap_or(entry.path());
+            !should_skip_packed_relative(relative)
+        });
+
+    for entry in walker {
+        let entry = entry.map_err(io::Error::other)?;
+        out.push(entry.path().to_path_buf());
     }
 
-    out.push(current.to_path_buf());
-    if current.is_dir() {
-        let mut children = Vec::new();
-        for entry in fs::read_dir(current)? {
-            children.push(entry?.path());
-        }
-        children
-            .sort_by(|left, right| normalize_for_compare(left).cmp(&normalize_for_compare(right)));
-        for child in children {
-            collect_pack_paths(base_parent, &child, out)?;
-        }
-    }
     Ok(())
 }
 

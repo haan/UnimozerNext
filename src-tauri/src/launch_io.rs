@@ -2,6 +2,7 @@ use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
+use url::Url;
 
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -15,65 +16,12 @@ pub struct LaunchOpenState {
     pending_paths: Arc<Mutex<Vec<String>>>,
 }
 
-fn percent_decode(input: &str) -> String {
-    let bytes = input.as_bytes();
-    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
-    let mut index = 0usize;
-    while index < bytes.len() {
-        if bytes[index] == b'%' && index + 2 < bytes.len() {
-            let hi = bytes[index + 1];
-            let lo = bytes[index + 2];
-            let hi_val = (hi as char).to_digit(16);
-            let lo_val = (lo as char).to_digit(16);
-            if let (Some(hi_val), Some(lo_val)) = (hi_val, lo_val) {
-                out.push(((hi_val << 4) as u8) | (lo_val as u8));
-                index += 3;
-                continue;
-            }
-        }
-        out.push(bytes[index]);
-        index += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
-}
-
 fn parse_file_uri_path(raw: &str) -> Option<PathBuf> {
-    let prefix = "file://";
-    if !raw
-        .get(..prefix.len())
-        .map(|value| value.eq_ignore_ascii_case(prefix))
-        .unwrap_or(false)
-    {
+    let parsed = Url::parse(raw).ok()?;
+    if parsed.scheme() != "file" {
         return None;
     }
-
-    let mut body = &raw[prefix.len()..];
-    if body
-        .get(..10)
-        .map(|value| value.eq_ignore_ascii_case("localhost/"))
-        .unwrap_or(false)
-    {
-        body = &body[10..];
-    }
-    if body.is_empty() {
-        return None;
-    }
-
-    let decoded = percent_decode(body);
-    #[cfg(target_os = "windows")]
-    {
-        let mut normalized = decoded;
-        if normalized.starts_with('/') && normalized.chars().nth(2) == Some(':') {
-            normalized = normalized[1..].to_string();
-        } else if !normalized.starts_with('/') && !normalized.contains(':') {
-            normalized = format!(r"\\{}", normalized);
-        }
-        return Some(PathBuf::from(normalized.replace('/', "\\")));
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        Some(PathBuf::from(decoded))
-    }
+    parsed.to_file_path().ok()
 }
 
 pub fn parse_launch_umz_arg(raw: &str) -> Option<String> {
