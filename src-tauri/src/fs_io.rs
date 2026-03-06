@@ -9,6 +9,13 @@ use std::{
     time::UNIX_EPOCH,
 };
 use walkdir::WalkDir;
+#[cfg(target_os = "windows")]
+use {
+    std::ffi::OsStr,
+    std::os::windows::ffi::OsStrExt,
+    windows_sys::Win32::Foundation::{ERROR_MORE_DATA, NO_ERROR},
+    windows_sys::Win32::NetworkManagement::WNet::WNetGetConnectionW,
+};
 
 const SKIP_DIRS: [&str; 8] = [
     "node_modules",
@@ -32,6 +39,13 @@ pub struct FileNode {
     path: String,
     kind: String,
     children: Option<Vec<FileNode>>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowsMappedDriveAlias {
+    drive: String,
+    unc: String,
 }
 
 #[tauri::command]
@@ -62,6 +76,18 @@ pub fn validate_folder_project_root(root: String) -> CommandResult<()> {
     }
 
     Err("Selected folder is not a NetBeans project root. Missing required folder: src/".to_string())
+}
+
+#[tauri::command]
+pub fn prefer_user_path(path: String) -> CommandResult<String> {
+    #[cfg(target_os = "windows")]
+    {
+        Ok(prefer_windows_user_path(&path))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Ok(path)
+    }
 }
 
 #[tauri::command]
@@ -230,6 +256,87 @@ fn should_skip_dir(path: &Path) -> bool {
         Some(name) => SKIP_DIRS.iter().any(|skip| skip.eq_ignore_ascii_case(name)),
         None => false,
     }
+}
+
+#[cfg(target_os = "windows")]
+fn list_windows_mapped_drive_aliases() -> Vec<WindowsMappedDriveAlias> {
+    let mut aliases = Vec::new();
+    for code in b'A'..=b'Z' {
+        let drive = format!("{}:", code as char);
+        let local_name: Vec<u16> = OsStr::new(&drive)
+            .encode_wide()
+            .chain(std::iter::once(0))
+            .collect();
+        let mut required_len = 0u32;
+        let first_status = unsafe {
+            WNetGetConnectionW(local_name.as_ptr(), std::ptr::null_mut(), &mut required_len)
+        };
+        if first_status != ERROR_MORE_DATA && first_status != NO_ERROR {
+            continue;
+        }
+        if required_len == 0 {
+            continue;
+        }
+
+        let mut remote_buffer = vec![0u16; required_len as usize];
+        let second_status = unsafe {
+            WNetGetConnectionW(local_name.as_ptr(), remote_buffer.as_mut_ptr(), &mut required_len)
+        };
+        if second_status != NO_ERROR {
+            continue;
+        }
+        let remote_len = remote_buffer
+            .iter()
+            .position(|ch| *ch == 0)
+            .unwrap_or(remote_buffer.len());
+        if remote_len == 0 {
+            continue;
+        }
+
+        let remote_share = String::from_utf16_lossy(&remote_buffer[..remote_len]);
+        if !remote_share.starts_with(r"\\") {
+            continue;
+        }
+
+        aliases.push(WindowsMappedDriveAlias {
+            drive: drive.clone(),
+            unc: remote_share,
+        });
+    }
+
+    aliases.sort_by(|left, right| right.unc.len().cmp(&left.unc.len()));
+    aliases
+}
+
+#[cfg(target_os = "windows")]
+fn prefer_windows_user_path(path: &str) -> String {
+    let normalized = path.replace('/', "\\");
+    if !normalized.starts_with(r"\\") {
+        return path.to_string();
+    }
+
+    let aliases = list_windows_mapped_drive_aliases();
+    for alias in aliases {
+        let unc_root = alias.unc.trim_end_matches('\\');
+        if normalized.len() < unc_root.len() {
+            continue;
+        }
+        let matches_root =
+            normalized[..unc_root.len()].eq_ignore_ascii_case(unc_root)
+                && (normalized.len() == unc_root.len()
+                    || normalized.as_bytes().get(unc_root.len()) == Some(&b'\\'));
+        if !matches_root {
+            continue;
+        }
+        let suffix = if normalized.len() == unc_root.len() {
+            ""
+        } else {
+            &normalized[unc_root.len()..]
+        };
+        return format!("{}{}", alias.drive, suffix);
+    }
+
+    path.to_string()
 }
 
 fn update_fnv64(hash: &mut u64, bytes: &[u8]) {

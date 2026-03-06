@@ -12,6 +12,7 @@ commands.allow = [
   "folder_java_files_change_token",
   "file_change_token",
   "resolve_file_uri",
+  "prefer_user_path",
   "open_packed_project",
   "reload_packed_project_in_place",
   "create_scratch_project",

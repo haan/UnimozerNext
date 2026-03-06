@@ -11,6 +11,7 @@ pub(crate) fn with_invoke_handlers(
         crate::fs_io::folder_java_files_change_token,
         crate::fs_io::file_change_token,
         crate::fs_io::resolve_file_uri,
+        crate::fs_io::prefer_user_path,
         crate::project_io::open_packed_project,
         crate::project_io::reload_packed_project_in_place,
         crate::project_io::create_scratch_project,

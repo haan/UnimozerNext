@@ -358,16 +358,32 @@ export const useProjectIO = ({
     ]
   );
 
+  const resolvePreferredUserPath = useCallback(async (path: string): Promise<string> => {
+    try {
+      const resolved = await invokeValidated(
+        "prefer_user_path",
+        stringSchema,
+        "prefer_user_path response",
+        { path }
+      );
+      const trimmed = resolved.trim();
+      return trimmed.length > 0 ? trimmed : path;
+    } catch {
+      return path;
+    }
+  }, []);
+
   const handleOpenPackedProjectPath = useCallback(
     async (archivePath: string, options?: { clearConsole?: boolean }) => {
       setStatus("Opening project...");
       try {
-        const projectRoot = await openPackedProjectByPath(archivePath, options);
+        const preferredArchivePath = await resolvePreferredUserPath(archivePath);
+        const projectRoot = await openPackedProjectByPath(preferredArchivePath, options);
         if (!projectRoot) {
           setStatus("Failed to open project: unknown error.");
           return;
         }
-        setStatus(`Project loaded: ${toDisplayPath(archivePath)}`);
+        setStatus(`Project loaded: ${toDisplayPath(preferredArchivePath)}`);
       } catch (error) {
         setStatus(`Failed to open project: ${formatStatus(error)}`);
       }
@@ -375,6 +391,7 @@ export const useProjectIO = ({
     [
       formatStatus,
       openPackedProjectByPath,
+      resolvePreferredUserPath,
       setStatus
     ]
   );
@@ -442,8 +459,9 @@ export const useProjectIO = ({
   const handleOpenFolderProjectPath = useCallback(
     async (path: string, options?: { clearConsole?: boolean }) => {
       setStatus("Opening folder project...");
+      const preferredPath = await resolvePreferredUserPath(path);
       try {
-        await invoke("validate_folder_project_root", { root: path });
+        await invoke("validate_folder_project_root", { root: preferredPath });
       } catch (error) {
         const detail = formatStatus(error);
         setStatus(`Failed to open folder project: ${detail}`);
@@ -451,15 +469,21 @@ export const useProjectIO = ({
         return;
       }
       try {
-        await openFolderProjectByPath(path, options);
-        setStatus(`Project loaded: ${toDisplayPath(path)}`);
+        await openFolderProjectByPath(preferredPath, options);
+        setStatus(`Project loaded: ${toDisplayPath(preferredPath)}`);
       } catch (error) {
         const detail = formatStatus(error);
         setStatus(`Failed to open folder project: ${detail}`);
         onFolderProjectOpenError?.(detail);
       }
     },
-    [formatStatus, onFolderProjectOpenError, openFolderProjectByPath, setStatus]
+    [
+      formatStatus,
+      onFolderProjectOpenError,
+      openFolderProjectByPath,
+      resolvePreferredUserPath,
+      setStatus
+    ]
   );
 
   const handleOpenFolderProject = useCallback(async () => {
