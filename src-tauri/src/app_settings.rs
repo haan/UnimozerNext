@@ -117,6 +117,8 @@ struct AdvancedSettings {
     structogram_colors: bool,
     #[serde(default = "default_update_channel")]
     update_channel: UpdateChannel,
+    #[serde(default = "default_jshell_warmup_diagnostic_mode")]
+    jshell_warmup_diagnostic_mode: JshellWarmupDiagnosticMode,
 }
 
 impl Default for AdvancedSettings {
@@ -126,6 +128,7 @@ impl Default for AdvancedSettings {
             debug_log_categories: DebugLogCategories::default(),
             structogram_colors: default_true(),
             update_channel: default_update_channel(),
+            jshell_warmup_diagnostic_mode: default_jshell_warmup_diagnostic_mode(),
         }
     }
 }
@@ -213,6 +216,13 @@ enum UpdateChannel {
     Prerelease,
 }
 
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+enum JshellWarmupDiagnosticMode {
+    Quick,
+    Full,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RecentProjectEntry {
@@ -277,6 +287,7 @@ impl Default for AppSettings {
                 debug_log_categories: DebugLogCategories::default(),
                 structogram_colors: default_true(),
                 update_channel: default_update_channel(),
+                jshell_warmup_diagnostic_mode: default_jshell_warmup_diagnostic_mode(),
             },
             structogram: StructogramSettings {
                 loop_header_color: default_structogram_loop_header_color(),
@@ -350,6 +361,10 @@ fn default_edge_stroke_width() -> f32 {
 
 fn default_update_channel() -> UpdateChannel {
     UpdateChannel::Stable
+}
+
+fn default_jshell_warmup_diagnostic_mode() -> JshellWarmupDiagnosticMode {
+    JshellWarmupDiagnosticMode::Quick
 }
 
 fn default_split_ratio() -> f32 {

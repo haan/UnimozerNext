@@ -29,6 +29,8 @@ type SettingsDialogProps = {
   onRunJshellWarmupDiagnostic?: () => void;
   jshellWarmupDiagnosticRunning?: boolean;
   jshellWarmupDiagnosticEnabled?: boolean;
+  jshellWarmupDiagnosticMode?: "quick" | "full";
+  onJshellWarmupDiagnosticModeChange?: (mode: "quick" | "full") => void;
 };
 
 const groups = [
@@ -48,7 +50,9 @@ export const SettingsDialog = ({
   onChange,
   onRunJshellWarmupDiagnostic,
   jshellWarmupDiagnosticRunning = false,
-  jshellWarmupDiagnosticEnabled = false
+  jshellWarmupDiagnosticEnabled = false,
+  jshellWarmupDiagnosticMode = "quick",
+  onJshellWarmupDiagnosticModeChange
 }: SettingsDialogProps) => {
   const [activeGroup, setActiveGroup] = useState<SettingsGroup>("General");
   const [themeOptions, setThemeOptions] = useState<ThemeOption[]>([
@@ -907,22 +911,41 @@ export const SettingsDialog = ({
                   <div>
                     <p className="text-sm font-medium">JShell warmup diagnostic</p>
                     <p className="text-xs text-muted-foreground">
-                      Run a one-shot benchmark from baseline to aggressive overrides and print
-                      timing details in the console.
+                      Run host + bridge timing diagnostics and write a JSONL trace in app data.
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={onRunJshellWarmupDiagnostic}
-                    disabled={
-                      !onRunJshellWarmupDiagnostic ||
-                      !jshellWarmupDiagnosticEnabled ||
-                      jshellWarmupDiagnosticRunning
-                    }
-                  >
-                    {jshellWarmupDiagnosticRunning ? "Running..." : "Run diagnostic"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="w-32">
+                      <Select
+                        value={jshellWarmupDiagnosticMode}
+                        onValueChange={(value) =>
+                          onJshellWarmupDiagnosticModeChange?.(
+                            value === "full" ? "full" : "quick"
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-8">
+                          <SelectValue placeholder="Mode" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="quick">Quick</SelectItem>
+                          <SelectItem value="full">Full</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <button
+                      type="button"
+                      className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={onRunJshellWarmupDiagnostic}
+                      disabled={
+                        !onRunJshellWarmupDiagnostic ||
+                        !jshellWarmupDiagnosticEnabled ||
+                        jshellWarmupDiagnosticRunning
+                      }
+                    >
+                      {jshellWarmupDiagnosticRunning ? "Running..." : "Run diagnostic"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

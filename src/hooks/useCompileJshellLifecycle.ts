@@ -93,7 +93,9 @@ export const useCompileJshellLifecycle = ({
         }, JSHELL_WARMUP_TIMEOUT_MS);
 
         try {
+          const warmupBegin = performance.now();
           const warmup = await jshellEval("1 + 1;");
+          const warmupMs = Math.round(performance.now() - warmupBegin);
           if (jshellStartTokenRef.current !== token) {
             return false;
           }
@@ -101,11 +103,11 @@ export const useCompileJshellLifecycle = ({
             const details = trimStatus(
               warmup.error || warmup.stderr || "Unknown warmup error"
             );
-            logDebug(`JShell warmup failed (token=${token}): ${details}`);
+            logDebug(`JShell warmup failed (token=${token}, ${warmupMs}ms): ${details}`);
             setStatus(`JShell warmup failed: ${details}`);
             return false;
           } else {
-            logDebug(`JShell warmup finished (token=${token})`);
+            logDebug(`JShell warmup finished (token=${token}, ${warmupMs}ms)`);
             logDebug(`JShell ready (token=${token}, warmup complete)`);
             setStatus("Object bench runtime ready.");
             return true;
@@ -127,43 +129,23 @@ export const useCompileJshellLifecycle = ({
 
       const startTask = (async (): Promise<boolean> => {
         if (jshellStartTokenRef.current !== startToken) {
-          logDebug(`JShell restart canceled before stop (token=${startToken})`);
-          return false;
-        }
-
-        logDebug(`JShell stop before restart (token=${startToken})`);
-        try {
-          await withTimeout(
-            jshellStop(),
-            JSHELL_STOP_TIMEOUT_MS,
-            `JShell stop timed out after ${JSHELL_STOP_TIMEOUT_MS}ms`
-          );
-          logDebug(`JShell stop completed before restart (token=${startToken})`);
-        } catch (error) {
-          // Ignore failures when restarting JShell.
-          logDebug(
-            `JShell stop failed before restart (token=${startToken}): ${trimStatus(
-              formatStatus(error)
-            )}`
-          );
-        }
-
-        if (jshellStartTokenRef.current !== startToken) {
           logDebug(`JShell restart canceled before start (token=${startToken})`);
           return false;
         }
 
         try {
+          const startBegin = performance.now();
           logDebug(`JShell start (token=${startToken}, outDir=${outDir})`);
           await withTimeout(
             jshellStart(rootPath, outDir),
             JSHELL_START_TIMEOUT_MS,
             `JShell start timed out after ${JSHELL_START_TIMEOUT_MS}ms`
           );
+          const startMs = Math.round(performance.now() - startBegin);
 
           if (jshellStartTokenRef.current === startToken) {
             setJshellReady(true);
-            logDebug(`JShell start completed (token=${startToken})`);
+            logDebug(`JShell start completed (token=${startToken}, ${startMs}ms)`);
             logDebug(`JShell ready (token=${startToken}, warmup pending)`);
             const warmupReady = await warmupJshell(startToken);
             if (!warmupReady) {
@@ -266,12 +248,14 @@ export const useCompileJshellLifecycle = ({
     setObjectBench([]);
     try {
       logDebug("JShell stop before compile");
+      const stopBegin = performance.now();
       await withTimeout(
         jshellStop(),
         JSHELL_STOP_TIMEOUT_MS,
         `JShell stop timed out after ${JSHELL_STOP_TIMEOUT_MS}ms`
       );
-      logDebug("JShell stop completed before compile");
+      const stopMs = Math.round(performance.now() - stopBegin);
+      logDebug(`JShell stop completed before compile (${stopMs}ms)`);
     } catch (error) {
       // Continue compile even if stop hangs/fails.
       logDebug(`JShell stop failed before compile: ${trimStatus(formatStatus(error))}`);

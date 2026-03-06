@@ -169,7 +169,8 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
       jshell: z.boolean()
     }),
     structogramColors: z.boolean(),
-    updateChannel: z.enum(["stable", "prerelease"])
+    updateChannel: z.enum(["stable", "prerelease"]),
+    jshellWarmupDiagnosticMode: z.enum(["quick", "full"])
   }),
   structogram: z.object({
     loopHeaderColor: z.string(),

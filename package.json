@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "build:parser": "cd java-parser && gradle copyBridgeJar",
     "build:jshell": "cd jshell-bridge && gradle copyBridgeJar",
+    "jshell:trace:summary": "node scripts/jshell-trace-summary.mjs",
     "sync:themes": "node scripts/sync-monaco-themes.cjs",
     "assets:logo-runtime": "node scripts/generate-logo-runtime-assets.mjs",
     "tauri": "tauri",

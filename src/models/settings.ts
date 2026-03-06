@@ -32,6 +32,7 @@ export type AdvancedSettings = {
   };
   structogramColors: boolean;
   updateChannel: "stable" | "prerelease";
+  jshellWarmupDiagnosticMode: "quick" | "full";
 };
 
 export type StructogramSettings = {

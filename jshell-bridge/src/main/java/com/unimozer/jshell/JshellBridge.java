@@ -23,6 +23,7 @@ import java.util.Locale;
 
 public final class JshellBridge {
     private static final String RESPONSE_PREFIX = "__UNIMOZER_BRIDGE__:";
+    private static final String DIAG_POST_PREFIX = "__UNIMOZER_BRIDGE_DIAG__:";
     private final ObjectMapper mapper = new ObjectMapper();
     private final String classpath;
     private final List<String> remoteVmOptions;
@@ -83,28 +84,80 @@ public final class JshellBridge {
              PrintWriter writer = new PrintWriter(System.out, true, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
+                long totalStartNs = System.nanoTime();
                 String trimmed = line.trim();
                 if (trimmed.isEmpty()) continue;
                 ObjectNode response;
+                BridgeDiagRequest diagRequest = BridgeDiagRequest.disabled();
+                long parseNs = 0L;
+                long dispatchNs = 0L;
+                long handlerNs = 0L;
+                Long evalNs = null;
                 try {
+                    long parseStartNs = System.nanoTime();
                     JsonNode request = mapper.readTree(trimmed);
+                    parseNs = System.nanoTime() - parseStartNs;
+                    diagRequest = BridgeDiagRequest.from(request.path("_diag"));
                     String cmd = request.path("cmd").asText("");
-                    response = switch (cmd) {
-                        case "eval" -> handleEval(request.path("code").asText(""));
-                        case "inspect" -> handleInspect(request.path("var").asText(""));
-                        case "vars" -> handleVars();
-                        case "reset" -> handleReset();
-                        default -> errorResponse("Unknown command");
-                    };
+                    long dispatchStartNs = System.nanoTime();
+                    BridgeCommandResult commandResult = executeCommand(cmd, request);
+                    dispatchNs = System.nanoTime() - dispatchStartNs;
+                    handlerNs = commandResult.handlerNs;
+                    evalNs = commandResult.evalNs;
+                    response = commandResult.response;
                 } catch (Throwable error) {
                     response = errorResponse(error.getMessage());
                 }
-                writer.println(RESPONSE_PREFIX + mapper.writeValueAsString(response));
+
+                if (diagRequest.enabled) {
+                    attachDiagTiming(
+                        response,
+                        diagRequest.commandId,
+                        parseNs,
+                        dispatchNs,
+                        handlerNs,
+                        evalNs
+                    );
+                }
+
+                long serializeStartNs = System.nanoTime();
+                String serialized = mapper.writeValueAsString(response);
+                long serializeNs = System.nanoTime() - serializeStartNs;
+                if (diagRequest.enabled) {
+                    ObjectNode diagNode = response.with("_diag");
+                    diagNode.put("serializeMs", nanosToMs(serializeNs));
+                    serialized = mapper.writeValueAsString(response);
+                }
+
+                long writeStartNs = System.nanoTime();
+                writer.println(RESPONSE_PREFIX + serialized);
+                writer.flush();
+                long writeNs = System.nanoTime() - writeStartNs;
+
+                if (diagRequest.enabled) {
+                    emitPostWriteDiagnostic(
+                        response,
+                        diagRequest.commandId,
+                        writeNs,
+                        System.nanoTime() - totalStartNs
+                    );
+                }
             }
         }
     }
 
-    private ObjectNode handleEval(String code) {
+    private BridgeCommandResult executeCommand(String cmd, JsonNode request) {
+        return switch (cmd) {
+            case "eval" -> handleEval(request.path("code").asText(""));
+            case "inspect" -> handleInspect(request.path("var").asText(""));
+            case "vars" -> handleVars();
+            case "reset" -> handleReset();
+            default -> new BridgeCommandResult(errorResponse("Unknown command"), 0L, null);
+        };
+    }
+
+    private BridgeCommandResult handleEval(String code) {
+        long handlerStartNs = System.nanoTime();
         EvalResult eval = evaluate(code);
         ObjectNode node = mapper.createObjectNode();
         node.put("ok", eval.ok);
@@ -116,21 +169,34 @@ public final class JshellBridge {
         } else if (!eval.ok) {
             node.put("error", "Unknown error");
         }
-        return node;
+        return new BridgeCommandResult(node, System.nanoTime() - handlerStartNs, eval.evalNs);
     }
 
-    private ObjectNode handleInspect(String varName) {
+    private BridgeCommandResult handleInspect(String varName) {
+        long handlerStartNs = System.nanoTime();
         if (varName == null || varName.isBlank()) {
-            return errorResponse("Missing variable name");
+            return new BridgeCommandResult(
+                errorResponse("Missing variable name"),
+                System.nanoTime() - handlerStartNs,
+                null
+            );
         }
         if (!isValidJavaIdentifier(varName)) {
-            return errorResponse("Invalid variable name");
+            return new BridgeCommandResult(
+                errorResponse("Invalid variable name"),
+                System.nanoTime() - handlerStartNs,
+                null
+            );
         }
         Path tempFile;
         try {
             tempFile = Files.createTempFile("unimozer-inspect-", ".json");
         } catch (Exception error) {
-            return errorResponse("Failed to create temp file: " + error.getMessage());
+            return new BridgeCommandResult(
+                errorResponse("Failed to create temp file: " + error.getMessage()),
+                System.nanoTime() - handlerStartNs,
+                null
+            );
         }
         String escapedPath = escapeJavaString(tempFile.toString());
         EvalResult eval = evaluate(
@@ -143,7 +209,11 @@ public final class JshellBridge {
                 // Ignore cleanup failures.
             }
             String message = eval.error != null ? eval.error : "Inspection failed";
-            return errorResponse(message);
+            return new BridgeCommandResult(
+                errorResponse(message),
+                System.nanoTime() - handlerStartNs,
+                eval.evalNs
+            );
         }
         try {
             String payload = Files.readString(tempFile, StandardCharsets.UTF_8);
@@ -163,9 +233,13 @@ public final class JshellBridge {
             ObjectNode node = mapper.createObjectNode();
             node.put("ok", true);
             node.setAll((ObjectNode) result);
-            return node;
+            return new BridgeCommandResult(node, System.nanoTime() - handlerStartNs, eval.evalNs);
         } catch (Exception error) {
-            return errorResponse(error.getMessage());
+            return new BridgeCommandResult(
+                errorResponse(error.getMessage()),
+                System.nanoTime() - handlerStartNs,
+                eval.evalNs
+            );
         } finally {
             try {
                 Files.deleteIfExists(tempFile);
@@ -175,7 +249,8 @@ public final class JshellBridge {
         }
     }
 
-    private ObjectNode handleVars() {
+    private BridgeCommandResult handleVars() {
+        long handlerStartNs = System.nanoTime();
         ObjectNode node = mapper.createObjectNode();
         List<ObjectNode> vars = new ArrayList<>();
         jshell.variables().forEach(var -> {
@@ -189,21 +264,31 @@ public final class JshellBridge {
         });
         node.put("ok", true);
         node.set("vars", mapper.valueToTree(vars));
-        return node;
+        return new BridgeCommandResult(node, System.nanoTime() - handlerStartNs, null);
     }
 
-    private ObjectNode handleReset() {
+    private BridgeCommandResult handleReset() {
+        long handlerStartNs = System.nanoTime();
         try {
             jshell.close();
             jshell = createShell(classpath, remoteVmOptions);
-            return mapper.createObjectNode().put("ok", true);
+            return new BridgeCommandResult(
+                mapper.createObjectNode().put("ok", true),
+                System.nanoTime() - handlerStartNs,
+                null
+            );
         } catch (Exception error) {
-            return errorResponse(error.getMessage());
+            return new BridgeCommandResult(
+                errorResponse(error.getMessage()),
+                System.nanoTime() - handlerStartNs,
+                null
+            );
         }
     }
 
     private EvalResult evaluate(String code) {
         EvalResult result = new EvalResult();
+        long evalStartNs = System.nanoTime();
         StringBuilder diagnostics = new StringBuilder();
         ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
         ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
@@ -241,7 +326,55 @@ public final class JshellBridge {
         }
         result.stdout = outBuffer.toString(StandardCharsets.UTF_8);
         result.stderr = errBuffer.toString(StandardCharsets.UTF_8);
+        result.evalNs = System.nanoTime() - evalStartNs;
         return result;
+    }
+
+    private void attachDiagTiming(
+        ObjectNode response,
+        String commandId,
+        long parseNs,
+        long dispatchNs,
+        long handlerNs,
+        Long evalNs
+    ) {
+        ObjectNode diag = response.putObject("_diag");
+        diag.put("commandId", commandId);
+        diag.put("parseMs", nanosToMs(parseNs));
+        diag.put("dispatchMs", nanosToMs(dispatchNs));
+        diag.put("handlerMs", nanosToMs(handlerNs));
+        if (evalNs != null) {
+            diag.put("evalMs", nanosToMs(evalNs));
+        }
+        diag.put("ok", response.path("ok").asBoolean(false));
+        if (response.has("error") && response.path("error").isTextual()) {
+            diag.put("error", response.path("error").asText());
+        }
+    }
+
+    private void emitPostWriteDiagnostic(
+        ObjectNode response,
+        String commandId,
+        long writeNs,
+        long totalNs
+    ) {
+        try {
+            ObjectNode diag = mapper.createObjectNode();
+            diag.put("commandId", commandId);
+            diag.put("writeMs", nanosToMs(writeNs));
+            diag.put("totalMs", nanosToMs(totalNs));
+            diag.put("ok", response.path("ok").asBoolean(false));
+            if (response.has("error") && response.path("error").isTextual()) {
+                diag.put("error", response.path("error").asText());
+            }
+            System.err.println(DIAG_POST_PREFIX + mapper.writeValueAsString(diag));
+        } catch (Exception ignored) {
+            // Diagnostic post logging must never break bridge behavior.
+        }
+    }
+
+    private static double nanosToMs(long nanos) {
+        return nanos / 1_000_000.0;
     }
 
     private ObjectNode errorResponse(String message) {
@@ -273,5 +406,43 @@ public final class JshellBridge {
         private String stderr;
         private String value;
         private String error;
+        private long evalNs;
+    }
+
+    private static final class BridgeCommandResult {
+        private final ObjectNode response;
+        private final long handlerNs;
+        private final Long evalNs;
+
+        private BridgeCommandResult(ObjectNode response, long handlerNs, Long evalNs) {
+            this.response = response;
+            this.handlerNs = handlerNs;
+            this.evalNs = evalNs;
+        }
+    }
+
+    private static final class BridgeDiagRequest {
+        private final boolean enabled;
+        private final String commandId;
+
+        private BridgeDiagRequest(boolean enabled, String commandId) {
+            this.enabled = enabled;
+            this.commandId = commandId;
+        }
+
+        private static BridgeDiagRequest disabled() {
+            return new BridgeDiagRequest(false, "");
+        }
+
+        private static BridgeDiagRequest from(JsonNode node) {
+            if (node == null || !node.isObject()) {
+                return disabled();
+            }
+            String commandId = node.path("commandId").asText("").trim();
+            if (commandId.isEmpty()) {
+                return disabled();
+            }
+            return new BridgeDiagRequest(true, commandId);
+        }
     }
 }

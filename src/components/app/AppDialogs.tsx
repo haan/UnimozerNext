@@ -34,6 +34,8 @@ type AppDialogsProps = {
   onRunJshellWarmupDiagnostic: () => void;
   jshellWarmupDiagnosticRunning: boolean;
   jshellWarmupDiagnosticEnabled: boolean;
+  jshellWarmupDiagnosticMode: "quick" | "full";
+  onJshellWarmupDiagnosticModeChange: (mode: "quick" | "full") => void;
   addClassOpen: boolean;
   onAddClassOpenChange: (open: boolean) => void;
   onCreateClass: (form: AddClassForm) => void;
@@ -108,6 +110,8 @@ export const AppDialogs = ({
   onRunJshellWarmupDiagnostic,
   jshellWarmupDiagnosticRunning,
   jshellWarmupDiagnosticEnabled,
+  jshellWarmupDiagnosticMode,
+  onJshellWarmupDiagnosticModeChange,
   addClassOpen,
   onAddClassOpenChange,
   onCreateClass,
@@ -181,6 +185,8 @@ export const AppDialogs = ({
       onRunJshellWarmupDiagnostic={onRunJshellWarmupDiagnostic}
       jshellWarmupDiagnosticRunning={jshellWarmupDiagnosticRunning}
       jshellWarmupDiagnosticEnabled={jshellWarmupDiagnosticEnabled}
+      jshellWarmupDiagnosticMode={jshellWarmupDiagnosticMode}
+      onJshellWarmupDiagnosticModeChange={onJshellWarmupDiagnosticModeChange}
     />
     <AddClassDialog
       open={addClassOpen}
