@@ -75,6 +75,13 @@ public class Tester {
             edgeCases.stderrOutput();
         });
 
+        runTest("RandomStatistics printSeries mixed print/println", () -> {
+            RandomStatistics stats = new RandomStatistics();
+            stats.printSeries(5);
+            stats.printSeries(50);
+            System.out.println();
+        });
+
         runTest("Run all class main methods", () -> {
             AppSmokeMain.main(new String[0]);
             StudentRecord.main(new String[0]);

@@ -6,25 +6,29 @@ const TRACE_PATTERN = /^jshell-diagnostic-.*\.jsonl$/i;
 const formatMs = (value) =>
   typeof value === "number" && Number.isFinite(value) ? `${Math.round(value)}ms` : "n/a";
 
-const findLatestTraceFile = async (tmpDir) => {
-  const entries = await fs.readdir(tmpDir, { withFileTypes: true });
-  const candidates = entries
-    .filter((entry) => entry.isFile() && TRACE_PATTERN.test(entry.name))
-    .map((entry) => entry.name);
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const withStats = await Promise.all(
-    candidates.map(async (name) => {
-      const filePath = path.join(tmpDir, name);
-      const stat = await fs.stat(filePath);
-      return { filePath, mtimeMs: stat.mtimeMs };
+const collectTraceCandidates = async (dir) => {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const nested = await Promise.all(
+    entries.map(async (entry) => {
+      const fullPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        return collectTraceCandidates(fullPath);
+      }
+      if (entry.isFile() && TRACE_PATTERN.test(entry.name)) {
+        const stat = await fs.stat(fullPath);
+        return [{ filePath: fullPath, mtimeMs: stat.mtimeMs }];
+      }
+      return [];
     })
   );
+  return nested.flat();
+};
 
-  withStats.sort((a, b) => b.mtimeMs - a.mtimeMs);
-  return withStats[0].filePath;
+const findLatestTraceFile = async (tmpDir) => {
+  const candidates = await collectTraceCandidates(tmpDir);
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return candidates[0].filePath;
 };
 
 const parseJsonl = (raw, filePath) => {
@@ -190,4 +194,3 @@ main().catch((error) => {
   console.error(`jshell trace summary failed: ${message}`);
   process.exitCode = 1;
 });
-

@@ -595,6 +595,26 @@ fn read_bridge_diag_post(
     None
 }
 
+fn parse_prefixed_bridge_response(
+    line: &str,
+    bridge_response_prefix: &str,
+) -> Option<(Option<String>, serde_json::Value)> {
+    for (index, _) in line.rmatch_indices(bridge_response_prefix) {
+        let payload_start = index + bridge_response_prefix.len();
+        let payload = &line[payload_start..];
+        if let Ok(value) = serde_json::from_str::<serde_json::Value>(payload) {
+            let leading_noise = line[..index].trim();
+            let noise = if leading_noise.is_empty() {
+                None
+            } else {
+                Some(leading_noise.to_string())
+            };
+            return Some((noise, value));
+        }
+    }
+    None
+}
+
 fn jshell_send_internal<T: for<'de> Deserialize<'de>>(
     session: &mut JshellSession,
     mut request: serde_json::Value,
@@ -692,16 +712,18 @@ fn jshell_send_internal<T: for<'de> Deserialize<'de>>(
             continue;
         }
 
-        if let Some(payload) = trimmed.strip_prefix(BRIDGE_RESPONSE_PREFIX) {
-            match serde_json::from_str::<serde_json::Value>(payload) {
-                Ok(value) => {
-                    parsed = Some(value);
-                    break;
-                }
-                Err(_) => {
-                    noise_lines.push(trimmed.to_string());
-                }
+        if let Some((leading_noise, value)) =
+            parse_prefixed_bridge_response(trimmed, BRIDGE_RESPONSE_PREFIX)
+        {
+            if let Some(noise) = leading_noise {
+                noise_lines.push(noise);
             }
+            parsed = Some(value);
+            break;
+        }
+
+        if trimmed.contains(BRIDGE_RESPONSE_PREFIX) {
+            noise_lines.push(trimmed.to_string());
             continue;
         }
 
@@ -1700,5 +1722,42 @@ pub fn shutdown_jshell(state: &JshellState) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_prefixed_bridge_response;
+
+    const PREFIX: &str = "__UNIMOZER_BRIDGE__:";
+
+    #[test]
+    fn parse_prefixed_bridge_response_accepts_prefix_at_line_start() {
+        let line = r#"__UNIMOZER_BRIDGE__:{"ok":true}"#;
+        let parsed = parse_prefixed_bridge_response(line, PREFIX)
+            .expect("expected prefixed response")
+            .1;
+        assert_eq!(parsed.get("ok").and_then(|value| value.as_bool()), Some(true));
+    }
+
+    #[test]
+    fn parse_prefixed_bridge_response_accepts_prefix_after_noise() {
+        let line = r#"1, 2, 3__UNIMOZER_BRIDGE__:{"ok":true,"stdout":"done"}"#;
+        let (noise, parsed) = parse_prefixed_bridge_response(line, PREFIX)
+            .expect("expected prefixed response with noise");
+        assert_eq!(noise.as_deref(), Some("1, 2, 3"));
+        assert_eq!(parsed.get("ok").and_then(|value| value.as_bool()), Some(true));
+    }
+
+    #[test]
+    fn parse_prefixed_bridge_response_uses_last_valid_prefix() {
+        let line = r#"__UNIMOZER_BRIDGE__:garbage__UNIMOZER_BRIDGE__:{"ok":false}"#;
+        let parsed = parse_prefixed_bridge_response(line, PREFIX)
+            .expect("expected parser to recover from earlier invalid prefix")
+            .1;
+        assert_eq!(
+            parsed.get("ok").and_then(|value| value.as_bool()),
+            Some(false)
+        );
     }
 }

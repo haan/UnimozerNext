@@ -8,7 +8,7 @@ Validate constructor calls, method calls, `main` execution, stdout/stderr handli
 2. Compile project (`Project -> Compile Project`).
 3. Run main class `Tester` (`Run -> Run Main` and select `Tester`).
 4. Confirm final summary shows:
-   - `Passed: 13`
+   - `Passed: 14`
    - `Failed: 0`
 5. Confirm `Run finished.` is printed at the end.
 
@@ -26,6 +26,7 @@ Validate constructor calls, method calls, `main` execution, stdout/stderr handli
 - `[PASS] JshellEdgeCases protocol flood`
 - `[PASS] JshellEdgeCases protocol flood unicode`
 - `[PASS] JshellEdgeCases stderr output`
+- `[PASS] RandomStatistics printSeries mixed print/println`
 - `[PASS] Run all class main methods`
 
 ## Advanced manual JShell stress checks
@@ -37,6 +38,12 @@ Validate constructor calls, method calls, `main` execution, stdout/stderr handli
 3. Call method `protocolFlood(120000)` on that object.
 4. Call method `protocolFloodUnicode(60000)` on that object.
 5. Confirm both method calls complete without the non-JSON bridge error.
+6. Create object `RandomStatistics` and call:
+   - `printSeries(5)`
+   - `printSeries(50)`
+7. Confirm calls complete without:
+   - `JShell bridge returned non-JSON output`
+   - `JShell bridge did not return a JSON response`
 
 ## Notes
 - Unicode output should render correctly (for example `äöü 漢字 😀` in `unicodeAndEscapes` and in `protocolFloodUnicode`). Replacement characters indicate a regression.

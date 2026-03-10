@@ -1,6 +1,6 @@
 # JShell smoke project
 
-This folder contains 5 Java classes to stress-test:
+This folder contains Java classes to stress-test:
 
 - object creation (constructors)
 - static and instance methods
@@ -9,6 +9,7 @@ This folder contains 5 Java classes to stress-test:
 - large stdout/stderr output
 - unicode/escape handling
 - higher-volume protocol-like flood output methods
+- mixed `print`/`println` output without trailing newline
 - inheritance behavior
 
 Open `examples/jshell-smoke-project` as a folder project in the app.
