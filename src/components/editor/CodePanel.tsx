@@ -54,6 +54,7 @@ type SelectionLike = {
 };
 
 const SCOPE_STRUCTURAL_INSERT_PATTERN = /[{}"'/\\*\r\n]/;
+const isPrintableSingleKey = (key: string) => key.length === 1 && key >= " ";
 
 const computeScopeLineInfo = (source: string): ScopeLineInfo[] => {
   const lines: ScopeLineInfo[] = [];
@@ -476,6 +477,9 @@ export const CodePanel = memo(
     const scopeRefreshFrameRef = useRef<number | null>(null);
     const selectionRefreshFrameRef = useRef<number | null>(null);
     const lastEditorValueRef = useRef<string | null>(null);
+    const isMacRef = useRef(
+      typeof navigator !== "undefined" && /mac/i.test(navigator.platform ?? "")
+    );
     const resolvedTheme = resolveMonacoTheme(theme, darkMode);
     const debugEnabled = Boolean(debugLogging && onDebugLog);
 
@@ -713,6 +717,36 @@ export const CodePanel = memo(
         };
 
         const subscriptions: Disposable[] = [
+          editor.onKeyDown((event) => {
+            if (!isMacRef.current) {
+              return;
+            }
+            if (event.metaKey || event.ctrlKey || event.altKey) {
+              return;
+            }
+            const browserEvent = event.browserEvent;
+            if (!browserEvent || browserEvent.defaultPrevented || browserEvent.isComposing) {
+              return;
+            }
+            if (!isPrintableSingleKey(browserEvent.key)) {
+              return;
+            }
+            const selections = editor.getSelections() ?? [];
+            if (selections.length === 0 || !selections.every((selection) => !selection.isEmpty())) {
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            editor.executeEdits(
+              "macSelectionReplace",
+              selections.map((selection) => ({
+                range: selection,
+                text: browserEvent.key,
+                forceMoveMarkers: true
+              }))
+            );
+          }),
           editor.onDidChangeModel((event) => {
             refreshScopeDecorations();
             refreshSelectionDecorations();
