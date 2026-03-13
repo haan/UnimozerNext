@@ -54,6 +54,7 @@ type SelectionLike = {
 };
 
 const SCOPE_STRUCTURAL_INSERT_PATTERN = /[{}"'/\\*\r\n]/;
+const isPrintableSingleKey = (key: string) => key.length === 1 && key >= " ";
 
 const computeScopeLineInfo = (source: string): ScopeLineInfo[] => {
   const lines: ScopeLineInfo[] = [];
@@ -473,9 +474,13 @@ export const CodePanel = memo(
     const subscriptionsRef = useRef<Disposable[]>([]);
     const scopeDecorationIdsByUriRef = useRef<Map<string, string[]>>(new Map());
     const selectionDecorationIdsByUriRef = useRef<Map<string, string[]>>(new Map());
+    const lastSelectionSourceRef = useRef<string | null>(null);
     const scopeRefreshFrameRef = useRef<number | null>(null);
     const selectionRefreshFrameRef = useRef<number | null>(null);
     const lastEditorValueRef = useRef<string | null>(null);
+    const isMacRef = useRef(
+      typeof navigator !== "undefined" && /mac/i.test(navigator.platform ?? "")
+    );
     const resolvedTheme = resolveMonacoTheme(theme, darkMode);
     const debugEnabled = Boolean(debugLogging && onDebugLog);
 
@@ -713,6 +718,37 @@ export const CodePanel = memo(
         };
 
         const subscriptions: Disposable[] = [
+          editor.onKeyDown((event) => {
+            if (!isMacRef.current) {
+              return;
+            }
+            if (event.metaKey || event.ctrlKey || event.altKey) {
+              return;
+            }
+            const browserEvent = event.browserEvent;
+            if (!browserEvent || browserEvent.defaultPrevented || browserEvent.isComposing) {
+              return;
+            }
+            if (!isPrintableSingleKey(browserEvent.key)) {
+              return;
+            }
+            if (lastSelectionSourceRef.current !== "keyboard") {
+              return;
+            }
+            const selections = editor.getSelections() ?? [];
+            if (selections.length === 0 || !selections.every((selection) => !selection.isEmpty())) {
+              return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            if (debugEnabled) {
+              logEvent(
+                `macSelectionReplace key=${JSON.stringify(browserEvent.key)} selections=${selections.length}`
+              );
+            }
+            editor.trigger("macSelectionReplace", "type", { text: browserEvent.key });
+          }),
           editor.onDidChangeModel((event) => {
             refreshScopeDecorations();
             refreshSelectionDecorations();
@@ -741,7 +777,8 @@ export const CodePanel = memo(
               );
             }
           }),
-          editor.onDidChangeCursorSelection(() => {
+          editor.onDidChangeCursorSelection((event) => {
+            lastSelectionSourceRef.current = event.source ?? null;
             refreshSelectionDecorations();
           }),
           editor.onDidChangeCursorPosition((event) => {
