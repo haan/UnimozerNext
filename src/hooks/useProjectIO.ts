@@ -88,7 +88,14 @@ type UseProjectIOResult = {
   ) => Promise<void>;
   handleSave: () => Promise<boolean>;
   handleSaveAs: () => Promise<boolean>;
-  loadDiagramState: (root: string, graph: UmlGraph) => Promise<void>;
+  loadDiagramState: (
+    root: string,
+    graph: UmlGraph,
+    context?: {
+      currentDiagramState?: DiagramState | null;
+      currentDiagramPath?: string | null;
+    }
+  ) => Promise<void>;
   reloadCurrentProjectFromDisk: () => Promise<boolean>;
 };
 
@@ -125,6 +132,14 @@ export const useProjectIO = ({
   onMissingRecentProject,
   onFolderProjectOpenError
 }: UseProjectIOArgs): UseProjectIOResult => {
+  const isFinitePosition = (value: unknown): value is { x: number; y: number } => {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+    const candidate = value as Partial<{ x: number; y: number }>;
+    return Number.isFinite(candidate.x) && Number.isFinite(candidate.y);
+  };
+
   const ensureUmzPath = useCallback((path: string) => {
     const extension = `.${PACKED_PROJECT_EXTENSION}`;
     return path.toLowerCase().endsWith(extension) ? path : `${path}${extension}`;
@@ -189,11 +204,19 @@ export const useProjectIO = ({
   );
 
   const loadDiagramState = useCallback(
-    async (root: string, graph: UmlGraph) => {
+    async (
+      root: string,
+      graph: UmlGraph,
+      context?: {
+        currentDiagramState?: DiagramState | null;
+        currentDiagramPath?: string | null;
+      }
+    ) => {
       const diagramFile = joinPath(root, "unimozer.json");
       let baseState: DiagramState | null = null;
       let loadedFromDisk = false;
       let stateWasNormalized = false;
+      let stateWasHydratedFromMemory = false;
 
       try {
         const text = await invokeValidated(
@@ -235,6 +258,44 @@ export const useProjectIO = ({
         baseState = createDefaultDiagramState();
       }
 
+      const currentDiagramState = context?.currentDiagramState;
+      const currentDiagramPath = context?.currentDiagramPath;
+      if (
+        currentDiagramState &&
+        currentDiagramPath &&
+        currentDiagramPath === diagramFile
+      ) {
+        const hydratedNodes: Record<string, { x: number; y: number }> = {
+          ...baseState.nodes
+        };
+        for (const [id, position] of Object.entries(currentDiagramState.nodes)) {
+          if (!isFinitePosition(position)) {
+            continue;
+          }
+          const existing = hydratedNodes[id];
+          if (!existing || existing.x !== position.x || existing.y !== position.y) {
+            hydratedNodes[id] = { x: position.x, y: position.y };
+            stateWasHydratedFromMemory = true;
+          }
+        }
+
+        const currentViewport = currentDiagramState.viewport;
+        const baseViewport = baseState.viewport;
+        const viewportChanged =
+          currentViewport.panX !== baseViewport.panX ||
+          currentViewport.panY !== baseViewport.panY ||
+          currentViewport.zoom !== baseViewport.zoom;
+
+        baseState = {
+          ...baseState,
+          nodes: hydratedNodes,
+          viewport: currentViewport
+        };
+        if (viewportChanged) {
+          stateWasHydratedFromMemory = true;
+        }
+      }
+
       const merged = mergeDiagramState(
         baseState,
         graph.nodes.map((node) => node.id)
@@ -242,7 +303,12 @@ export const useProjectIO = ({
       setDiagramState(merged.state);
       setDiagramPath(diagramFile);
 
-      if (!loadedFromDisk || merged.added || stateWasNormalized) {
+      if (
+        !loadedFromDisk ||
+        merged.added ||
+        stateWasNormalized ||
+        stateWasHydratedFromMemory
+      ) {
         await invokeValidated("write_text_file", voidResponseSchema, "write_text_file response", {
           path: diagramFile,
           contents: JSON.stringify(merged.state, null, 2)

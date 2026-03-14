@@ -906,8 +906,18 @@ export default function AppContainer({
       return;
     }
     lastDiagramLoadKeyRef.current = loadKey;
-    void loadDiagramState(projectPath, umlGraph);
-  }, [projectPath, umlGraph, umlNodeLayoutSignature, loadDiagramState]);
+    void loadDiagramState(projectPath, umlGraph, {
+      currentDiagramState: diagramState,
+      currentDiagramPath: diagramPath
+    });
+  }, [
+    diagramPath,
+    diagramState,
+    projectPath,
+    umlGraph,
+    umlNodeLayoutSignature,
+    loadDiagramState
+  ]);
 
 
   const {

@@ -32,6 +32,24 @@ const alignToGrid = (value: number, origin: number, step: number) => {
 
 const gridSlotKey = (col: number, row: number) => `${col}:${row}`;
 
+const getGridSlotFromPosition = (
+  position: DiagramNodePosition,
+  startX: number,
+  startY: number
+): string | null => {
+  const col = Math.round((position.x - startX) / GRID_W);
+  const row = Math.round((position.y - startY) / GRID_H);
+  if (!Number.isFinite(col) || !Number.isFinite(row)) {
+    return null;
+  }
+  const slotX = startX + col * GRID_W;
+  const slotY = startY + row * GRID_H;
+  if (!isNearGridSlot(position, slotX, slotY)) {
+    return null;
+  }
+  return gridSlotKey(col, row);
+};
+
 const isNearGridSlot = (
   position: DiagramNodePosition,
   slotX: number,
@@ -47,17 +65,9 @@ const collectOccupiedGridSlots = (
 ) => {
   const occupied = new Set<string>();
   for (const position of positions) {
-    const col = Math.round((position.x - startX) / GRID_W);
-    const row = Math.round((position.y - startY) / GRID_H);
-    if (!Number.isFinite(col) || !Number.isFinite(row)) {
-      continue;
-    }
-    const slotX = startX + col * GRID_W;
-    const slotY = startY + row * GRID_H;
-    if (!isNearGridSlot(position, slotX, slotY)) {
-      continue;
-    }
-    occupied.add(gridSlotKey(col, row));
+    const slot = getGridSlotFromPosition(position, startX, startY);
+    if (!slot) continue;
+    occupied.add(slot);
   }
   return occupied;
 };
@@ -145,33 +155,13 @@ export const normalizeDiagramState = (input: unknown): DiagramState => {
   };
 };
 
-const positionForIndex = (index: number): DiagramNodePosition => {
-  const col = index % GRID_COLS;
-  const row = Math.floor(index / GRID_COLS);
-  return {
-    x: GRID_X + col * GRID_W,
-    y: GRID_Y + row * GRID_H
-  };
-};
-
 const positionForAppendedNode = (
-  anchorNodes: Record<string, DiagramNodePosition>,
+  startX: number,
+  startY: number,
   occupiedSlots: Set<string>
 ): DiagramNodePosition => {
-  const positions = Object.values(anchorNodes);
-  if (positions.length === 0) {
-    const slot = gridSlotKey(0, 0);
-    occupiedSlots.add(slot);
-    return positionForIndex(0);
-  }
-
-  const minX = Math.min(...positions.map((position) => position.x));
-  const minY = Math.min(...positions.map((position) => position.y));
-  const startX = alignToGrid(minX, GRID_X, GRID_W);
-  const startY = alignToGrid(minY, GRID_Y, GRID_H);
-
   let index = 0;
-  const maxIterations = Math.max(positions.length + occupiedSlots.size + 128, 256);
+  const maxIterations = Math.max(occupiedSlots.size + 128, 256);
   while (index < maxIterations) {
     const col = index % GRID_COLS;
     const row = Math.floor(index / GRID_COLS);
@@ -247,8 +237,18 @@ export const mergeDiagramState = (
     staleBySimpleName.delete(duplicated);
   }
   const consumedAliasIds = new Set<string>();
+  const staleFallbackQueue = staleIds
+    .filter((id) => nodes[id] && !consumedAliasIds.has(id))
+    .sort((a, b) => {
+      const pa = nodes[a]!;
+      const pb = nodes[b]!;
+      if (pa.y !== pb.y) return pa.y - pb.y;
+      if (pa.x !== pb.x) return pa.x - pb.x;
+      return a.localeCompare(b);
+    });
 
   let added = false;
+  const unresolvedMissing: string[] = [];
 
   for (const id of sorted) {
     if (!nodes[id]) {
@@ -260,15 +260,38 @@ export const mergeDiagramState = (
         nodes[id] = reused;
         anchorNodes[id] = reused;
         consumedAliasIds.add(aliasId);
+        const slot = getGridSlotFromPosition(reused, startX, startY);
+        if (slot) {
+          occupiedSlots.add(slot);
+        }
         added = true;
         continue;
       }
-
-      const position = positionForAppendedNode(anchorNodes, occupiedSlots);
-      nodes[id] = position;
-      anchorNodes[id] = position;
-      added = true;
+      unresolvedMissing.push(id);
     }
+  }
+
+  for (const id of unresolvedMissing) {
+    const reuseId = staleFallbackQueue.find(
+      (candidateId) => !consumedAliasIds.has(candidateId)
+    );
+    if (reuseId) {
+      consumedAliasIds.add(reuseId);
+      const reused = { x: nodes[reuseId]!.x, y: nodes[reuseId]!.y };
+      nodes[id] = reused;
+      anchorNodes[id] = reused;
+      const slot = getGridSlotFromPosition(reused, startX, startY);
+      if (slot) {
+        occupiedSlots.add(slot);
+      }
+      added = true;
+      continue;
+    }
+
+    const position = positionForAppendedNode(startX, startY, occupiedSlots);
+    nodes[id] = position;
+    anchorNodes[id] = position;
+    added = true;
   }
 
   return {
