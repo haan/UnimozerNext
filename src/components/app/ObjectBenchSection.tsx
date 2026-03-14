@@ -29,6 +29,7 @@ type ObjectBenchSectionProps = {
   onCompileClass: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
   onCreateObject?: (node: UmlNode, constructor: UmlConstructor) => void;
+  onRenameClass?: (node: UmlNode) => void;
   onRemoveClass?: (node: UmlNode) => void;
   onAddField?: (node: UmlNode) => void;
   onAddConstructor?: (node: UmlNode) => void;
@@ -73,6 +74,7 @@ export const ObjectBenchSection = ({
   onCompileClass,
   onRunMain,
   onCreateObject,
+  onRenameClass,
   onRemoveClass,
   onAddField,
   onAddConstructor,
@@ -119,6 +121,7 @@ export const ObjectBenchSection = ({
           onCompileClass={onCompileClass}
           onRunMain={onRunMain}
           onCreateObject={onCreateObject}
+          onRenameClass={onRenameClass}
           onRemoveClass={onRemoveClass}
           onAddField={onAddField}
           onAddConstructor={onAddConstructor}

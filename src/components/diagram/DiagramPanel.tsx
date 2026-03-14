@@ -39,6 +39,7 @@ export type DiagramPanelProps = {
   onCompileClass: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
   onCreateObject?: (node: UmlNode, constructor: UmlConstructor) => void;
+  onRenameClass?: (node: UmlNode) => void;
   onRegisterZoom?: (controls: ZoomControls | null) => void;
   onAddClass?: () => void;
   onRemoveClass?: (node: UmlNode) => void;
@@ -100,6 +101,7 @@ export const DiagramPanel = ({
   onCompileClass,
   onRunMain,
   onCreateObject,
+  onRenameClass,
   onRegisterZoom,
   onAddClass,
   onRemoveClass,
@@ -213,6 +215,7 @@ export const DiagramPanel = ({
                 onCompileClass={onCompileClass}
                 onRunMain={onRunMain}
                 onCreateObject={onCreateObject}
+                onRenameClass={onRenameClass}
                 onRemoveClass={onRemoveClass}
                 onAddField={onAddField}
                 onAddConstructor={onAddConstructor}

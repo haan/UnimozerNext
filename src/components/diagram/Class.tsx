@@ -36,6 +36,7 @@ export type ClassProps = {
   onCompile?: () => void;
   onRunMain?: () => void;
   onCreateObject?: (node: UmlNode, constructor: UmlConstructor) => void;
+  onRename?: () => void;
   onRemove?: () => void;
   onAddField?: () => void;
   onAddConstructor?: () => void;
@@ -60,6 +61,7 @@ export const Class = ({
   onCompile,
   onRunMain,
   onCreateObject,
+  onRename,
   onRemove,
   onAddField,
   onAddConstructor,
@@ -306,6 +308,26 @@ export const Class = ({
           </ContextMenuItem>
         ) : null}
         <ContextMenuSeparator />
+        <ContextMenuItem disabled={!onRename} onSelect={onRename}>
+          <span className="inline-flex items-center gap-2">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="16"
+              height="16"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth="1.5"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L9.832 16.82a4.5 4.5 0 0 1-1.897 1.13L6 18.5l.55-1.935a4.5 4.5 0 0 1 1.13-1.897L16.862 4.487ZM19.5 7.125 16.875 4.5"
+              />
+            </svg>
+            Rename class
+          </span>
+        </ContextMenuItem>
         <ContextMenuItem disabled={!onRemove} onSelect={onRemove}>
           <span className="inline-flex items-center gap-2">
             <svg

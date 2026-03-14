@@ -33,6 +33,7 @@ import { useClassEditActions } from "./hooks/useClassEditActions";
 import { useObjectBenchActions } from "./hooks/useObjectBenchActions";
 import { useClassSelectionActions } from "./hooks/useClassSelectionActions";
 import { useClassRemovalActions } from "./hooks/useClassRemovalActions";
+import { useClassRenameActions } from "./hooks/useClassRenameActions";
 import { useAppAppearanceEffects } from "./hooks/useAppAppearanceEffects";
 import { useCompileJshellLifecycle } from "./hooks/useCompileJshellLifecycle";
 import { useMenuCommandActions } from "./hooks/useMenuCommandActions";
@@ -143,6 +144,10 @@ export default function AppContainer({
     methodReturnLabel,
     removeClassOpen,
     removeTarget,
+    renameClassOpen,
+    renameTarget,
+    renameClassErrorOpen,
+    renameClassErrorMessage,
     fieldTarget,
     constructorTarget,
     methodTarget,
@@ -159,8 +164,12 @@ export default function AppContainer({
     handleCallMethodOpenChange,
     openMethodReturnDialog,
     handleMethodReturnOpenChange,
+    requestRenameClass,
     requestRemoveClass,
+    handleRenameClassOpenChange,
     handleRemoveClassOpenChange,
+    openRenameClassErrorDialog,
+    handleRenameClassErrorOpenChange,
     closeRemoveClassDialog,
     missingRecentProjectOpen,
     missingRecentProjectPath,
@@ -968,6 +977,28 @@ export default function AppContainer({
     setStatus,
     formatStatus
   });
+  const { handleRenameClass } = useClassRenameActions({
+    projectPath,
+    openFilePath,
+    renameTarget,
+    requestPackedArchiveSync,
+    monacoRef,
+    getInternalFileUri,
+    notifyLsClose,
+    notifyLsOpen,
+    fileDrafts,
+    setTree,
+    setOpenFile,
+    setContent,
+    setLastSavedContent,
+    setFileDrafts,
+    setCompileStatus,
+    setSelectedClassId,
+    setBusy,
+    setStatus,
+    openRenameClassErrorDialog,
+    formatStatus
+  });
 
   const {
     handleMenuAddClass,
@@ -1292,6 +1323,7 @@ export default function AppContainer({
           onCompileClass: handleCompileClass,
           onRunMain: handleRunMain,
           onCreateObject: handleOpenCreateObject,
+          onRenameClass: requestRenameClass,
           onRemoveClass: requestRemoveClass,
           onAddField: handleOpenAddField,
           onAddConstructor: handleOpenAddConstructor,
@@ -1405,6 +1437,13 @@ export default function AppContainer({
         onRemoveClassOpenChange={handleRemoveClassOpenChange}
         removeTargetName={removeTarget?.name ?? null}
         onConfirmRemoveClass={handleConfirmRemoveClass}
+        renameClassOpen={renameClassOpen}
+        onRenameClassOpenChange={handleRenameClassOpenChange}
+        renameClassName={renameTarget?.name ?? ""}
+        onRenameClass={handleRenameClass}
+        renameClassErrorOpen={renameClassErrorOpen}
+        renameClassErrorMessage={renameClassErrorMessage}
+        onRenameClassErrorOpenChange={handleRenameClassErrorOpenChange}
         confirmProjectActionOpen={confirmProjectActionOpen}
         onConfirmProjectActionOpenChange={onConfirmProjectActionOpenChange}
         canConfirmProjectAction={Boolean(pendingProjectAction)}

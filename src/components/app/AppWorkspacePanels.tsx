@@ -61,6 +61,7 @@ export const AppWorkspacePanels = ({
                 onCompileClass={objectBenchSectionProps.onCompileClass}
                 onRunMain={objectBenchSectionProps.onRunMain}
                 onCreateObject={objectBenchSectionProps.onCreateObject}
+                onRenameClass={objectBenchSectionProps.onRenameClass}
                 onRegisterZoom={objectBenchSectionProps.onRegisterZoom}
                 onRegisterExport={objectBenchSectionProps.onRegisterExport}
                 onRegisterStructogramExport={objectBenchSectionProps.onRegisterStructogramExport}

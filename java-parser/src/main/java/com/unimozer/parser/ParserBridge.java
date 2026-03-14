@@ -43,6 +43,7 @@ import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.type.PrimitiveType;
 import com.github.javaparser.ast.type.Type;
 import com.github.javaparser.ast.type.WildcardType;
+import com.github.javaparser.printer.lexicalpreservation.LexicalPreservingPrinter;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -225,6 +226,20 @@ public class ParserBridge {
     public String error;
   }
 
+  static class RenameClassRequest {
+    public String action;
+    public String path;
+    public String content;
+    public String oldClassName;
+    public String newClassName;
+  }
+
+  static class RenameClassResponse {
+    public boolean ok;
+    public String content;
+    public String error;
+  }
+
   static class ErrorResponse {
     public boolean ok;
     public String error;
@@ -311,6 +326,10 @@ public class ParserBridge {
     if ("addMethod".equals(action)) {
       AddMethodRequest request = mapper.treeToValue(rootNode, AddMethodRequest.class);
       return addMethod(request);
+    }
+    if ("renameClass".equals(action)) {
+      RenameClassRequest request = mapper.treeToValue(rootNode, RenameClassRequest.class);
+      return renameClass(request);
     }
 
     Request request = mapper.treeToValue(rootNode, Request.class);
@@ -825,6 +844,113 @@ public class ParserBridge {
     response.ok = true;
     response.content = cu.toString();
     return response;
+  }
+
+  static RenameClassResponse renameClass(RenameClassRequest request) {
+    RenameClassResponse response = new RenameClassResponse();
+    if (request == null || request.path == null || request.path.isBlank()) {
+      response.ok = false;
+      response.error = "Missing file path";
+      return response;
+    }
+    if (request.oldClassName == null || request.oldClassName.isBlank()) {
+      response.ok = false;
+      response.error = "Missing current class name";
+      return response;
+    }
+    if (request.newClassName == null || request.newClassName.isBlank()) {
+      response.ok = false;
+      response.error = "Missing new class name";
+      return response;
+    }
+    if (!isValidJavaIdentifier(request.newClassName)) {
+      response.ok = false;
+      response.error = "New class name is not a valid Java identifier";
+      return response;
+    }
+
+    String source;
+    try {
+      source = request.content != null && !request.content.isBlank()
+        ? request.content
+        : Files.readString(Paths.get(request.path));
+    } catch (IOException ex) {
+      response.ok = false;
+      response.error = "Failed to read source file";
+      return response;
+    }
+
+    ParserConfiguration config = createParserConfiguration();
+    JavaParser parser = new JavaParser(config);
+    ParseResult<CompilationUnit> parseResult = parser.parse(
+      ParseStart.COMPILATION_UNIT,
+      Providers.provider(source)
+    );
+
+    if (!parseResult.isSuccessful() || parseResult.getResult().isEmpty()) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    CompilationUnit cu = parseResult.getResult().orElse(null);
+    if (cu == null) {
+      response.ok = false;
+      response.error = "Failed to parse source file";
+      return response;
+    }
+
+    LexicalPreservingPrinter.setup(cu);
+    TypeDeclaration<?> targetType = null;
+    for (TypeDeclaration<?> typeDecl : cu.getTypes()) {
+      if (request.oldClassName.equals(typeDecl.getNameAsString())) {
+        targetType = typeDecl;
+        break;
+      }
+    }
+
+    if (targetType == null) {
+      response.ok = false;
+      response.error = "Target class not found";
+      return response;
+    }
+
+    String oldName = request.oldClassName;
+    String newName = request.newClassName;
+    targetType.setName(newName);
+
+    for (BodyDeclaration<?> member : targetType.getMembers()) {
+      if (member instanceof ConstructorDeclaration constructorDeclaration
+        && oldName.equals(constructorDeclaration.getNameAsString())
+      ) {
+        constructorDeclaration.setName(newName);
+      }
+    }
+
+    cu.findAll(ClassOrInterfaceType.class).forEach(type -> {
+      if (oldName.equals(type.getNameAsString())) {
+        type.setName(newName);
+      }
+    });
+
+    response.ok = true;
+    response.content = LexicalPreservingPrinter.print(cu);
+    return response;
+  }
+
+  static boolean isValidJavaIdentifier(String value) {
+    if (value == null || value.isBlank()) {
+      return false;
+    }
+    if (!Character.isJavaIdentifierStart(value.charAt(0))) {
+      return false;
+    }
+    for (int i = 1; i < value.length(); i++) {
+      if (!Character.isJavaIdentifierPart(value.charAt(i))) {
+        return false;
+      }
+    }
+    return true;
   }
 
   static String buildDefaultMethodBody(Type type) {

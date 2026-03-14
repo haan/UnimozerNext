@@ -20,6 +20,7 @@ commands.allow = [
   "add_field_to_class",
   "add_constructor_to_class",
   "add_method_to_class",
+  "rename_class_in_file",
   "compile_project",
   "append_crash_log",
   "get_crash_log_path",

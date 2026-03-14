@@ -29,6 +29,10 @@ export const useDialogState = () => {
 
   const [removeClassOpen, setRemoveClassOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<UmlNode | null>(null);
+  const [renameClassOpen, setRenameClassOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState<UmlNode | null>(null);
+  const [renameClassErrorOpen, setRenameClassErrorOpen] = useState(false);
+  const [renameClassErrorMessage, setRenameClassErrorMessage] = useState<string | null>(null);
   const [missingRecentProjectOpen, setMissingRecentProjectOpen] = useState(false);
   const [missingRecentProjectPath, setMissingRecentProjectPath] = useState<string | null>(null);
   const [folderProjectErrorOpen, setFolderProjectErrorOpen] = useState(false);
@@ -121,6 +125,11 @@ export const useDialogState = () => {
     setRemoveClassOpen(true);
   }, []);
 
+  const requestRenameClass = useCallback((node: UmlNode) => {
+    setRenameTarget(node);
+    setRenameClassOpen(true);
+  }, []);
+
   const handleRemoveClassOpenChange = useCallback((open: boolean) => {
     setRemoveClassOpen(open);
     if (!open) {
@@ -128,9 +137,33 @@ export const useDialogState = () => {
     }
   }, []);
 
+  const handleRenameClassOpenChange = useCallback((open: boolean) => {
+    setRenameClassOpen(open);
+    if (!open) {
+      setRenameTarget(null);
+    }
+  }, []);
+
   const closeRemoveClassDialog = useCallback(() => {
     setRemoveClassOpen(false);
     setRemoveTarget(null);
+  }, []);
+
+  const closeRenameClassDialog = useCallback(() => {
+    setRenameClassOpen(false);
+    setRenameTarget(null);
+  }, []);
+
+  const openRenameClassErrorDialog = useCallback((message: string) => {
+    setRenameClassErrorMessage(message);
+    setRenameClassErrorOpen(true);
+  }, []);
+
+  const handleRenameClassErrorOpenChange = useCallback((open: boolean) => {
+    setRenameClassErrorOpen(open);
+    if (!open) {
+      setRenameClassErrorMessage(null);
+    }
   }, []);
 
   const openMissingRecentProjectDialog = useCallback((path: string) => {
@@ -172,6 +205,10 @@ export const useDialogState = () => {
     methodReturnOpen,
     methodReturnValue,
     methodReturnLabel,
+    renameClassOpen,
+    renameTarget,
+    renameClassErrorOpen,
+    renameClassErrorMessage,
     removeClassOpen,
     removeTarget,
     missingRecentProjectOpen,
@@ -194,9 +231,14 @@ export const useDialogState = () => {
     handleCallMethodOpenChange,
     openMethodReturnDialog,
     handleMethodReturnOpenChange,
+    requestRenameClass,
     requestRemoveClass,
+    handleRenameClassOpenChange,
     handleRemoveClassOpenChange,
+    closeRenameClassDialog,
     closeRemoveClassDialog,
+    openRenameClassErrorDialog,
+    handleRenameClassErrorOpenChange,
     openMissingRecentProjectDialog,
     handleMissingRecentProjectOpenChange,
     openFolderProjectErrorDialog,

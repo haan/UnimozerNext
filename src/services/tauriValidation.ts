@@ -67,6 +67,14 @@ export const compileProjectResultSchema = z.object({
   outDir: z.string()
 });
 
+export const renameClassResponseSchema = z
+  .object({
+    oldPath: z.string(),
+    newPath: z.string(),
+    content: z.string()
+  })
+  .loose();
+
 export const openPackedProjectResponseSchema = z.object({
   archivePath: z.string(),
   workspaceDir: z.string(),

@@ -34,6 +34,7 @@ pub(crate) fn with_invoke_handlers(
         crate::parser_io::add_field_to_class,
         crate::parser_io::add_constructor_to_class,
         crate::parser_io::add_method_to_class,
+        crate::parser_io::rename_class_in_file,
         crate::ls::ls_start,
         crate::ls::ls_stop,
         crate::ls::ls_did_open,

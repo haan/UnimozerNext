@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 use std::{
+    fs,
     io::{BufRead, BufReader, Write},
+    path::PathBuf,
     process::{Command, Stdio},
     sync::{Arc, Mutex},
 };
@@ -242,6 +244,32 @@ struct AddMethodResponse {
     error: Option<String>,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameClassBridgeRequest {
+    action: String,
+    path: String,
+    content: String,
+    old_class_name: String,
+    new_class_name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RenameClassBridgeResponse {
+    ok: bool,
+    content: Option<String>,
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RenameClassInFileResponse {
+    old_path: String,
+    new_path: String,
+    content: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AddFieldResponse {
@@ -450,6 +478,27 @@ fn parser_send_raw(
     Err(last_error)
 }
 
+fn is_valid_java_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if first == '_' || first == '$' || first.is_ascii_alphabetic() {
+        // valid start
+    } else {
+        return false;
+    }
+    chars.all(|ch| ch == '_' || ch == '$' || ch.is_ascii_alphanumeric())
+}
+
+fn renamed_java_path(file_path: &str, new_class_name: &str) -> Result<PathBuf, String> {
+    let source = PathBuf::from(file_path);
+    let parent = source
+        .parent()
+        .ok_or_else(|| "Source file has no parent directory".to_string())?;
+    Ok(parent.join(format!("{new_class_name}.java")))
+}
+
 #[tauri::command]
 pub fn parse_uml_graph(
     app: tauri::AppHandle,
@@ -534,6 +583,85 @@ pub fn add_method_to_class(
     response
         .content
         .ok_or_else(|| "Method update returned empty content".to_string())
+}
+
+#[tauri::command]
+pub fn rename_class_in_file(
+    app: tauri::AppHandle,
+    state: State<ParserBridgeState>,
+    project_root: String,
+    file_path: String,
+    old_class_name: String,
+    new_class_name: String,
+) -> Result<RenameClassInFileResponse, String> {
+    let old_class_name = old_class_name.trim();
+    let new_class_name = new_class_name.trim();
+    if old_class_name.is_empty() {
+        return Err("Current class name is required".to_string());
+    }
+    if new_class_name.is_empty() {
+        return Err("New class name is required".to_string());
+    }
+    if old_class_name == new_class_name {
+        return Err("New class name must be different".to_string());
+    }
+    if !is_valid_java_identifier(new_class_name) {
+        return Err("New class name is not a valid Java identifier".to_string());
+    }
+
+    let project_root_path = PathBuf::from(project_root);
+    if !project_root_path.is_dir() {
+        return Err("Project root does not exist".to_string());
+    }
+
+    let source_path = PathBuf::from(&file_path);
+    if !source_path.is_file() {
+        return Err("Source class file does not exist".to_string());
+    }
+
+    let target_path = renamed_java_path(&file_path, new_class_name)?;
+    if target_path.exists() {
+        return Err(format!(
+            "Target class file already exists: {}",
+            target_path.display()
+        ));
+    }
+
+    let source_content = fs::read_to_string(&source_path).map_err(crate::command_error::to_command_error)?;
+    let request = RenameClassBridgeRequest {
+        action: "renameClass".to_string(),
+        path: file_path.clone(),
+        content: source_content,
+        old_class_name: old_class_name.to_string(),
+        new_class_name: new_class_name.to_string(),
+    };
+    let request_value =
+        serde_json::to_value(&request).map_err(crate::command_error::to_command_error)?;
+    let raw = parser_send_raw(&app, &state, request_value)?;
+    let bridge_response: RenameClassBridgeResponse =
+        serde_json::from_str(&raw).map_err(crate::command_error::to_command_error)?;
+    if !bridge_response.ok {
+        return Err(
+            bridge_response
+                .error
+                .unwrap_or_else(|| "Failed to rename class".to_string()),
+        );
+    }
+    let updated_content = bridge_response
+        .content
+        .ok_or_else(|| "Rename update returned empty content".to_string())?;
+
+    fs::write(&target_path, &updated_content).map_err(crate::command_error::to_command_error)?;
+    if let Err(error) = fs::remove_file(&source_path) {
+        let _ = fs::remove_file(&target_path);
+        return Err(crate::command_error::to_command_error(error));
+    }
+
+    Ok(RenameClassInFileResponse {
+        old_path: source_path.display().to_string(),
+        new_path: target_path.display().to_string(),
+        content: updated_content,
+    })
 }
 
 pub fn shutdown_parser_bridge(state: &ParserBridgeState) {

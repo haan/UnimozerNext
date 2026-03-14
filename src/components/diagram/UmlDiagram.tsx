@@ -368,6 +368,7 @@ export type UmlDiagramProps = {
   onCompileClass?: (node: UmlNode) => void;
   onRunMain?: (node: UmlNode) => void;
   onCreateObject?: (node: UmlNode, constructor: UmlConstructor) => void;
+  onRenameClass?: (node: UmlNode) => void;
   onRemoveClass?: (node: UmlNode) => void;
   onAddField?: (node: UmlNode) => void;
   onAddConstructor?: (node: UmlNode) => void;
@@ -436,6 +437,7 @@ export const UmlDiagram = ({
   onCompileClass,
   onRunMain,
   onCreateObject,
+  onRenameClass,
   onRemoveClass,
   onAddField,
   onAddConstructor,
@@ -1537,6 +1539,7 @@ export const UmlDiagram = ({
             onCompile={() => onCompileClass?.(node)}
             onRunMain={() => onRunMain?.(node)}
             onCreateObject={onCreateObject ? (target, constructor) => onCreateObject(target, constructor) : undefined}
+            onRename={() => onRenameClass?.(node)}
             onRemove={() => onRemoveClass?.(node)}
             onAddField={() => onAddField?.(node)}
             onAddConstructor={() => onAddConstructor?.(node)}

@@ -5,6 +5,10 @@ import {
   type AddConstructorForm
 } from "../wizards/AddConstructorDialog";
 import { AddMethodDialog, type AddMethodForm } from "../wizards/AddMethodDialog";
+import {
+  RenameClassDialog,
+  type RenameClassForm
+} from "../wizards/RenameClassDialog";
 import { CreateObjectDialog, type CreateObjectForm } from "../wizards/CreateObjectDialog";
 import { CallMethodDialog, type CallMethodForm } from "../wizards/CallMethodDialog";
 import { SettingsDialog } from "../settings/SettingsDialog";
@@ -69,6 +73,13 @@ type AppDialogsProps = {
   onRemoveClassOpenChange: (open: boolean) => void;
   removeTargetName: string | null;
   onConfirmRemoveClass: () => void;
+  renameClassOpen: boolean;
+  onRenameClassOpenChange: (open: boolean) => void;
+  renameClassName: string;
+  onRenameClass: (form: RenameClassForm) => Promise<void> | void;
+  renameClassErrorOpen: boolean;
+  renameClassErrorMessage: string | null;
+  onRenameClassErrorOpenChange: (open: boolean) => void;
   confirmProjectActionOpen: boolean;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
   canConfirmProjectAction: boolean;
@@ -145,6 +156,13 @@ export const AppDialogs = ({
   onRemoveClassOpenChange,
   removeTargetName,
   onConfirmRemoveClass,
+  renameClassOpen,
+  onRenameClassOpenChange,
+  renameClassName,
+  onRenameClass,
+  renameClassErrorOpen,
+  renameClassErrorMessage,
+  onRenameClassErrorOpenChange,
   confirmProjectActionOpen,
   onConfirmProjectActionOpenChange,
   canConfirmProjectAction,
@@ -235,6 +253,26 @@ export const AppDialogs = ({
       availableObjects={callMethodAvailableObjects}
       busy={busy}
     />
+    <RenameClassDialog
+      open={renameClassOpen}
+      onOpenChange={onRenameClassOpenChange}
+      className={renameClassName}
+      onSubmit={onRenameClass}
+      busy={busy}
+    />
+    <AlertDialog open={renameClassErrorOpen} onOpenChange={onRenameClassErrorOpenChange}>
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Rename failed</AlertDialogTitle>
+          <AlertDialogDescription className="text-center">
+            {renameClassErrorMessage || "Could not rename the class."}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogAction className="w-full">OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     <AlertDialog open={removeClassOpen} onOpenChange={onRemoveClassOpenChange}>
       <AlertDialogContent size="sm">
         <AlertDialogHeader className="items-center text-center">
