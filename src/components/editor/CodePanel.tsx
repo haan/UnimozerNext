@@ -732,9 +732,12 @@ export const CodePanel = memo(
             if (!isPrintableSingleKey(browserEvent.key)) {
               return;
             }
+<<<<<<< HEAD
             if (lastSelectionSourceRef.current !== "keyboard") {
               return;
             }
+=======
+>>>>>>> 700bc4f67a6afd2f1a18308f46bb11055b70d66a
             const selections = editor.getSelections() ?? [];
             if (selections.length === 0 || !selections.every((selection) => !selection.isEmpty())) {
               return;
@@ -742,12 +745,23 @@ export const CodePanel = memo(
 
             event.preventDefault();
             event.stopPropagation();
+<<<<<<< HEAD
             if (debugEnabled) {
               logEvent(
                 `macSelectionReplace key=${JSON.stringify(browserEvent.key)} selections=${selections.length}`
               );
             }
             editor.trigger("macSelectionReplace", "type", { text: browserEvent.key });
+=======
+            editor.executeEdits(
+              "macSelectionReplace",
+              selections.map((selection) => ({
+                range: selection,
+                text: browserEvent.key,
+                forceMoveMarkers: true
+              }))
+            );
+>>>>>>> 700bc4f67a6afd2f1a18308f46bb11055b70d66a
           }),
           editor.onDidChangeModel((event) => {
             refreshScopeDecorations();
