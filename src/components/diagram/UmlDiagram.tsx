@@ -7,6 +7,7 @@ import { toast } from "sonner";
 
 import type { DiagramState, DiagramViewport } from "../../models/diagram";
 import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
+import { mergeDiagramState } from "../../services/diagram";
 import { basename, joinPath } from "../../services/paths";
 import { Association } from "./Association";
 import { Class } from "./Class";
@@ -715,10 +716,50 @@ export const UmlDiagram = ({
     [view.scale, view.x, view.y]
   );
 
+  const layoutMerge = useMemo(
+    () => mergeDiagramState(diagram, graph.nodes.map((node) => node.id)),
+    [diagram, graph.nodes]
+  );
+  const layoutNodes = layoutMerge.state.nodes;
+  const missingNodeSyncSignatureRef = useRef("");
+
+  useEffect(() => {
+    const missing = graph.nodes
+      .filter((node) => {
+        const raw = diagram.nodes[node.id] as Partial<{ x: number; y: number }> | undefined;
+        return !(raw && Number.isFinite(raw.x) && Number.isFinite(raw.y));
+      })
+      .map((node) => ({
+        id: node.id,
+        position: layoutNodes[node.id]
+      }))
+      .filter(
+        (entry): entry is { id: string; position: { x: number; y: number } } =>
+          Boolean(entry.position)
+      );
+
+    if (missing.length === 0) {
+      missingNodeSyncSignatureRef.current = "";
+      return;
+    }
+
+    const signature = missing
+      .map(({ id, position }) => `${id}:${position.x},${position.y}`)
+      .join("|");
+    if (missingNodeSyncSignatureRef.current === signature) {
+      return;
+    }
+    missingNodeSyncSignatureRef.current = signature;
+
+    missing.forEach(({ id, position }, index) => {
+      onNodePositionChange(id, position.x, position.y, index === missing.length - 1);
+    });
+  }, [diagram.nodes, graph.nodes, layoutNodes, onNodePositionChange]);
+
   const nodesWithLayout = useMemo(
     () =>
       graph.nodes.map((node) => {
-        const position = diagram.nodes[node.id] ?? { x: 0, y: 0 };
+        const position = layoutNodes[node.id];
         return {
           ...node,
           x: position.x,
@@ -729,7 +770,16 @@ export const UmlDiagram = ({
           height: computeNodeHeight(node, diagram, headerHeight, rowHeight)
         };
       }),
-    [diagram, graph.nodes, fontReady, headerHeight, rowHeight, showParameterNames, umlFontSize]
+    [
+      diagram,
+      fontReady,
+      graph.nodes,
+      headerHeight,
+      layoutNodes,
+      rowHeight,
+      showParameterNames,
+      umlFontSize
+    ]
   );
 
   const nodeMap = useMemo(() => {
