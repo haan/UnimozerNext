@@ -987,6 +987,7 @@ export default function AppContainer({
     notifyLsClose,
     notifyLsOpen,
     fileDrafts,
+    setDiagramState,
     setTree,
     setOpenFile,
     setContent,

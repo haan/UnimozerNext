@@ -3,6 +3,7 @@ import type { Dispatch, RefObject, SetStateAction } from "react";
 import type { Monaco } from "@monaco-editor/react";
 
 import type { RenameClassForm } from "../components/wizards/RenameClassDialog";
+import type { DiagramState } from "../models/diagram";
 import type { FileDraft } from "../models/drafts";
 import type { FileNode } from "../models/files";
 import type { OpenFile } from "../models/openFile";
@@ -26,6 +27,7 @@ type UseClassRenameActionsArgs = {
   notifyLsClose: (path: string) => void;
   notifyLsOpen: (path: string, text: string) => void;
   fileDrafts: Record<string, FileDraft>;
+  setDiagramState: Dispatch<SetStateAction<DiagramState | null>>;
   setTree: Dispatch<SetStateAction<FileNode | null>>;
   setOpenFile: Dispatch<SetStateAction<OpenFile | null>>;
   setContent: Dispatch<SetStateAction<string>>;
@@ -63,6 +65,7 @@ export const useClassRenameActions = ({
   notifyLsClose,
   notifyLsOpen,
   fileDrafts,
+  setDiagramState,
   setTree,
   setOpenFile,
   setContent,
@@ -162,6 +165,26 @@ export const useClassRenameActions = ({
         );
         setTree(nextTree);
 
+        const renamedClassId = deriveRenamedClassId(renameTarget.id, oldName, newName);
+        if (renamedClassId && renamedClassId !== renameTarget.id) {
+          setDiagramState((prev) => {
+            if (!prev) {
+              return prev;
+            }
+            const oldPosition = prev.nodes[renameTarget.id];
+            if (!oldPosition) {
+              return prev;
+            }
+            const nextNodes = { ...prev.nodes };
+            delete nextNodes[renameTarget.id];
+            nextNodes[renamedClassId] = { x: oldPosition.x, y: oldPosition.y };
+            return {
+              ...prev,
+              nodes: nextNodes
+            };
+          });
+        }
+
         setSelectedClassId((current) => {
           if (!current || current !== renameTarget.id) {
             return current;
@@ -194,6 +217,7 @@ export const useClassRenameActions = ({
       setBusy,
       setCompileStatus,
       setContent,
+      setDiagramState,
       setFileDrafts,
       setLastSavedContent,
       setOpenFile,
