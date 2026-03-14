@@ -981,6 +981,8 @@ export default function AppContainer({
     projectPath,
     openFilePath,
     renameTarget,
+    diagramPath,
+    diagramState,
     requestPackedArchiveSync,
     monacoRef,
     getInternalFileUri,

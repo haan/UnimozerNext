@@ -9,7 +9,7 @@ import type { FileNode } from "../models/files";
 import type { OpenFile } from "../models/openFile";
 import type { UmlNode } from "../models/uml";
 import { isValidJavaIdentifier } from "../services/java";
-import { basename } from "../services/paths";
+import { basename, joinPath } from "../services/paths";
 import {
   fileNodeSchema,
   invokeValidated,
@@ -21,6 +21,8 @@ type UseClassRenameActionsArgs = {
   projectPath: string | null;
   openFilePath: string | null;
   renameTarget: UmlNode | null;
+  diagramPath: string | null;
+  diagramState: DiagramState | null;
   requestPackedArchiveSync: () => void;
   monacoRef: RefObject<Monaco | null>;
   getInternalFileUri: (path: string) => string;
@@ -59,6 +61,8 @@ export const useClassRenameActions = ({
   projectPath,
   openFilePath,
   renameTarget,
+  diagramPath,
+  diagramState,
   requestPackedArchiveSync,
   monacoRef,
   getInternalFileUri,
@@ -163,27 +167,31 @@ export const useClassRenameActions = ({
           "list_project_tree response",
           { root: projectPath }
         );
-        setTree(nextTree);
 
         const renamedClassId = deriveRenamedClassId(renameTarget.id, oldName, newName);
+        let nextDiagramState: DiagramState | null = null;
         if (renamedClassId && renamedClassId !== renameTarget.id) {
-          setDiagramState((prev) => {
-            if (!prev) {
-              return prev;
-            }
-            const oldPosition = prev.nodes[renameTarget.id];
-            if (!oldPosition) {
-              return prev;
-            }
-            const nextNodes = { ...prev.nodes };
+          const oldPosition = diagramState?.nodes[renameTarget.id];
+          if (diagramState && oldPosition) {
+            const nextNodes = { ...diagramState.nodes };
             delete nextNodes[renameTarget.id];
             nextNodes[renamedClassId] = { x: oldPosition.x, y: oldPosition.y };
-            return {
-              ...prev,
+            nextDiagramState = {
+              ...diagramState,
               nodes: nextNodes
             };
+            setDiagramState(nextDiagramState);
+          }
+        }
+
+        if (nextDiagramState) {
+          const persistedDiagramPath = diagramPath ?? joinPath(projectPath, "unimozer.json");
+          await invokeValidated("write_text_file", voidResponseSchema, "write_text_file response", {
+            path: persistedDiagramPath,
+            contents: JSON.stringify(nextDiagramState, null, 2)
           });
         }
+        setTree(nextTree);
 
         setSelectedClassId((current) => {
           if (!current || current !== renameTarget.id) {
@@ -211,6 +219,8 @@ export const useClassRenameActions = ({
       notifyLsOpen,
       openFilePath,
       openRenameClassErrorDialog,
+      diagramPath,
+      diagramState,
       projectPath,
       renameTarget,
       requestPackedArchiveSync,

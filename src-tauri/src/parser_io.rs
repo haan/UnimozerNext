@@ -499,6 +499,42 @@ fn renamed_java_path(file_path: &str, new_class_name: &str) -> Result<PathBuf, S
     Ok(parent.join(format!("{new_class_name}.java")))
 }
 
+#[cfg(target_os = "windows")]
+fn is_case_only_rename(source_path: &std::path::Path, target_path: &std::path::Path) -> bool {
+    if source_path.parent() != target_path.parent() {
+        return false;
+    }
+    let Some(source_name) = source_path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    let Some(target_name) = target_path.file_name().and_then(|value| value.to_str()) else {
+        return false;
+    };
+    source_name != target_name && source_name.eq_ignore_ascii_case(target_name)
+}
+
+#[cfg(not(target_os = "windows"))]
+fn is_case_only_rename(_source_path: &std::path::Path, _target_path: &std::path::Path) -> bool {
+    false
+}
+
+fn case_rename_temp_path(source_path: &std::path::Path) -> Result<PathBuf, String> {
+    let parent = source_path
+        .parent()
+        .ok_or_else(|| "Source file has no parent directory".to_string())?;
+    let stem = source_path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("class");
+    for index in 0..32 {
+        let candidate = parent.join(format!(".{stem}.unimozer-rename-{index}.tmp"));
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err("Unable to allocate temporary file for case-only rename".to_string())
+}
+
 #[tauri::command]
 pub fn parse_uml_graph(
     app: tauri::AppHandle,
@@ -620,11 +656,9 @@ pub fn rename_class_in_file(
     }
 
     let target_path = renamed_java_path(&file_path, new_class_name)?;
-    if target_path.exists() {
-        return Err(format!(
-            "Target class file already exists: {}",
-            target_path.display()
-        ));
+    let case_only_rename = is_case_only_rename(&source_path, &target_path);
+    if target_path.exists() && !case_only_rename {
+        return Err(format!("Class '{new_class_name}' already exists"));
     }
 
     let source_content = fs::read_to_string(&source_path).map_err(crate::command_error::to_command_error)?;
@@ -651,10 +685,23 @@ pub fn rename_class_in_file(
         .content
         .ok_or_else(|| "Rename update returned empty content".to_string())?;
 
-    fs::write(&target_path, &updated_content).map_err(crate::command_error::to_command_error)?;
-    if let Err(error) = fs::remove_file(&source_path) {
-        let _ = fs::remove_file(&target_path);
-        return Err(crate::command_error::to_command_error(error));
+    if case_only_rename {
+        let temp_path = case_rename_temp_path(&source_path)?;
+        fs::rename(&source_path, &temp_path).map_err(crate::command_error::to_command_error)?;
+        if let Err(error) = fs::write(&temp_path, &updated_content) {
+            let _ = fs::rename(&temp_path, &source_path);
+            return Err(crate::command_error::to_command_error(error));
+        }
+        if let Err(error) = fs::rename(&temp_path, &target_path) {
+            let _ = fs::rename(&temp_path, &source_path);
+            return Err(crate::command_error::to_command_error(error));
+        }
+    } else {
+        fs::write(&target_path, &updated_content).map_err(crate::command_error::to_command_error)?;
+        if let Err(error) = fs::remove_file(&source_path) {
+            let _ = fs::remove_file(&target_path);
+            return Err(crate::command_error::to_command_error(error));
+        }
     }
 
     Ok(RenameClassInFileResponse {

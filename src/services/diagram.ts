@@ -294,12 +294,21 @@ export const mergeDiagramState = (
     added = true;
   }
 
+  const nextNodes: Record<string, DiagramNodePosition> = {};
+  for (const id of sorted) {
+    const position = nodes[id];
+    if (!position) continue;
+    nextNodes[id] = { x: position.x, y: position.y };
+  }
+
+  const stalePruned = Object.keys(nodes).length !== Object.keys(nextNodes).length;
+
   return {
     state: {
       ...base,
-      nodes
+      nodes: nextNodes
     },
-    added
+    added: added || stalePruned
   };
 };
 
