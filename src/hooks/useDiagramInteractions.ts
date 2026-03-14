@@ -89,9 +89,13 @@ export const useDiagramInteractions = ({
       if (!previous) {
         return;
       }
+      const persistPath = diagramPath;
       const current = previous.nodes[id];
       const isSamePosition = Boolean(current && current.x === x && current.y === y);
       if (isSamePosition) {
+        if (commit && persistPath) {
+          queueDiagramPersist(persistPath, previous);
+        }
         return;
       }
 
@@ -105,7 +109,6 @@ export const useDiagramInteractions = ({
       diagramStateRef.current = next;
       setDiagramState(next);
 
-      const persistPath = diagramPath;
       if (!commit || !persistPath) {
         return;
       }
@@ -120,12 +123,16 @@ export const useDiagramInteractions = ({
       if (!previous) {
         return;
       }
+      const persistPath = diagramPath;
       const current = previous.viewport;
       const unchanged =
         current.panX === viewport.panX &&
         current.panY === viewport.panY &&
         current.zoom === viewport.zoom;
       if (unchanged) {
+        if (commit && persistPath) {
+          queueDiagramPersist(persistPath, previous);
+        }
         return;
       }
 
@@ -136,7 +143,6 @@ export const useDiagramInteractions = ({
       diagramStateRef.current = next;
       setDiagramState(next);
 
-      const persistPath = diagramPath;
       if (!commit || !persistPath) {
         return;
       }
