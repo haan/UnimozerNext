@@ -686,8 +686,9 @@ export const UmlDiagram = ({
           Math.abs(point.y - draggingPackage.startY) > DRAG_MOVE_THRESHOLD_PX;
         const { nodes } = draggingPackage;
         setDraggingPackage(null);
-        nodes.forEach((node) => {
-          onNodePositionChange(node.id, node.x + dx, node.y + dy, moved);
+        nodes.forEach((node, index) => {
+          const commit = moved && index === nodes.length - 1;
+          onNodePositionChange(node.id, node.x + dx, node.y + dy, commit);
         });
       }
       if (panning) {
