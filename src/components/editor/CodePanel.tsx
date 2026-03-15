@@ -732,7 +732,7 @@ export const CodePanel = memo(
             if (!isPrintableSingleKey(browserEvent.key)) {
               return;
             }
-            if (lastSelectionSourceRef.current !== "keyboard") {
+            if (lastSelectionSourceRef.current === "mouse") {
               return;
             }
             const selections = editor.getSelections() ?? [];
@@ -744,7 +744,7 @@ export const CodePanel = memo(
             event.stopPropagation();
             if (debugEnabled) {
               logEvent(
-                `macSelectionReplace key=${JSON.stringify(browserEvent.key)} selections=${selections.length}`
+                `macSelectionReplace key=${JSON.stringify(browserEvent.key)} selections=${selections.length} source=${JSON.stringify(lastSelectionSourceRef.current)}`
               );
             }
             editor.trigger("macSelectionReplace", "type", { text: browserEvent.key });
