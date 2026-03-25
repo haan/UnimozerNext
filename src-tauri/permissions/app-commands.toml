@@ -26,6 +26,7 @@ commands.allow = [
   "get_crash_log_path",
   "jshell_start",
   "jshell_stop",
+  "jshell_force_stop",
   "jshell_eval",
   "jshell_inspect",
   "jshell_vars",

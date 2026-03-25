@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../models/uml";
 import type { ObjectInstance, ObjectInheritedMethodGroup, ObjectMethod } from "../models/objectBench";
 import { normalizeConstructorArg, resolveConstructorParamClass } from "../services/javaCodegen";
-import { jshellEval, jshellInspect, jshellStart, jshellStop } from "../services/jshell";
+import { jshellEval, jshellForceStop, jshellInspect, jshellStart, jshellStop } from "../services/jshell";
 
 type CreateObjectArgs = {
   form: { objectName: string; paramValues: string[] };
@@ -29,6 +29,7 @@ type UseJshellActionsArgs = {
   setObjectBench: (next: ObjectInstance[] | ((prev: ObjectInstance[]) => ObjectInstance[])) => void;
   lastCompileOutDirRef: MutableRefObject<string | null>;
   appendConsoleOutput: (text: string) => void;
+  replaceLastConsoleLine: (text: string) => void;
   resetConsoleOutput: () => void;
   preserveConsoleOnActions?: boolean;
   appendDebugOutput?: (text: string) => void;
@@ -75,6 +76,7 @@ export const useJshellActions = ({
   setObjectBench,
   lastCompileOutDirRef,
   appendConsoleOutput,
+  replaceLastConsoleLine,
   resetConsoleOutput,
   preserveConsoleOnActions = false,
   appendDebugOutput,
@@ -84,6 +86,13 @@ export const useJshellActions = ({
   trimStatus
 }: UseJshellActionsArgs) => {
   const objectBenchRef = useRef<ObjectInstance[]>([]);
+  const [methodCallInProgress, setMethodCallInProgress] = useState(false);
+  const methodCallInProgressRef = useRef(false);
+  const hardStopRequestedRef = useRef(false);
+  const setMethodCallRunning = useCallback((running: boolean) => {
+    methodCallInProgressRef.current = running;
+    setMethodCallInProgress(running);
+  }, []);
   const logDebug = useCallback(
     (message: string | (() => string)) => {
       if (!appendDebugOutput) return;
@@ -402,6 +411,8 @@ export const useJshellActions = ({
         ? `Class.forName("${className}").${buildMethodSelector()}.invoke(${method.isStatic ? "null" : target.name}${args.length ? `, ${args.join(", ")}` : ""});`
         : `${method.isStatic ? className : target.name}.${methodName}(${args.join(", ")});`;
 
+      hardStopRequestedRef.current = false;
+      setMethodCallRunning(true);
       setBusy(true);
       const startedAt = new Date().toLocaleTimeString();
       if (!preserveConsoleOnActions) {
@@ -430,7 +441,7 @@ export const useJshellActions = ({
           const message = trimStatus(
             result.error || result.stderr || "Unknown error"
           );
-          appendConsoleOutput(`Method call failed: ${message}`);
+          appendConsoleOutput(`Running method call...failed (${message}).`);
           setStatus("Method call failed.");
           return false;
         }
@@ -455,7 +466,7 @@ export const useJshellActions = ({
         }
         const refreshed = await refreshObjectBench(objectBenchRef.current);
         setObjectBench(refreshed);
-        appendConsoleOutput("Method call finished.");
+        appendConsoleOutput("Running method call...finished.");
         setStatus(`Called ${methodName}.`);
         return true;
       };
@@ -465,6 +476,12 @@ export const useJshellActions = ({
       } catch (error) {
         const message = formatStatus(error);
         logDebug(() => `[${new Date().toLocaleTimeString()}] JShell error\n${message}`);
+        if (hardStopRequestedRef.current && isBrokenPipe(message)) {
+          logDebug(
+            () => `[${new Date().toLocaleTimeString()}] JShell method call interrupted by hard stop`
+          );
+          return;
+        }
         if (isBrokenPipe(message)) {
           setJshellReady(false);
           const outDir = lastCompileOutDirRef.current;
@@ -490,6 +507,7 @@ export const useJshellActions = ({
         }
         setStatus(`Failed to call method: ${trimStatus(message)}`);
       } finally {
+        setMethodCallRunning(false);
         setBusy(false);
       }
     },
@@ -507,15 +525,83 @@ export const useJshellActions = ({
       setBusy,
       setJshellReady,
       setObjectBench,
+      setMethodCallRunning,
       setStatus,
       waitForJshellReady,
       trimStatus
     ]
   );
 
+  const handleStopMethodCallHard = useCallback(async () => {
+    if (!methodCallInProgressRef.current) {
+      return;
+    }
+    hardStopRequestedRef.current = true;
+    appendConsoleOutput("Stopping method call...");
+    logDebug(() => `[${new Date().toLocaleTimeString()}] JShell hard stop requested`);
+    setJshellReady(false);
+    setObjectBench([]);
+    setStatus("Stopping method call...");
+    try {
+      await jshellForceStop();
+      replaceLastConsoleLine("Stopping method call...stopped.");
+    } catch (error) {
+      const message = trimStatus(formatStatus(error));
+      replaceLastConsoleLine(`Stopping method call...failed (${message}).`);
+      setStatus("Method call stop failed.");
+      hardStopRequestedRef.current = false;
+      return;
+    }
+
+    const outDir = lastCompileOutDirRef.current;
+    if (!projectPath || !outDir) {
+      appendConsoleOutput(
+        "Restarting object bench runtime...skipped (compile required)."
+      );
+      setStatus("Method call stopped. Compile the project to restart object bench runtime.");
+      hardStopRequestedRef.current = false;
+      return;
+    }
+
+    appendConsoleOutput("Restarting object bench runtime...");
+    try {
+      await jshellStart(projectPath, outDir);
+      const warmup = await jshellEval("1 + 1;");
+      if (!warmup.ok) {
+        const details = trimStatus(warmup.error || warmup.stderr || "Unknown warmup error");
+        replaceLastConsoleLine(`Restarting object bench runtime...failed (${details}).`);
+        setStatus(`Method call stopped. JShell warmup failed: ${details}`);
+        hardStopRequestedRef.current = false;
+        return;
+      }
+      setJshellReady(true);
+      replaceLastConsoleLine("Restarting object bench runtime...ready.");
+      setStatus("Method call stopped. Object bench runtime ready.");
+    } catch (error) {
+      const message = trimStatus(formatStatus(error));
+      replaceLastConsoleLine(`Restarting object bench runtime...failed (${message}).`);
+      setStatus("Method call stopped. Failed to restart object bench runtime.");
+    } finally {
+      hardStopRequestedRef.current = false;
+    }
+  }, [
+    appendConsoleOutput,
+    formatStatus,
+    lastCompileOutDirRef,
+    logDebug,
+    projectPath,
+    replaceLastConsoleLine,
+    setJshellReady,
+    setObjectBench,
+    setStatus,
+    trimStatus
+  ]);
+
   return {
     getPublicMethodsForObject,
     handleCreateObject,
-    executeMethodCall
+    executeMethodCall,
+    methodCallInProgress,
+    handleStopMethodCallHard
   };
 };

@@ -8,7 +8,10 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
     path::PathBuf,
     process::{Command, Stdio},
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Mutex, TryLockError,
+    },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 use tauri::{Manager, State};
@@ -17,6 +20,14 @@ use crate::java_tools::{java_executable_name, resolve_resource};
 use crate::BRIDGE_STDERR_BUFFER_MAX_LINES;
 #[cfg(target_os = "windows")]
 use crate::CREATE_NO_WINDOW;
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::Foundation::{
+    CloseHandle, GetLastError, ERROR_INVALID_PARAMETER, WAIT_OBJECT_0, WAIT_TIMEOUT,
+};
+#[cfg(target_os = "windows")]
+use windows_sys::Win32::System::Threading::{
+    OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_TERMINATE,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,6 +123,7 @@ impl Drop for JshellSession {
 #[derive(Default)]
 pub struct JshellState {
     current: Arc<Mutex<Option<JshellSession>>>,
+    bridge_pid: Arc<AtomicU32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -891,12 +903,94 @@ fn jshell_send_timed<T: for<'de> Deserialize<'de>>(
 }
 
 fn stop_current_session(state: &JshellState) {
+    state.bridge_pid.store(0, Ordering::SeqCst);
     if let Ok(mut guard) = state.current.lock() {
         if let Some(mut session) = guard.take() {
             let _ = session.child.kill();
             let _ = session.child.wait();
         }
     }
+}
+
+#[cfg(target_os = "windows")]
+fn force_kill_pid(pid: u32) -> Result<(), String> {
+    const WAIT_TIMEOUT_MS: u32 = 5_000;
+    const SYNCHRONIZE_ACCESS: u32 = 0x0010_0000;
+    unsafe {
+        let handle = OpenProcess(PROCESS_TERMINATE | SYNCHRONIZE_ACCESS, 0, pid);
+        if handle.is_null() {
+            let error = GetLastError();
+            // PID is no longer valid.
+            if error == ERROR_INVALID_PARAMETER {
+                return Ok(());
+            }
+            return Err(format!(
+                "Failed to open JShell process {pid} for termination (winerr={error})"
+            ));
+        }
+
+        let mut taskkill_command = Command::new("taskkill");
+        taskkill_command
+            .arg("/PID")
+            .arg(pid.to_string())
+            .arg("/T")
+            .arg("/F")
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .creation_flags(CREATE_NO_WINDOW);
+        let taskkill_result = taskkill_command.output();
+
+        let taskkill_succeeded = match &taskkill_result {
+            Ok(output) => output.status.success(),
+            Err(_) => false,
+        };
+
+        if !taskkill_succeeded && TerminateProcess(handle, 1) == 0 {
+            let error = GetLastError();
+            CloseHandle(handle);
+            return Err(format!(
+                "Failed to terminate JShell process {pid} (winerr={error})"
+            ));
+        }
+        let wait_result = WaitForSingleObject(handle, WAIT_TIMEOUT_MS);
+        let wait_error = GetLastError();
+        CloseHandle(handle);
+        if wait_result == WAIT_OBJECT_0 {
+            return Ok(());
+        }
+        if wait_result == WAIT_TIMEOUT {
+            let taskkill_details = match &taskkill_result {
+                Ok(output) => format!(
+                    "taskkill_exit={:?} stdout='{}' stderr='{}'",
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stdout).trim(),
+                    String::from_utf8_lossy(&output.stderr).trim()
+                ),
+                Err(error) => format!("taskkill_error={error}"),
+            };
+            return Err(format!(
+                "Timed out waiting for JShell process {pid} to terminate ({taskkill_details})"
+            ));
+        }
+        Err(format!(
+            "Failed waiting for JShell process {pid} termination (wait={wait_result}, winerr={wait_error})"
+        ))
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn force_kill_pid(pid: u32) -> Result<(), String> {
+    let status = unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
+    if status == 0 {
+        return Ok(());
+    }
+    let error = std::io::Error::last_os_error();
+    if error.raw_os_error() == Some(libc::ESRCH) {
+        // Process already gone.
+        return Ok(());
+    }
+    Err(format!("Failed to terminate JShell process {pid}: {error}"))
 }
 
 fn non_empty_option(value: &Option<String>) -> Option<String> {
@@ -1059,12 +1153,14 @@ fn start_jshell_session_internal(
         .current
         .lock()
         .map_err(|_| "Failed to lock JShell state".to_string())?;
+    let child_pid = child.id();
     *guard = Some(JshellSession {
         child,
         stdin,
         stdout: BufReader::new(stdout),
         stderr: stderr_lines,
     });
+    state.bridge_pid.store(child_pid, Ordering::SeqCst);
     drop(guard);
 
     let spawn_ms = duration_ms(spawn_begin);
@@ -1674,44 +1770,134 @@ pub fn jshell_stop(state: State<JshellState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn jshell_eval(state: State<JshellState>, code: String) -> Result<JshellEvalResponse, String> {
-    jshell_eval_internal(state.inner(), &code)
+pub fn jshell_force_stop(state: State<JshellState>) -> Result<bool, String> {
+    let tracked_pid = state.inner().bridge_pid.load(Ordering::SeqCst);
+    let mut terminated_any = false;
+    let mut first_error: Option<String> = None;
+
+    if tracked_pid != 0 {
+        match force_kill_pid(tracked_pid) {
+            Ok(_) => terminated_any = true,
+            Err(error) => {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+    }
+
+    const LOCK_TIMEOUT_MS: u64 = 2_000;
+    let lock_deadline = Instant::now() + Duration::from_millis(LOCK_TIMEOUT_MS);
+    loop {
+        match state.inner().current.try_lock() {
+            Ok(mut guard) => {
+                if let Some(mut session) = guard.take() {
+                    let session_pid = session.child.id();
+                    if session_pid != 0 && session_pid != tracked_pid {
+                        match force_kill_pid(session_pid) {
+                            Ok(_) => terminated_any = true,
+                            Err(error) => {
+                                if first_error.is_none() {
+                                    first_error = Some(error);
+                                }
+                            }
+                        }
+                    }
+                    let _ = session.child.kill();
+                    let _ = session.child.wait();
+                    if session_pid != 0 {
+                        terminated_any = true;
+                    }
+                }
+                state.inner().bridge_pid.store(0, Ordering::SeqCst);
+                if terminated_any {
+                    return Ok(true);
+                }
+                if let Some(error) = first_error {
+                    return Err(error);
+                }
+                return Ok(false);
+            }
+            Err(TryLockError::WouldBlock) => {
+                if Instant::now() >= lock_deadline {
+                    return Err(
+                        "JShell process was terminated, but session cleanup timed out".to_string(),
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            Err(TryLockError::Poisoned(_)) => {
+                return Err("Failed to lock JShell session state".to_string());
+            }
+        }
+    }
 }
 
 #[tauri::command]
-pub fn jshell_inspect(
-    state: State<JshellState>,
+pub async fn jshell_eval(
+    state: State<'_, JshellState>,
+    code: String,
+) -> Result<JshellEvalResponse, String> {
+    let state_owned = JshellState {
+        current: state.inner().current.clone(),
+        bridge_pid: state.inner().bridge_pid.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || jshell_eval_internal(&state_owned, &code))
+        .await
+        .map_err(|error| format!("Failed to join JShell eval task: {error}"))?
+}
+
+#[tauri::command]
+pub async fn jshell_inspect(
+    state: State<'_, JshellState>,
     var_name: String,
 ) -> Result<JshellInspectResponse, String> {
-    let mut guard = state
-        .current
-        .lock()
-        .map_err(|_| "Failed to lock JShell state".to_string())?;
-    let session = guard
-        .as_mut()
-        .ok_or_else(|| "JShell is not running".to_string())?;
-    jshell_send(
-        session,
-        serde_json::json!({
-            "cmd": "inspect",
-            "var": var_name
-        }),
-    )
+    let state_owned = JshellState {
+        current: state.inner().current.clone(),
+        bridge_pid: state.inner().bridge_pid.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut guard = state_owned
+            .current
+            .lock()
+            .map_err(|_| "Failed to lock JShell state".to_string())?;
+        let session = guard
+            .as_mut()
+            .ok_or_else(|| "JShell is not running".to_string())?;
+        jshell_send(
+            session,
+            serde_json::json!({
+                "cmd": "inspect",
+                "var": var_name
+            }),
+        )
+    })
+    .await
+    .map_err(|error| format!("Failed to join JShell inspect task: {error}"))?
 }
 
 #[tauri::command]
-pub fn jshell_vars(state: State<JshellState>) -> Result<JshellVarsResponse, String> {
-    let mut guard = state
-        .current
-        .lock()
-        .map_err(|_| "Failed to lock JShell state".to_string())?;
-    let session = guard
-        .as_mut()
-        .ok_or_else(|| "JShell is not running".to_string())?;
-    jshell_send(session, serde_json::json!({ "cmd": "vars" }))
+pub async fn jshell_vars(state: State<'_, JshellState>) -> Result<JshellVarsResponse, String> {
+    let state_owned = JshellState {
+        current: state.inner().current.clone(),
+        bridge_pid: state.inner().bridge_pid.clone(),
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut guard = state_owned
+            .current
+            .lock()
+            .map_err(|_| "Failed to lock JShell state".to_string())?;
+        let session = guard
+            .as_mut()
+            .ok_or_else(|| "JShell is not running".to_string())?;
+        jshell_send(session, serde_json::json!({ "cmd": "vars" }))
+    })
+    .await
+    .map_err(|error| format!("Failed to join JShell vars task: {error}"))?
 }
 
 pub fn shutdown_jshell(state: &JshellState) {
+    state.bridge_pid.store(0, Ordering::SeqCst);
     if let Ok(mut guard) = state.current.lock() {
         if let Some(mut session) = guard.take() {
             match session.child.try_wait() {

@@ -62,7 +62,9 @@ public final class JshellBridge {
         if (!remoteVmOptions.isEmpty()) {
             builder.remoteVMOptions(remoteVmOptions.toArray(new String[0]));
         }
+        builder.executionEngine("local");
         JShell shell = builder.build();
+        System.err.println("[jshell-bridge] execution mode=local");
         addBridgeClasspath(shell);
         if (classpath != null && !classpath.isBlank()) {
             shell.addToClasspath(classpath);

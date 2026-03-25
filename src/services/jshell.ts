@@ -69,6 +69,7 @@ const jshellWarmupDiagnosticResultSchema = z.object({
 const jshellVarsResponseSchema = z.object({
   vars: z.array(jshellFieldSchema)
 });
+const jshellForceStopResponseSchema = z.boolean();
 
 export type JshellField = z.infer<typeof jshellFieldSchema>;
 export type JshellMethod = z.infer<typeof jshellMethodSchema>;
@@ -95,6 +96,10 @@ export const jshellStart = (root: string, classpath: string, options?: JshellSta
   invoke<void>("jshell_start", { root, classpath, options });
 
 export const jshellStop = () => invoke<void>("jshell_stop");
+export const jshellForceStop = async (): Promise<boolean> => {
+  const raw = await invoke<unknown>("jshell_force_stop");
+  return parseSchemaOrThrow(jshellForceStopResponseSchema, raw, "jshell_force_stop response");
+};
 
 export const jshellEval = async (code: string): Promise<JshellEvalResult> => {
   const raw = await invoke<unknown>("jshell_eval", { code });

@@ -36,6 +36,7 @@ type UseRunConsoleResult = {
   setCompileStatus: Dispatch<SetStateAction<"success" | "failed" | null>>;
   runSessionId: number | null;
   appendConsoleOutput: (text: string) => void;
+  replaceLastConsoleLine: (text: string) => void;
   resetConsoleOutput: (text?: string) => void;
   handleCompileProject: () => Promise<void>;
   handleCompileClass: (node: UmlNode) => Promise<void>;
@@ -61,6 +62,7 @@ export const useRunConsole = ({
   const [consoleOutput, setConsoleOutput] = useState("");
   const runSessionRef = useRef<number | null>(null);
   const compileInFlightRef = useRef(false);
+  const runCancellationRequestedRef = useRef(false);
   const consoleLinesRef = useRef<string[]>([]);
   const consoleDroppedRef = useRef(0);
   const consoleFlushRef = useRef<number | null>(null);
@@ -92,6 +94,19 @@ export const useRunConsole = ({
         const excess = lines.length - CONSOLE_MAX_LINES;
         lines.splice(0, excess);
         consoleDroppedRef.current += excess;
+      }
+      flushConsole();
+    },
+    [flushConsole]
+  );
+
+  const replaceLastConsoleLine = useCallback(
+    (text: string) => {
+      const lines = consoleLinesRef.current;
+      if (lines.length === 0) {
+        lines.push(text);
+      } else {
+        lines[lines.length - 1] = text;
       }
       flushConsole();
     },
@@ -157,9 +172,18 @@ export const useRunConsole = ({
         }
         const activeId = runSessionRef.current;
         if (activeId === null || payload.runId !== activeId) return;
-        const exitLabel = payload.ok ? "Run finished." : `Run failed (exit ${payload.code ?? "?"}).`;
-        appendConsole(exitLabel);
-        setStatus(payload.ok ? "Run main succeeded." : "Run main failed.");
+        const wasCanceled = runCancellationRequestedRef.current;
+        runCancellationRequestedRef.current = false;
+        if (wasCanceled) {
+          replaceLastConsoleLine("Stopping main process...stopped.");
+          setStatus("Run main stopped.");
+        } else if (payload.ok) {
+          appendConsole("Running main process...finished.");
+          setStatus("Run main succeeded.");
+        } else {
+          appendConsole(`Running main process...failed (exit ${payload.code ?? "?"}).`);
+          setStatus("Run main failed.");
+        }
         setRunSession(null);
       });
       if (!active) {
@@ -176,7 +200,7 @@ export const useRunConsole = ({
       if (unlistenOutput) unlistenOutput();
       if (unlistenComplete) unlistenComplete();
     };
-  }, [appendConsole, setRunSession, setStatus]);
+  }, [appendConsole, replaceLastConsoleLine, setRunSession, setStatus]);
 
   const runCompile = useCallback(
     async (label?: string) => {
@@ -202,27 +226,59 @@ export const useRunConsole = ({
       appendConsole(`[${startedAt}] Compile requested${labelSuffix}`);
       try {
         setStatus("Stopping object bench runtime...");
-        await onCompileRequested?.();
-        appendConsole("Phase 1/4: stopping object bench runtime...done.");
+        appendConsole("Phase 1/4: stopping object bench runtime...");
+        try {
+          await onCompileRequested?.();
+          replaceLastConsoleLine("Phase 1/4: stopping object bench runtime...done.");
+        } catch (error) {
+          replaceLastConsoleLine(
+            `Phase 1/4: stopping object bench runtime...failed (${formatStatus(error)}).`
+          );
+          throw error;
+        }
+
         setStatus("Saving files...");
-        const savedFiles = await formatAndSaveUmlFiles(false);
-        await onCompileInputsSaved?.();
-        appendConsole(
-          `Phase 2/4: saving files...saved ${savedFiles} file${
-            savedFiles === 1 ? "" : "s"
-          } before compile.`
-        );
+        appendConsole("Phase 2/4: saving files...");
+        let savedFiles = 0;
+        try {
+          savedFiles = await formatAndSaveUmlFiles(false);
+          await onCompileInputsSaved?.();
+          replaceLastConsoleLine(
+            `Phase 2/4: saving files...saved ${savedFiles} file${
+              savedFiles === 1 ? "" : "s"
+            } before compile.`
+          );
+        } catch (error) {
+          replaceLastConsoleLine(`Phase 2/4: saving files...failed (${formatStatus(error)}).`);
+          throw error;
+        }
+
         setStatus("Compiling Java sources...");
-        const resultRaw = await invoke<unknown>("compile_project", {
-          root: projectPath,
-          srcRoot: "src",
-          overrides
-        });
-        const result = parseSchemaOrThrow(
-          compileProjectResultSchema,
-          resultRaw,
-          "compile_project response"
-        );
+        appendConsole("Phase 3/4: compiling Java sources...");
+        let result;
+        try {
+          const resultRaw = await invoke<unknown>("compile_project", {
+            root: projectPath,
+            srcRoot: "src",
+            overrides
+          });
+          result = parseSchemaOrThrow(
+            compileProjectResultSchema,
+            resultRaw,
+            "compile_project response"
+          );
+        } catch (error) {
+          replaceLastConsoleLine(
+            `Phase 3/4: compiling Java sources...failed (${formatStatus(error)}).`
+          );
+          throw error;
+        }
+
+        if (result.ok) {
+          replaceLastConsoleLine("Phase 3/4: compiling Java sources...compilation succeeded.");
+        } else {
+          replaceLastConsoleLine("Phase 3/4: compiling Java sources...compilation failed.");
+        }
         if (result.stdout) {
           appendConsole(result.stdout.trim());
         }
@@ -231,15 +287,23 @@ export const useRunConsole = ({
         }
         let finalStatus = result.ok ? "Compile succeeded." : "Compile failed.";
         if (result.ok) {
-          appendConsole("Phase 3/4: compiling Java sources...compilation succeeded.");
           setCompileStatus("success");
           if (result.outDir && onCompileSuccess) {
             setStatus("Starting object bench runtime...");
-            const runtimeResult = await onCompileSuccess(result.outDir);
+            appendConsole("Phase 4/4: starting object bench runtime...");
+            let runtimeResult;
+            try {
+              runtimeResult = await onCompileSuccess(result.outDir);
+            } catch (error) {
+              replaceLastConsoleLine(
+                `Phase 4/4: starting object bench runtime...failed (${formatStatus(error)}).`
+              );
+              throw error;
+            }
             if (runtimeResult.ready) {
-              appendConsole("Phase 4/4: starting object bench runtime...ready.");
+              replaceLastConsoleLine("Phase 4/4: starting object bench runtime...ready.");
             } else {
-              appendConsole(
+              replaceLastConsoleLine(
                 `Phase 4/4: starting object bench runtime...failed (${runtimeResult.reason ?? "unknown reason"}).`
               );
               finalStatus = `Compile succeeded, but object bench runtime failed: ${runtimeResult.reason ?? "unknown reason"}`;
@@ -248,7 +312,6 @@ export const useRunConsole = ({
             appendConsole("Phase 4/4: starting object bench runtime...skipped.");
           }
         } else {
-          appendConsole("Phase 3/4: compiling Java sources...compilation failed.");
           if (!result.stderr && !result.stdout) {
             appendConsole("Compilation failed.");
           }
@@ -289,6 +352,7 @@ export const useRunConsole = ({
       onCompileSuccess,
       preserveConsoleOnCompile,
       projectPath,
+      replaceLastConsoleLine,
       resetConsole,
       setBusy,
       setCompileStatus,
@@ -317,6 +381,7 @@ export const useRunConsole = ({
       appendConsole(`[${startedAt}] Run main requested for ${node.name}`);
       try {
         if (runSessionRef.current !== null) {
+          runCancellationRequestedRef.current = true;
           await invoke("cancel_run");
           setRunSession(null);
         }
@@ -324,9 +389,11 @@ export const useRunConsole = ({
           root: projectPath,
           mainClass: node.id
         });
+        runCancellationRequestedRef.current = false;
         setStatus("Run main started.");
       } catch (error) {
-        appendConsole(`Run main failed: ${formatStatus(error)}`);
+        runCancellationRequestedRef.current = false;
+        appendConsole(`Running main process...failed (${formatStatus(error)}).`);
         setStatus("Run main failed.");
         setRunSession(null);
       }
@@ -344,15 +411,17 @@ export const useRunConsole = ({
 
   const handleCancelRun = useCallback(async () => {
     if (runSessionRef.current === null) return;
+    appendConsole("Stopping main process...");
     try {
+      runCancellationRequestedRef.current = true;
       await invoke("cancel_run");
-      appendConsole("Run cancellation requested.");
       setStatus("Cancelling run...");
     } catch (error) {
-      appendConsole(`Cancel failed: ${formatStatus(error)}`);
+      runCancellationRequestedRef.current = false;
+      replaceLastConsoleLine(`Stopping main process...failed (${formatStatus(error)}).`);
       setStatus("Cancel failed.");
     }
-  }, [appendConsole, formatStatus, setStatus]);
+  }, [appendConsole, formatStatus, replaceLastConsoleLine, setStatus]);
 
   return {
     consoleOutput,
@@ -360,6 +429,7 @@ export const useRunConsole = ({
     setCompileStatus,
     runSessionId,
     appendConsoleOutput: appendConsole,
+    replaceLastConsoleLine,
     resetConsoleOutput: resetConsole,
     handleCompileProject,
     handleCompileClass,

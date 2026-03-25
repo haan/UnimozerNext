@@ -23,6 +23,7 @@ pub(crate) fn with_invoke_handlers(
         crate::crash_log_io::get_crash_log_path,
         crate::jshell_io::jshell_start,
         crate::jshell_io::jshell_stop,
+        crate::jshell_io::jshell_force_stop,
         crate::jshell_io::jshell_eval,
         crate::jshell_io::jshell_inspect,
         crate::jshell_io::jshell_vars,

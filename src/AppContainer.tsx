@@ -430,6 +430,7 @@ export default function AppContainer({
     consoleOutput,
     runSessionId,
     appendConsoleOutput,
+    replaceLastConsoleLine,
     resetConsoleOutput,
     handleCompileProject,
     handleCompileClass,
@@ -681,7 +682,9 @@ export default function AppContainer({
   const {
     getPublicMethodsForObject,
     handleCreateObject: createObjectWithJshell,
-    executeMethodCall
+    executeMethodCall,
+    methodCallInProgress,
+    handleStopMethodCallHard
   } = useJshellActions({
     projectPath,
     umlGraph,
@@ -692,6 +695,7 @@ export default function AppContainer({
     setObjectBench,
     lastCompileOutDirRef,
     appendConsoleOutput,
+    replaceLastConsoleLine,
     resetConsoleOutput,
     preserveConsoleOnActions: debugLogging,
     appendDebugOutput: debugLogging && debugLogCategories.jshell ? appendJshellDebugOutput : undefined,
@@ -700,6 +704,16 @@ export default function AppContainer({
     formatStatus,
     trimStatus
   });
+
+  const handleConsoleStop = useCallback(() => {
+    if (runSessionId !== null) {
+      void handleCancelRun();
+      return;
+    }
+    if (methodCallInProgress) {
+      void handleStopMethodCallHard();
+    }
+  }, [handleCancelRun, handleStopMethodCallHard, methodCallInProgress, runSessionId]);
 
   const recordRecentProject = useCallback(
     (entry: RecentProjectEntry) => {
@@ -1377,8 +1391,8 @@ export default function AppContainer({
         consolePanelProps={{
           output: consoleOutput,
           fontSize,
-          running: runSessionId !== null,
-          onStop: handleCancelRun
+          running: runSessionId !== null || methodCallInProgress,
+          onStop: handleConsoleStop
         }}
         editorMinHeightPx={EDITOR_MIN_HEIGHT_PX}
         consoleMinHeightPx={CONSOLE_MIN_HEIGHT_PX}
