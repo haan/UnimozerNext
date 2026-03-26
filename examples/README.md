@@ -14,3 +14,6 @@
 
 - `code-highlighting-project`  
   Scope/highlight rendering checks (nested blocks, javadocs, comments, selection behavior).
+
+- `infinite-loop-stop-project`  
+  Stop-button behavior checks for `Run main` and object-bench method calls.
