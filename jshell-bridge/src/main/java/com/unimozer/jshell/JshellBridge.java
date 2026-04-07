@@ -126,7 +126,7 @@ public final class JshellBridge {
                 String serialized = mapper.writeValueAsString(response);
                 long serializeNs = System.nanoTime() - serializeStartNs;
                 if (diagRequest.enabled) {
-                    ObjectNode diagNode = response.with("_diag");
+                    ObjectNode diagNode = response.withObjectProperty("_diag");
                     diagNode.put("serializeMs", nanosToMs(serializeNs));
                     serialized = mapper.writeValueAsString(response);
                 }
