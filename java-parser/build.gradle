@@ -21,7 +21,7 @@ repositories {
 
 dependencies {
   implementation 'com.github.javaparser:javaparser-core:3.28.0'
-  implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.0'
+  implementation 'com.fasterxml.jackson.core:jackson-databind:2.21.2'
 }
 
 application {
