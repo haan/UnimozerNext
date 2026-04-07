@@ -232,7 +232,7 @@ jobs:
 
       - name: Authenticode sign app binaries (EXE + DLL)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/trusted-signing-action@v0.5.9
+        uses: azure/trusted-signing-action@v0.5.11
         with:
           endpoint: https://weu.codesigning.azure.net/
           trusted-signing-account-name: haala-artifact
@@ -255,7 +255,7 @@ jobs:
 
       - name: Authenticode sign Windows installers (MSI + NSIS)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/trusted-signing-action@v0.5.9
+        uses: azure/trusted-signing-action@v0.5.11
         with:
           endpoint: https://weu.codesigning.azure.net/
           trusted-signing-account-name: haala-artifact
