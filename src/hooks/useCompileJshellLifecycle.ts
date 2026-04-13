@@ -3,7 +3,7 @@ import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 import type { ObjectInstance } from "../models/objectBench";
 import type { UmlGraph } from "../models/uml";
-import { jshellEval, jshellStart, jshellStop } from "../services/jshell";
+import { jshellEval, jshellInspect, jshellStart, jshellStop } from "../services/jshell";
 import { getUmlSignature } from "../services/umlGraph";
 
 type UseCompileJshellLifecycleArgs = {
@@ -82,6 +82,64 @@ export const useCompileJshellLifecycle = ({
   const startJshellForCompile = useCallback(
     (startToken: number, rootPath: string, outDir: string): Promise<boolean> => {
       const warmupJshell = async (token: number): Promise<boolean> => {
+        const runEvalWarmupStep = async (
+          label: string,
+          code: string,
+          required: boolean
+        ): Promise<boolean> => {
+          const begin = performance.now();
+          const result = await jshellEval(code);
+          const elapsedMs = Math.round(performance.now() - begin);
+          if (jshellStartTokenRef.current !== token) {
+            return false;
+          }
+          if (!result.ok) {
+            const details = trimStatus(
+              result.error || result.stderr || "Unknown warmup error"
+            );
+            if (required) {
+              logDebug(`JShell warmup step failed (${label}, ${elapsedMs}ms): ${details}`);
+              setStatus(`JShell warmup failed: ${details}`);
+              return false;
+            }
+            logDebug(
+              `JShell warmup step skipped (${label}, ${elapsedMs}ms): ${details}`
+            );
+            return true;
+          }
+          logDebug(`JShell warmup step finished (${label}, ${elapsedMs}ms)`);
+          return true;
+        };
+
+        const runInspectWarmupStep = async (
+          label: string,
+          varName: string,
+          required: boolean
+        ): Promise<boolean> => {
+          const begin = performance.now();
+          const inspect = await jshellInspect(varName);
+          const elapsedMs = Math.round(performance.now() - begin);
+          if (jshellStartTokenRef.current !== token) {
+            return false;
+          }
+          if (!inspect.ok) {
+            const details = trimStatus(
+              inspect.error || "Unknown inspect warmup error"
+            );
+            if (required) {
+              logDebug(`JShell warmup step failed (${label}, ${elapsedMs}ms): ${details}`);
+              setStatus(`JShell warmup failed: ${details}`);
+              return false;
+            }
+            logDebug(
+              `JShell warmup step skipped (${label}, ${elapsedMs}ms): ${details}`
+            );
+            return true;
+          }
+          logDebug(`JShell warmup step finished (${label}, ${elapsedMs}ms)`);
+          return true;
+        };
+
         logDebug(`JShell warmup start (token=${token})`);
         setStatus("Warming up object bench runtime...");
         let timeoutHandle: number | null = window.setTimeout(() => {
@@ -93,25 +151,30 @@ export const useCompileJshellLifecycle = ({
         }, JSHELL_WARMUP_TIMEOUT_MS);
 
         try {
-          const warmupBegin = performance.now();
-          const warmup = await jshellEval("1 + 1;");
-          const warmupMs = Math.round(performance.now() - warmupBegin);
-          if (jshellStartTokenRef.current !== token) {
+          // Required baseline warmup: confirms eval path is responsive.
+          const baselineReady = await runEvalWarmupStep(
+            "eval-baseline",
+            "1 + 1;",
+            true
+          );
+          if (!baselineReady) {
             return false;
           }
-          if (!warmup.ok) {
-            const details = trimStatus(
-              warmup.error || warmup.stderr || "Unknown warmup error"
-            );
-            logDebug(`JShell warmup failed (token=${token}, ${warmupMs}ms): ${details}`);
-            setStatus(`JShell warmup failed: ${details}`);
-            return false;
-          } else {
-            logDebug(`JShell warmup finished (token=${token}, ${warmupMs}ms)`);
-            logDebug(`JShell ready (token=${token}, warmup complete)`);
-            setStatus("Object bench runtime ready.");
-            return true;
+
+          // Optional preheat: reflection + inspect path used by first object creation.
+          const reflectionReady = await runEvalWarmupStep(
+            "eval-reflection",
+            'Class.forName("java.lang.String").getDeclaredConstructor().newInstance();',
+            false
+          );
+          if (reflectionReady) {
+            await runInspectWarmupStep("inspect-first-result", "$2", false);
           }
+
+          logDebug(`JShell warmup finished (token=${token})`);
+          logDebug(`JShell ready (token=${token}, warmup complete)`);
+          setStatus("Object bench runtime ready.");
+          return true;
         } catch (error) {
           if (jshellStartTokenRef.current !== token) {
             return false;
