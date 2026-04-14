@@ -222,15 +222,27 @@ const computeScopeLineInfo = (source: string): ScopeLineInfo[] => {
   return lines;
 };
 
+type ScopeLineInfoCacheEntry = { versionId: number; info: ScopeLineInfo[] };
+const scopeLineInfoCache = new Map<string, ScopeLineInfoCacheEntry>();
+
 const createScopeDecorations = (
   monaco: typeof import("monaco-editor"),
   model: MonacoEditorType.ITextModel
 ): MonacoEditorType.IModelDeltaDecoration[] => {
-  const scopeLineInfo = computeScopeLineInfo(model.getValue());
+  const source = model.getValue();
+  const uriKey = model.uri.toString();
+  const versionId = model.getVersionId();
+  const cached = scopeLineInfoCache.get(uriKey);
+  const scopeLineInfo =
+    cached?.versionId === versionId
+      ? cached.info
+      : (() => {
+          const info = computeScopeLineInfo(source);
+          scopeLineInfoCache.set(uriKey, { versionId, info });
+          return info;
+        })();
   const lineCount = model.getLineCount();
-  const lineTexts = Array.from({ length: lineCount }, (_, index) =>
-    model.getLineContent(index + 1)
-  );
+  const lineTexts = source.split("\n").map((l) => l.replace(/\r$/, ""));
   const stripeDepths: number[] = new Array(lineCount).fill(0);
   const fillDepths: number[] = new Array(lineCount).fill(0);
   const decorations: MonacoEditorType.IModelDeltaDecoration[] = [];
@@ -248,7 +260,7 @@ const createScopeDecorations = (
     stripeDepths[lineNumber - 1] = Math.min(effectiveDepth, SCOPE_COLOR_COUNT);
 
     let fillDepth = 0;
-    if (info.openCount > 0) {
+    if (info.openCount > 0 && info.openCount > info.closeCount) {
       fillDepth = Math.min(effectiveDepth + 1, SCOPE_COLOR_COUNT);
     } else if (info.leadingCloseCount > 0) {
       fillDepth = Math.min(info.startDepth, SCOPE_COLOR_COUNT);
@@ -336,7 +348,7 @@ const createScopeDecorations = (
       continue;
     }
     decorations.push({
-      range: new monaco.Range(lineNumber, 1, lineNumber, model.getLineMaxColumn(lineNumber)),
+      range: new monaco.Range(lineNumber, 1, lineNumber, 1),
       options: {
         isWholeLine: true,
         className: `editor-scope-line editor-scope-stripes-${stripeDepth} editor-scope-fill-${fillDepth}`
@@ -481,6 +493,10 @@ export const CodePanel = memo(
     const isMacRef = useRef(
       typeof navigator !== "undefined" && /mac/i.test(navigator.platform ?? "")
     );
+    const scopeHighlightingRef = useRef(scopeHighlighting);
+    const autoCloseCommentsRef = useRef(autoCloseComments);
+    useEffect(() => { scopeHighlightingRef.current = scopeHighlighting; }, [scopeHighlighting]);
+    useEffect(() => { autoCloseCommentsRef.current = autoCloseComments; }, [autoCloseComments]);
     const resolvedTheme = resolveMonacoTheme(theme, darkMode);
     const debugEnabled = Boolean(debugLogging && onDebugLog);
 
@@ -577,7 +593,7 @@ export const CodePanel = memo(
             if (!model) {
               return;
             }
-            if (!scopeHighlighting || !monacoRef.current) {
+            if (!scopeHighlightingRef.current || !monacoRef.current) {
               deltaModelDecorations(
                 model,
                 scopeDecorationIdsByUriRef.current,
@@ -604,7 +620,7 @@ export const CodePanel = memo(
             if (!model) {
               return;
             }
-            if (!scopeHighlighting || !monacoRef.current) {
+            if (!scopeHighlightingRef.current || !monacoRef.current) {
               deltaModelDecorations(
                 model,
                 selectionDecorationIdsByUriRef.current,
@@ -627,7 +643,7 @@ export const CodePanel = memo(
         };
 
         const tryAutoCloseBlockComments = () => {
-          if (!autoCloseComments) {
+          if (!autoCloseCommentsRef.current) {
             return;
           }
           const monaco = monacoRef.current;
@@ -760,7 +776,7 @@ export const CodePanel = memo(
           }),
           editor.onDidChangeModelContent((event) => {
             const shouldTryAutoCloseComments =
-              autoCloseComments &&
+              autoCloseCommentsRef.current &&
               event.changes.length > 0 &&
               event.changes.every((change) => change.rangeLength === 0 && change.text === "*");
             if (shouldTryAutoCloseComments) {
@@ -800,6 +816,7 @@ export const CodePanel = memo(
               const key = disposedModel.uri.toString();
               scopeDecorationIdsByUriRef.current.delete(key);
               selectionDecorationIdsByUriRef.current.delete(key);
+              scopeLineInfoCache.delete(key);
             })
           );
         }
@@ -819,7 +836,7 @@ export const CodePanel = memo(
         refreshScopeDecorations();
         refreshSelectionDecorations();
       },
-      [autoCloseComments, debugEnabled, logEvent, onCaretChange, scopeHighlighting]
+      [debugEnabled, logEvent, onCaretChange]
     );
 
     useEffect(() => {
