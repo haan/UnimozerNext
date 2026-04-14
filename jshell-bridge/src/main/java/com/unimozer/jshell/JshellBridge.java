@@ -15,7 +15,6 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -190,26 +189,13 @@ public final class JshellBridge {
                 null
             );
         }
-        Path tempFile;
-        try {
-            tempFile = Files.createTempFile("unimozer-inspect-", ".json");
-        } catch (Exception error) {
-            return new BridgeCommandResult(
-                errorResponse("Failed to create temp file: " + error.getMessage()),
-                System.nanoTime() - handlerStartNs,
-                null
-            );
-        }
-        String escapedPath = escapeJavaString(tempFile.toString());
+        // Capture inspect result via stdout (already redirected to an in-memory buffer in
+        // evaluate()) to avoid any temp-file I/O, which can be slow in managed environments
+        // where AV minifilter drivers perform synchronous scans on new files.
         EvalResult eval = evaluate(
-            "com.unimozer.jshell.Inspector.inspectToFile(" + varName + ", \"" + escapedPath + "\")"
+            "System.out.println(com.unimozer.jshell.Inspector.inspect(" + varName + "))"
         );
         if (!eval.ok) {
-            try {
-                Files.deleteIfExists(tempFile);
-            } catch (Exception ignored) {
-                // Ignore cleanup failures.
-            }
             String message = eval.error != null ? eval.error : "Inspection failed";
             return new BridgeCommandResult(
                 errorResponse(message),
@@ -217,8 +203,15 @@ public final class JshellBridge {
                 eval.evalNs
             );
         }
+        String payload = eval.stdout != null ? eval.stdout.trim() : "";
+        if (payload.isEmpty()) {
+            return new BridgeCommandResult(
+                errorResponse("Inspect returned empty output"),
+                System.nanoTime() - handlerStartNs,
+                eval.evalNs
+            );
+        }
         try {
-            String payload = Files.readString(tempFile, StandardCharsets.UTF_8);
             JsonNode result;
             try {
                 result = mapper.readTree(payload);
@@ -226,8 +219,7 @@ public final class JshellBridge {
                 int start = payload.indexOf('{');
                 int end = payload.lastIndexOf('}');
                 if (start >= 0 && end > start) {
-                    String trimmed = payload.substring(start, end + 1);
-                    result = mapper.readTree(trimmed);
+                    result = mapper.readTree(payload.substring(start, end + 1));
                 } else {
                     throw primary;
                 }
@@ -242,12 +234,6 @@ public final class JshellBridge {
                 System.nanoTime() - handlerStartNs,
                 eval.evalNs
             );
-        } finally {
-            try {
-                Files.deleteIfExists(tempFile);
-            } catch (Exception ignored) {
-                // Ignore cleanup failures.
-            }
         }
     }
 

@@ -80,7 +80,7 @@ export const useCompileJshellLifecycle = ({
   );
 
   const startJshellForCompile = useCallback(
-    (startToken: number, rootPath: string, outDir: string): Promise<boolean> => {
+    (startToken: number, rootPath: string, outDir: string, classIds: string[]): Promise<boolean> => {
       const warmupJshell = async (token: number): Promise<boolean> => {
         const runEvalWarmupStep = async (
           label: string,
@@ -169,6 +169,19 @@ export const useCompileJshellLifecycle = ({
           );
           if (reflectionReady) {
             await runInspectWarmupStep("inspect-first-result", "$2", false);
+          }
+
+          // Warm up JVM reflection metadata for each user class so that the first
+          // Inspector.inspect() call on a user object doesn't hit a cold getDeclaredFields /
+          // getMethods / setAccessible path.  Each step is optional — a missing or
+          // unloadable class is silently skipped by Inspector.warm() itself.
+          for (const classId of classIds) {
+            if (jshellStartTokenRef.current !== token) break;
+            await runEvalWarmupStep(
+              `reflect-class-${classId}`,
+              `com.unimozer.jshell.Inspector.warm("${classId}");`,
+              false
+            );
           }
 
           logDebug(`JShell warmup finished (token=${token})`);
@@ -286,7 +299,8 @@ export const useCompileJshellLifecycle = ({
       jshellStartTokenRef.current = startToken;
       logDebug(`JShell start executing (token=${startToken})`);
       setStatus("Starting object bench runtime...");
-      const ready = await startJshellForCompile(startToken, projectPath, outDir);
+      const classIds = umlGraph?.nodes.map((node) => node.id).filter(Boolean) ?? [];
+      const ready = await startJshellForCompile(startToken, projectPath, outDir, classIds);
       if (!ready) {
         return { ready: false, reason: "JShell start or warmup failed." };
       }
@@ -298,6 +312,7 @@ export const useCompileJshellLifecycle = ({
       requestPackedArchiveSync,
       setStatus,
       startJshellForCompile,
+      umlGraph,
       setJshellReady,
       setObjectBench,
     ]

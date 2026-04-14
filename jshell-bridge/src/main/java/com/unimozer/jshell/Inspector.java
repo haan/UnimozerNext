@@ -103,6 +103,26 @@ public final class Inspector {
         }
     }
 
+    /**
+     * Warms up JVM reflection metadata for the named class without requiring an instance.
+     * Call this during JShell startup warmup so that the first real inspect() call is fast.
+     */
+    public static void warm(String className) {
+        try {
+            Class<?> c = Class.forName(className);
+            for (Field f : c.getDeclaredFields()) {
+                try {
+                    f.setAccessible(true);
+                } catch (Exception ignored) {
+                    // Some fields (e.g. module-restricted) may not allow setAccessible.
+                }
+            }
+            c.getMethods();
+        } catch (Exception ignored) {
+            // Best-effort: missing or unloadable classes are silently skipped.
+        }
+    }
+
     private static String write(InspectResult result) {
         StringBuilder sb = new StringBuilder();
         sb.append('{');

@@ -314,9 +314,11 @@ export const useJshellActions = ({
       const createAndRefresh = async () => {
         const entry = await createInstance();
         if (!entry) return false;
+        // Only refresh pre-existing objects — the new entry was just inspected by
+        // createInstance() so re-inspecting it here is redundant.
         const baseObjects = objectBenchRef.current.filter((item) => item.name !== entry.name);
-        const refreshed = await refreshObjectBench([...baseObjects, entry]);
-        setObjectBench(refreshed);
+        const refreshed = await refreshObjectBench(baseObjects);
+        setObjectBench([...refreshed, entry]);
         appendConsoleOutput("Object created.");
         setStatus(`Created ${entry.name}.`);
         return true;
