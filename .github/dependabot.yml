@@ -8,6 +8,8 @@ updates:
       time: "07:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "npm"
@@ -29,6 +31,8 @@ updates:
       time: "07:15"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "cargo"
@@ -50,6 +54,8 @@ updates:
       time: "07:30"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "github-actions"
@@ -71,6 +77,8 @@ updates:
       time: "07:45"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "gradle"
@@ -92,6 +100,8 @@ updates:
       time: "08:00"
       timezone: "Europe/Berlin"
     open-pull-requests-limit: 2
+    commit-message:
+      prefix: "chore(deps)"
     labels:
       - "dependencies"
       - "gradle"

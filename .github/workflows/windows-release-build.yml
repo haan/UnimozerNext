@@ -27,6 +27,10 @@ permissions:
   id-token: write
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 jobs:
   build-windows:
     runs-on: windows-latest
@@ -224,7 +228,7 @@ jobs:
 
       - name: Azure login (OIDC)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/login@v1
+        uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
