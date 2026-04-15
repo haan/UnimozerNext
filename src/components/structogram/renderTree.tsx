@@ -119,6 +119,7 @@ export const renderStructogramNode = (
     crh: number,
     ckey: string
   ) => renderCenteredText(value, cx, cy, cw, crh, colors.text, ckey);
+  // Loop bodies fall back to body background when unstretched.
   const paddedRemainder = (
     px: number,
     py: number,
@@ -127,6 +128,16 @@ export const renderStructogramNode = (
     pfh: number,
     pkey: string
   ) => renderPaddedRemainder(px, py, pw, pch, pfh, pkey, colors);
+  // If-branches and switch-case columns use branch highlight as background, so
+  // the unfilled remainder must match rather than revert to body background.
+  const branchPaddedRemainder = (
+    px: number,
+    py: number,
+    pw: number,
+    pch: number,
+    pfh: number,
+    pkey: string
+  ) => renderPaddedRemainder(px, py, pw, pch, pfh, pkey, colors, colors.branch);
 
   if (node.kind === "statement") {
     return (
@@ -193,8 +204,14 @@ export const renderStructogramNode = (
   }
 
   if (node.kind === "if") {
-    const stretchedThen = stretchLastStatementToHeight(node.thenBranch, node.branchHeight);
-    const stretchedElse = stretchLastStatementToHeight(node.elseBranch, node.branchHeight);
+    const stretchedThen = stretchLastStatementToHeight(
+      stretchLoopBodyToHeight(node.thenBranch, node.branchHeight),
+      node.branchHeight
+    );
+    const stretchedElse = stretchLastStatementToHeight(
+      stretchLoopBodyToHeight(node.elseBranch, node.branchHeight),
+      node.branchHeight
+    );
     const renderableIf =
       stretchedThen === node.thenBranch && stretchedElse === node.elseBranch
         ? node
@@ -211,7 +228,7 @@ export const renderStructogramNode = (
       keyPrefix,
       colors,
       fitColumnWidths,
-      renderPaddedRemainder: paddedRemainder,
+      renderPaddedRemainder: branchPaddedRemainder,
       renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
         renderStructogramNode(
           childNode,
@@ -241,7 +258,7 @@ export const renderStructogramNode = (
       colors,
       fitColumnWidths,
       renderCenteredText: centeredText,
-      renderPaddedRemainder: paddedRemainder,
+      renderPaddedRemainder: branchPaddedRemainder,
       renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
         renderStructogramNode(
           childNode,

@@ -63,7 +63,7 @@ export const renderTryNode = <TNode extends { height: number },>({
     headerY: number,
     headerHeight: number,
     headerKey: string,
-    options?: { fullTopBorder?: boolean }
+    options?: { fullTopBorder?: boolean; suppressTopDivider?: boolean }
   ): ReactNode => (
     <g key={headerKey}>
       <rect
@@ -76,7 +76,7 @@ export const renderTryNode = <TNode extends { height: number },>({
       />
       {options?.fullTopBorder ? (
         <line x1={x} y1={headerY} x2={x + width} y2={headerY} stroke={colors.border} />
-      ) : (
+      ) : options?.suppressTopDivider ? null : (
         renderHorizontalDivider(headerY, `${headerKey}-top-divider`)
       )}
       {renderHorizontalDivider(
@@ -87,6 +87,8 @@ export const renderTryNode = <TNode extends { height: number },>({
     </g>
   );
 
+  // Top divider is omitted: the preceding section header's bottom divider (or
+  // the "try" header's bottom divider) already draws at this body's top Y.
   const renderFramedBody = (bodyY: number, bodyHeight: number, bodyKey: string): ReactNode => (
     <g key={bodyKey}>
       <rect
@@ -97,7 +99,6 @@ export const renderTryNode = <TNode extends { height: number },>({
         fill={colors.tryWrapper}
         stroke="none"
       />
-      {renderHorizontalDivider(bodyY, `${bodyKey}-top-divider`)}
       {renderHorizontalDivider(bodyY + bodyHeight, `${bodyKey}-bottom-divider`)}
       <line x1={contentX} y1={bodyY} x2={contentX} y2={bodyY + bodyHeight} stroke={colors.border} />
     </g>
@@ -113,7 +114,8 @@ export const renderTryNode = <TNode extends { height: number },>({
         `catch (${entry.exception})`,
         offsetY,
         STRUCTOGRAM_SECTION_HEADER_HEIGHT,
-        `${keyPrefix}-catch-${index}`
+        `${keyPrefix}-catch-${index}`,
+        { suppressTopDivider: true }
       )
     );
     offsetY += STRUCTOGRAM_SECTION_HEADER_HEIGHT;
@@ -130,7 +132,8 @@ export const renderTryNode = <TNode extends { height: number },>({
         "finally",
         offsetY,
         STRUCTOGRAM_SECTION_HEADER_HEIGHT,
-        `${keyPrefix}-finally`
+        `${keyPrefix}-finally`,
+        { suppressTopDivider: true }
       )
     );
     offsetY += STRUCTOGRAM_SECTION_HEADER_HEIGHT;
@@ -165,7 +168,6 @@ export const renderTryNode = <TNode extends { height: number },>({
         fill={colors.tryWrapper}
         stroke="none"
       />
-      {renderHorizontalDivider(footerY, `${keyPrefix}-footer-divider`)}
     </g>
   );
 };

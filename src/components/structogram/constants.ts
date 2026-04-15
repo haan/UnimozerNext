@@ -13,6 +13,7 @@ export const STRUCTOGRAM_VIEWPORT_PADDING = 8; // Outer viewport padding around 
 export const STRUCTOGRAM_HEADER_TOP_PADDING = 10; // Space above the method signature.
 export const STRUCTOGRAM_HEADER_BOTTOM_PADDING = 10; // Space between signature and structogram.
 export const STRUCTOGRAM_SVG_STROKE_WIDTH = 1; // Global stroke width for SVG block borders.
+export const STRUCTOGRAM_LOOP_COVER_STROKE_WIDTH = STRUCTOGRAM_SVG_STROKE_WIDTH * 2; // Stroke width for the cover line that hides the body separator behind the loop inset band.
 export const STRUCTOGRAM_EXPORT_SCALE = 1; // Rasterization scale factor for PNG export/copy.
 export const STRUCTOGRAM_EXPORT_PADDING = 8; // Extra SVG padding around exported/captured structograms.
 export const STRUCTOGRAM_DEFAULT_VIEW_SCALE = 1; // Initial zoom factor for structogram viewport.

@@ -55,7 +55,8 @@ export const renderPaddedRemainder = (
   contentHeight: number,
   fullHeight: number,
   key: string,
-  colors: StructogramColors
+  colors: StructogramColors,
+  fill?: string
 ) => {
   if (contentHeight >= fullHeight) {
     return null;
@@ -67,7 +68,7 @@ export const renderPaddedRemainder = (
       y={y + contentHeight}
       width={width}
       height={fullHeight - contentHeight}
-      fill={colors.body}
+      fill={fill ?? colors.body}
       stroke={colors.border}
     />
   );

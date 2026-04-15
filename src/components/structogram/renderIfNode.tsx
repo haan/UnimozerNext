@@ -62,7 +62,6 @@ export const renderIfNode = <TNode extends { height: number },>({
       <line x1={x} y1={y} x2={splitX} y2={branchTop} stroke={colors.border} />
       <line x1={x + width} y1={y} x2={splitX} y2={branchTop} stroke={colors.border} />
       <line x1={splitX} y1={branchTop} x2={splitX} y2={y + node.height} stroke={colors.border} />
-      <line x1={x} y1={branchTop} x2={x + width} y2={branchTop} stroke={colors.border} />
 
       <text
         x={splitX}

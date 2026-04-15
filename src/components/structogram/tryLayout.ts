@@ -36,10 +36,9 @@ export const buildTryLayout = <TBody extends { width: number; height: number }>(
   const catchWidths = catches.map((entry) =>
     Math.max(estimatedTextWidth(`catch (${entry.exception})`), entry.body.width)
   );
-  const finallyWidth =
-    finallyBranch === null
-      ? estimatedTextWidth("finally")
-      : Math.max(estimatedTextWidth("finally"), finallyBranch.width);
+  const finallyWidth = finallyBranch
+    ? Math.max(estimatedTextWidth("finally"), finallyBranch.width)
+    : 0;
   const contentWidth = Math.max(bodyWidth, ...catchWidths, finallyWidth);
   const width = contentWidth + STRUCTOGRAM_TRY_FRAME_SIDE_WIDTH;
 

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { STRUCTOGRAM_HEADER_HEIGHT, type StructogramColors } from "./constants";
+import { STRUCTOGRAM_HEADER_HEIGHT, STRUCTOGRAM_LOOP_COVER_STROKE_WIDTH, type StructogramColors } from "./constants";
 import type { LoopLayoutNode } from "./loopLayout";
 
 type RenderLoopNodeArgs<TNode extends { height: number }> = {
@@ -106,7 +106,7 @@ export const renderLoopNode = <TNode extends { height: number },>({
               x2={loopContentX}
               y2={bodyY}
               stroke={colors.loopHeader}
-              strokeWidth={2}
+              strokeWidth={STRUCTOGRAM_LOOP_COVER_STROKE_WIDTH}
               strokeLinecap="butt"
             />
           ) : null}
