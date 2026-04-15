@@ -286,7 +286,7 @@ const createScopeDecorations = (
         return 0;
       }
       const info = scopeLineInfo[scanLine - 1];
-      if (info && info.openCount > 0) {
+      if (info && info.openCount > 0 && info.openCount > info.closeCount) {
         const effectiveDepth = Math.max(0, info.startDepth - info.leadingCloseCount);
         return Math.min(effectiveDepth + 1, SCOPE_COLOR_COUNT);
       }
