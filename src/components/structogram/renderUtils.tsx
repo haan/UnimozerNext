@@ -1,8 +1,8 @@
 import {
-  STRUCTOGRAM_COLORS,
   STRUCTOGRAM_FONT_SIZE,
   STRUCTOGRAM_TEXT_BASELINE_OFFSET,
-  STRUCTOGRAM_TEXT_PADDING_X
+  STRUCTOGRAM_TEXT_PADDING_X,
+  type StructogramColors
 } from "./constants";
 
 const textBaseline = (top: number, rowHeight: number) =>
@@ -33,6 +33,7 @@ export const renderCenteredText = (
   y: number,
   width: number,
   rowHeight: number,
+  fill: string,
   key: string
 ) => (
   <text
@@ -41,7 +42,7 @@ export const renderCenteredText = (
     y={textBaseline(y, rowHeight)}
     textAnchor="middle"
     fontSize={STRUCTOGRAM_FONT_SIZE}
-    fill={STRUCTOGRAM_COLORS.text}
+    fill={fill}
   >
     {value}
   </text>
@@ -53,7 +54,8 @@ export const renderPaddedRemainder = (
   width: number,
   contentHeight: number,
   fullHeight: number,
-  key: string
+  key: string,
+  colors: StructogramColors
 ) => {
   if (contentHeight >= fullHeight) {
     return null;
@@ -65,8 +67,8 @@ export const renderPaddedRemainder = (
       y={y + contentHeight}
       width={width}
       height={fullHeight - contentHeight}
-      fill={STRUCTOGRAM_COLORS.body}
-      stroke={STRUCTOGRAM_COLORS.border}
+      fill={colors.body}
+      stroke={colors.border}
     />
   );
 };

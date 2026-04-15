@@ -86,10 +86,10 @@ const fitSwitchGeometry = (
     }
 
     if (caseWidths.length === 1) {
-      const totalWidth = caseWidths[0];
+      const totalWidth = caseWidths[0] ?? 0;
       const requiredTotalWidth = Math.ceil(minimumRun * 2);
       if (totalWidth < requiredTotalWidth) {
-        caseWidths[0] = requiredTotalWidth;
+        caseWidths = distributeExtraWidth(caseWidths, [0], Math.ceil(requiredTotalWidth - totalWidth));
       }
       return;
     }
@@ -165,7 +165,7 @@ export const buildSwitchLayout = <TBody>({
   const resolvedCases = cases.map((entry, index) => ({
     label: entry.label,
     body: entry.body,
-    width: geometry.caseWidths[index]
+    width: geometry.caseWidths[index] ?? entry.minWidth
   }));
 
   return {

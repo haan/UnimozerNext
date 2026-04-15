@@ -407,7 +407,7 @@ const toLayoutNode = (
 
   if (node.kind === "if") {
     const condition = normalizeLabel(node.condition, "condition");
-    const thenBranch = toSequence(node.thenBranch, estimators, STRUCTOGRAM_EMPTY_ELSE_LABEL);
+    const thenBranch = toSequence(node.thenBranch, estimators);
     const hasElseBranch = (node.elseBranch ?? []).length > 0;
     const elseBranch =
       hasElseBranch
@@ -464,7 +464,10 @@ const toLayoutNode = (
     });
   }
 
-  return estimators.createStatement(normalizeLabel(node.text, node.kind));
+  // All known kinds are handled above. This branch is unreachable with the
+  // current UmlStructogramNode union but acts as a guard if a new kind is
+  // added without a matching case here.
+  return null;
 };
 
 export const buildStructogramLayout = (

@@ -109,12 +109,31 @@ export const renderStructogramNode = (
 ): ReactNode => {
   const width = forcedWidth ?? node.width;
 
+  // Palette-aware wrappers so node renderers receive colours without changing
+  // their callback signatures.
+  const centeredText = (
+    value: string,
+    cx: number,
+    cy: number,
+    cw: number,
+    crh: number,
+    ckey: string
+  ) => renderCenteredText(value, cx, cy, cw, crh, colors.text, ckey);
+  const paddedRemainder = (
+    px: number,
+    py: number,
+    pw: number,
+    pch: number,
+    pfh: number,
+    pkey: string
+  ) => renderPaddedRemainder(px, py, pw, pch, pfh, pkey, colors);
+
   if (node.kind === "statement") {
     return (
       <g key={keyPrefix}>
         <rect x={x} y={y} width={width} height={node.height} fill={colors.body} stroke={colors.border} />
         {isNoElsePlaceholder(node.text)
-          ? renderCenteredText(node.text, x, y, width, node.height, `${keyPrefix}-text`)
+          ? centeredText(node.text, x, y, width, node.height, `${keyPrefix}-text`)
           : renderLeftAlignedText(node.text, x, y, node.height, colors.text, `${keyPrefix}-text`)}
       </g>
     );
@@ -160,7 +179,7 @@ export const renderStructogramNode = (
       keyPrefix,
       colors,
       renderLeftAlignedText,
-      renderPaddedRemainder,
+      renderPaddedRemainder: paddedRemainder,
       renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
         renderStructogramNode(
           childNode,
@@ -192,7 +211,7 @@ export const renderStructogramNode = (
       keyPrefix,
       colors,
       fitColumnWidths,
-      renderPaddedRemainder,
+      renderPaddedRemainder: paddedRemainder,
       renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
         renderStructogramNode(
           childNode,
@@ -221,8 +240,8 @@ export const renderStructogramNode = (
       keyPrefix,
       colors,
       fitColumnWidths,
-      renderCenteredText,
-      renderPaddedRemainder,
+      renderCenteredText: centeredText,
+      renderPaddedRemainder: paddedRemainder,
       renderNode: (childNode, childX, childY, childForcedWidth, childKeyPrefix) =>
         renderStructogramNode(
           childNode,

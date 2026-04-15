@@ -63,7 +63,7 @@ const findActiveMethod = (
   filePath: string | null | undefined,
   caretLineNumber: number | null | undefined
 ): ActiveMethodContext | null => {
-  if (!graph || !filePath || !caretLineNumber) {
+  if (!graph || !filePath || caretLineNumber == null) {
     return null;
   }
   const normalizedPath = filePath.toLowerCase();
@@ -170,28 +170,19 @@ export const DiagramPanel = ({
     if (!onDebugLog) {
       return;
     }
-    const lookupStart = performance.now();
-    const lookupResult = findActiveMethod(
-      graph,
-      debouncedStructogramInput.filePath,
-      debouncedStructogramInput.caretLineNumber
-    );
-    const resolveMs = performance.now() - lookupStart;
     const requestedAt = structogramSwitchRequestedAtRef.current;
     const switchMs = requestedAt === null ? null : performance.now() - requestedAt;
-    const methodName = lookupResult
-      ? `${lookupResult.node.name}.${lookupResult.method.name}`
+    const methodName = resolvedMethodContext
+      ? `${resolvedMethodContext.node.name}.${resolvedMethodContext.method.name}`
       : "<none>";
     const sourcePath = debouncedStructogramInput.filePath ?? "<none>";
     const sourceLine =
       debouncedStructogramInput.caretLineNumber === null
         ? "-"
         : String(debouncedStructogramInput.caretLineNumber);
-    const switchDetail = switchMs === null ? "" : `, switch ${switchMs.toFixed(1)} ms`;
-    onDebugLog(
-      `resolved ${methodName} at ${sourcePath}:${sourceLine} (lookup ${resolveMs.toFixed(1)} ms${switchDetail})`
-    );
-  }, [debouncedStructogramInput, graph, onDebugLog, viewMode]);
+    const switchDetail = switchMs === null ? "" : ` switch ${switchMs.toFixed(1)} ms`;
+    onDebugLog(`resolved ${methodName} at ${sourcePath}:${sourceLine}${switchDetail}`);
+  }, [resolvedMethodContext, debouncedStructogramInput, onDebugLog, viewMode]);
 
   return (
     <ContextMenu>

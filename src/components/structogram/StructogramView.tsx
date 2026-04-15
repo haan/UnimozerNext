@@ -60,22 +60,25 @@ const EXPORT_CSS_VARIABLES = [
 
 const STRUCTOGRAM_FONT_FAMILY_FALLBACK =
   "\"JetBrains Mono\", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, \"Liberation Mono\", \"Courier New\", monospace";
-let measureCanvas: HTMLCanvasElement | null = null;
-
-const measureTextWidth = (text: string, font: string) => {
-  if (typeof document === "undefined") {
-    return text.length * STRUCTOGRAM_CHAR_WIDTH;
-  }
-  if (!measureCanvas) {
-    measureCanvas = document.createElement("canvas");
-  }
-  const ctx = measureCanvas.getContext("2d");
-  if (!ctx) {
-    return text.length * STRUCTOGRAM_CHAR_WIDTH;
-  }
-  ctx.font = font;
-  return ctx.measureText(text).width;
-};
+// Lazy canvas singleton scoped to this module's closure to avoid polluting the
+// module namespace with a raw mutable variable.
+const measureTextWidth = (() => {
+  let canvas: HTMLCanvasElement | null = null;
+  return (text: string, font: string): number => {
+    if (typeof document === "undefined") {
+      return text.length * STRUCTOGRAM_CHAR_WIDTH;
+    }
+    if (!canvas) {
+      canvas = document.createElement("canvas");
+    }
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      return text.length * STRUCTOGRAM_CHAR_WIDTH;
+    }
+    ctx.font = font;
+    return ctx.measureText(text).width;
+  };
+})();
 
 const resolveMeasureFont = () => {
   if (typeof document === "undefined") {
@@ -352,16 +355,18 @@ export const StructogramView = ({
         const image = new Image();
         image.onload = () => {
           try {
+            const dpr = Math.max(1, window.devicePixelRatio ?? 1);
+            const exportScale = STRUCTOGRAM_EXPORT_SCALE * dpr;
             const canvas = document.createElement("canvas");
-            canvas.width = Math.max(1, Math.round(width * STRUCTOGRAM_EXPORT_SCALE));
-            canvas.height = Math.max(1, Math.round(height * STRUCTOGRAM_EXPORT_SCALE));
+            canvas.width = Math.max(1, Math.round(width * exportScale));
+            canvas.height = Math.max(1, Math.round(height * exportScale));
             const ctx = canvas.getContext("2d");
             if (!ctx) {
               reject(new Error("Failed to create canvas context."));
               return;
             }
             ctx.imageSmoothingEnabled = true;
-            ctx.scale(STRUCTOGRAM_EXPORT_SCALE, STRUCTOGRAM_EXPORT_SCALE);
+            ctx.scale(exportScale, exportScale);
             ctx.drawImage(image, 0, 0, width, height);
             resolve(canvas);
           } catch (error) {
@@ -522,7 +527,11 @@ export const StructogramView = ({
   }
 
   if (!renderMetrics) {
-    return null;
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        No layout data available for this method.
+      </div>
+    );
   }
 
   const scaledWidth = Math.round(renderMetrics.svgWidth * fontScale * viewScale);

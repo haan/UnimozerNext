@@ -51,7 +51,6 @@ export const renderIfNode = <TNode extends { height: number },>({
 
   return (
     <g key={keyPrefix}>
-      <rect x={x} y={y} width={width} height={node.height} fill={colors.body} stroke={colors.border} />
       <rect
         x={x}
         y={y}
