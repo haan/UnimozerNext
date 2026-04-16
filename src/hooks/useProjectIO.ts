@@ -260,6 +260,9 @@ export const useProjectIO = ({
 
       const currentDiagramState = context?.currentDiagramState;
       const currentDiagramPath = context?.currentDiagramPath;
+      // When reloading the same project (e.g. after a UML re-parse), prefer
+      // the live in-memory positions and viewport over the on-disk values so
+      // the canvas does not snap back to an older saved state mid-session.
       if (
         currentDiagramState &&
         currentDiagramPath &&
