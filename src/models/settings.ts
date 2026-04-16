@@ -30,12 +30,12 @@ export type AdvancedSettings = {
     structogram: boolean;
     jshell: boolean;
   };
-  structogramColors: boolean;
   updateChannel: "stable" | "prerelease";
   jshellWarmupDiagnosticMode: "quick" | "full";
 };
 
 export type StructogramSettings = {
+  colorsEnabled: boolean;
   loopHeaderColor: string;
   ifHeaderColor: string;
   switchHeaderColor: string;

@@ -115,9 +115,9 @@ export const useMenuPreferenceActions = ({
     (value: boolean) => {
       handleSettingsChange({
         ...settings,
-        advanced: {
-          ...settings.advanced,
-          structogramColors: value
+        structogram: {
+          ...settings.structogram,
+          colorsEnabled: value
         }
       });
     },

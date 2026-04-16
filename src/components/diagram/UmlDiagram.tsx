@@ -33,7 +33,7 @@ import {
   DEFAULT_VIEW_SCALE,
   DEFAULT_VIEW_X,
   DEFAULT_VIEW_Y,
-  DRAG_MOVE_THRESHOLD_PX,
+  DRAG_MOVE_THRESHOLD_SVG,
   FONT_MEASURE_FALLBACK_CHAR_WIDTH,
   FONT_METRICS_FALLBACK_ASCENT_RATIO,
   FONT_METRICS_FALLBACK_DESCENT_RATIO,
@@ -629,8 +629,8 @@ export const UmlDiagram = ({
         const y = point.y - dragging.offsetY;
         const moved =
           dragging.moved ||
-          Math.abs(point.x - dragging.startX) > DRAG_MOVE_THRESHOLD_PX ||
-          Math.abs(point.y - dragging.startY) > DRAG_MOVE_THRESHOLD_PX;
+          Math.abs(point.x - dragging.startX) > DRAG_MOVE_THRESHOLD_SVG ||
+          Math.abs(point.y - dragging.startY) > DRAG_MOVE_THRESHOLD_SVG;
         if (moved !== dragging.moved) {
           setDragging({ ...dragging, moved });
         }
@@ -644,8 +644,8 @@ export const UmlDiagram = ({
         const dy = point.y - draggingPackage.startY;
         const moved =
           draggingPackage.moved ||
-          Math.abs(point.x - draggingPackage.startX) > DRAG_MOVE_THRESHOLD_PX ||
-          Math.abs(point.y - draggingPackage.startY) > DRAG_MOVE_THRESHOLD_PX;
+          Math.abs(point.x - draggingPackage.startX) > DRAG_MOVE_THRESHOLD_SVG ||
+          Math.abs(point.y - draggingPackage.startY) > DRAG_MOVE_THRESHOLD_SVG;
         if (moved !== draggingPackage.moved) {
           setDraggingPackage({ ...draggingPackage, moved });
         }
@@ -679,8 +679,8 @@ export const UmlDiagram = ({
         const y = point.y - dragging.offsetY;
         const moved =
           dragging.moved ||
-          Math.abs(point.x - dragging.startX) > DRAG_MOVE_THRESHOLD_PX ||
-          Math.abs(point.y - dragging.startY) > DRAG_MOVE_THRESHOLD_PX;
+          Math.abs(point.x - dragging.startX) > DRAG_MOVE_THRESHOLD_SVG ||
+          Math.abs(point.y - dragging.startY) > DRAG_MOVE_THRESHOLD_SVG;
         const { id } = dragging;
         setDragging(null);
         onNodePositionChange(id, x, y, moved);
@@ -694,8 +694,8 @@ export const UmlDiagram = ({
         const dy = point.y - draggingPackage.startY;
         const moved =
           draggingPackage.moved ||
-          Math.abs(point.x - draggingPackage.startX) > DRAG_MOVE_THRESHOLD_PX ||
-          Math.abs(point.y - draggingPackage.startY) > DRAG_MOVE_THRESHOLD_PX;
+          Math.abs(point.x - draggingPackage.startX) > DRAG_MOVE_THRESHOLD_SVG ||
+          Math.abs(point.y - draggingPackage.startY) > DRAG_MOVE_THRESHOLD_SVG;
         const { nodes } = draggingPackage;
         setDraggingPackage(null);
         nodes.forEach((node, index) => {
@@ -1404,6 +1404,26 @@ export const UmlDiagram = ({
             measureTextWidth(pkg.name, `600 ${umlFontSize}px ${UML_FONT_FAMILY}`) +
               TEXT_PADDING
           );
+          const handlePackagePointerDown = (event: React.PointerEvent<SVGRectElement>) => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            event.stopPropagation();
+            const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
+            const nodes = pkg.nodeIds
+              .map((id) => nodeMap.get(id))
+              .filter(Boolean)
+              .map((node) => ({ id: node!.id, x: node!.x, y: node!.y }));
+            setDraggingPackage({
+              name: pkg.name,
+              startX: point.x,
+              startY: point.y,
+              offsetX: point.x - pkg.x,
+              offsetY: point.y - pkg.y,
+              nodes,
+              moved: false
+            });
+          };
+
           return (
             <g key={pkg.name} data-uml-package>
               <rect
@@ -1417,25 +1437,7 @@ export const UmlDiagram = ({
                 stroke="var(--uml-package-border)"
                 strokeWidth={1}
                 style={{ cursor: "grab" }}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
-                  const nodes = pkg.nodeIds
-                    .map((id) => nodeMap.get(id))
-                    .filter(Boolean)
-                    .map((node) => ({ id: node!.id, x: node!.x, y: node!.y }));
-                  setDraggingPackage({
-                    name: pkg.name,
-                    startX: point.x,
-                    startY: point.y,
-                    offsetX: point.x - pkg.x,
-                    offsetY: point.y - pkg.y,
-                    nodes,
-                    moved: false
-                  });
-                }}
+                onPointerDown={handlePackagePointerDown}
               />
               <rect
                 x={pkg.x}
@@ -1448,25 +1450,7 @@ export const UmlDiagram = ({
                 stroke="var(--uml-package-border)"
                 strokeWidth={1}
                 style={{ cursor: "grab" }}
-                onPointerDown={(event) => {
-                  if (event.button !== 0) return;
-                  event.preventDefault();
-                  event.stopPropagation();
-                  const point = getSvgPoint(svgRef.current, event.clientX, event.clientY, view);
-                  const nodes = pkg.nodeIds
-                    .map((id) => nodeMap.get(id))
-                    .filter(Boolean)
-                    .map((node) => ({ id: node!.id, x: node!.x, y: node!.y }));
-                  setDraggingPackage({
-                    name: pkg.name,
-                    startX: point.x,
-                    startY: point.y,
-                    offsetX: point.x - pkg.x,
-                    offsetY: point.y - pkg.y,
-                    nodes,
-                    moved: false
-                  });
-                }}
+                onPointerDown={handlePackagePointerDown}
               />
               <text
                 x={pkg.x + TEXT_PADDING / 2}

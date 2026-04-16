@@ -234,7 +234,7 @@ export default function AppContainer({
     },
     [appendCategorizedDebugOutput]
   );
-  const structogramColorsEnabled = settings.advanced.structogramColors;
+  const structogramColorsEnabled = settings.structogram.colorsEnabled;
   const updateChannel = settings.advanced.updateChannel;
   const jshellWarmupDiagnosticMode = settings.advanced.jshellWarmupDiagnosticMode;
   const structogramLoopHeaderColor = settings.structogram.loopHeaderColor;

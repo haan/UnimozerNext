@@ -676,13 +676,13 @@ export const SettingsDialog = ({
                     </p>
                   </div>
                   <Switch
-                    checked={settings.advanced.structogramColors}
+                    checked={settings.structogram.colorsEnabled}
                     onCheckedChange={(checked) =>
                       onChange({
                         ...settings,
-                        advanced: {
-                          ...settings.advanced,
-                          structogramColors: checked
+                        structogram: {
+                          ...settings.structogram,
+                          colorsEnabled: checked
                         }
                       })
                     }

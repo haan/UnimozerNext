@@ -113,8 +113,6 @@ struct AdvancedSettings {
     debug_logging: bool,
     #[serde(default)]
     debug_log_categories: DebugLogCategories,
-    #[serde(default = "default_true")]
-    structogram_colors: bool,
     #[serde(default = "default_update_channel")]
     update_channel: UpdateChannel,
     #[serde(default = "default_jshell_warmup_diagnostic_mode")]
@@ -126,7 +124,6 @@ impl Default for AdvancedSettings {
         Self {
             debug_logging: default_false(),
             debug_log_categories: DebugLogCategories::default(),
-            structogram_colors: default_true(),
             update_channel: default_update_channel(),
             jshell_warmup_diagnostic_mode: default_jshell_warmup_diagnostic_mode(),
         }
@@ -136,6 +133,8 @@ impl Default for AdvancedSettings {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct StructogramSettings {
+    #[serde(default = "default_true")]
+    colors_enabled: bool,
     #[serde(default = "default_structogram_loop_header_color")]
     loop_header_color: String,
     #[serde(default = "default_structogram_if_header_color")]
@@ -149,6 +148,7 @@ struct StructogramSettings {
 impl Default for StructogramSettings {
     fn default() -> Self {
         Self {
+            colors_enabled: default_true(),
             loop_header_color: default_structogram_loop_header_color(),
             if_header_color: default_structogram_if_header_color(),
             switch_header_color: default_structogram_switch_header_color(),
@@ -285,11 +285,11 @@ impl Default for AppSettings {
             advanced: AdvancedSettings {
                 debug_logging: default_false(),
                 debug_log_categories: DebugLogCategories::default(),
-                structogram_colors: default_true(),
                 update_channel: default_update_channel(),
                 jshell_warmup_diagnostic_mode: default_jshell_warmup_diagnostic_mode(),
             },
             structogram: StructogramSettings {
+                colors_enabled: default_true(),
                 loop_header_color: default_structogram_loop_header_color(),
                 if_header_color: default_structogram_if_header_color(),
                 switch_header_color: default_structogram_switch_header_color(),
