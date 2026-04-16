@@ -42,28 +42,21 @@ import {
   MIN_ZOOM_SCALE,
   PACKAGE_LABEL_BASELINE_OFFSET,
   ZOOM_STEP_IN,
-  ZOOM_STEP_OUT
+  ZOOM_STEP_OUT,
+  ZOOM_COMMIT_DEBOUNCE_MS
 } from "./constants";
 import { formatMethodSignature } from "./methodSignature";
 
 const computeNodeHeight = (
   node: UmlNode,
-  diagram: DiagramState,
   headerHeight: number,
   rowHeight: number
 ) => {
-  const showFields = diagram.showFields;
-  const showMethods = diagram.showMethods;
-  let height = headerHeight;
-
-  if (showFields) {
-    height += 2 * SECTION_PADDING + node.fields.length * rowHeight;
-  }
-  if (showMethods) {
-    height += 2 * SECTION_PADDING + node.methods.length * rowHeight;
-  }
-
-  return height;
+  return (
+    headerHeight +
+    2 * SECTION_PADDING + node.fields.length * rowHeight +
+    2 * SECTION_PADDING + node.methods.length * rowHeight
+  );
 };
 
 const resolveExportDirectory = (path: string) => {
@@ -198,37 +191,32 @@ const measureFontMetrics = (font: string, fontSize: number): FontMetrics => {
 
 const computeNodeWidth = (
   node: UmlNode,
-  diagram: DiagramState,
   fontSize: number,
   showParameterNames: boolean
 ) => {
   const padding = TEXT_PADDING;
   const nameWidth = measureTextWidth(node.name, `600 ${fontSize}px ${UML_FONT_FAMILY}`);
-  const fieldWidth = diagram.showFields
-    ? Math.max(
-        0,
-        ...node.fields.map((field) => {
-          const visibility = field.visibility ? `${field.visibility} ` : "";
-          return measureTextWidth(
-            `${visibility}${field.signature}`,
-            `${fontSize}px ${UML_FONT_FAMILY}`
-          );
-        })
-      )
-    : 0;
-  const methodWidth = diagram.showMethods
-    ? Math.max(
-        0,
-        ...node.methods.map((method) => {
-          const visibility = method.visibility ? `${method.visibility} ` : "";
-          const signature = formatMethodSignature(method, showParameterNames);
-          return measureTextWidth(
-            `${visibility}${signature}`,
-            `${fontSize}px ${UML_FONT_FAMILY}`
-          );
-        })
-      )
-    : 0;
+  const fieldWidth = Math.max(
+    0,
+    ...node.fields.map((field) => {
+      const visibility = field.visibility ? `${field.visibility} ` : "";
+      return measureTextWidth(
+        `${visibility}${field.signature}`,
+        `${fontSize}px ${UML_FONT_FAMILY}`
+      );
+    })
+  );
+  const methodWidth = Math.max(
+    0,
+    ...node.methods.map((method) => {
+      const visibility = method.visibility ? `${method.visibility} ` : "";
+      const signature = formatMethodSignature(method, showParameterNames);
+      return measureTextWidth(
+        `${visibility}${signature}`,
+        `${fontSize}px ${UML_FONT_FAMILY}`
+      );
+    })
+  );
 
   const contentWidth = Math.max(nameWidth, fieldWidth, methodWidth);
   return Math.max(NODE_WIDTH, Math.ceil(contentWidth + padding * 2));
@@ -451,6 +439,7 @@ export const UmlDiagram = ({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const embeddedFontCssRef = useRef("");
   const embeddedFontCssLoadRef = useRef<Promise<string> | null>(null);
+  const zoomCommitTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const [dragging, setDragging] = useState<DragState | null>(null);
   const [draggingPackage, setDraggingPackage] = useState<PackageDragState | null>(null);
   const [panning, setPanning] = useState<PanState | null>(null);
@@ -538,7 +527,7 @@ export const UmlDiagram = ({
     setView(next);
   }, [diagram.viewport?.panX, diagram.viewport?.panY, diagram.viewport?.zoom]);
 
-  const zoomAt = useCallback((factor: number, clientX?: number, clientY?: number) => {
+  const zoomAt = useCallback((factor: number, clientX?: number, clientY?: number, immediate = false) => {
     const svg = svgRef.current;
     if (!svg) return;
     const current = viewRef.current;
@@ -557,7 +546,22 @@ export const UmlDiagram = ({
     };
     viewRef.current = next;
     setView(next);
-    commitViewport(next, true);
+    if (immediate) {
+      if (zoomCommitTimerRef.current !== null) {
+        window.clearTimeout(zoomCommitTimerRef.current);
+        zoomCommitTimerRef.current = null;
+      }
+      commitViewport(next, true);
+    } else {
+      commitViewport(next, false);
+      if (zoomCommitTimerRef.current !== null) {
+        window.clearTimeout(zoomCommitTimerRef.current);
+      }
+      zoomCommitTimerRef.current = window.setTimeout(() => {
+        zoomCommitTimerRef.current = null;
+        commitViewport(viewRef.current, true);
+      }, ZOOM_COMMIT_DEBOUNCE_MS);
+    }
   }, [commitViewport]);
 
   const resetZoom = useCallback(() => {
@@ -570,6 +574,14 @@ export const UmlDiagram = ({
     setView(next);
     commitViewport(next, true);
   }, [commitViewport]);
+
+  useEffect(() => {
+    return () => {
+      if (zoomCommitTimerRef.current !== null) {
+        window.clearTimeout(zoomCommitTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -600,8 +612,8 @@ export const UmlDiagram = ({
   useEffect(() => {
     if (!onRegisterZoom) return;
     onRegisterZoom({
-      zoomIn: () => zoomAt(ZOOM_STEP_IN),
-      zoomOut: () => zoomAt(ZOOM_STEP_OUT),
+      zoomIn: () => zoomAt(ZOOM_STEP_IN, undefined, undefined, true),
+      zoomOut: () => zoomAt(ZOOM_STEP_OUT, undefined, undefined, true),
       resetZoom
     });
     return () => {
@@ -768,9 +780,9 @@ export const UmlDiagram = ({
           x: position.x,
           y: position.y,
           width: fontReady
-            ? computeNodeWidth(node, diagram, umlFontSize, showParameterNames)
+            ? computeNodeWidth(node, umlFontSize, showParameterNames)
             : NODE_WIDTH,
-          height: computeNodeHeight(node, diagram, headerHeight, rowHeight)
+          height: computeNodeHeight(node, headerHeight, rowHeight)
         };
       }),
     [
@@ -1516,7 +1528,6 @@ export const UmlDiagram = ({
           <Class
             key={node.id}
             node={node}
-            diagram={diagram}
             compiled={compiled}
             fontSize={umlFontSize}
             headerHeight={headerHeight}

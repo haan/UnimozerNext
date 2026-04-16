@@ -1,4 +1,3 @@
-import type { DiagramState } from "../../models/diagram";
 import type { UmlConstructor, UmlNode } from "../../models/uml";
 import { SECTION_PADDING, UML_CORNER_RADIUS } from "./constants";
 import { UmlAttribute } from "./Attribute";
@@ -24,7 +23,6 @@ type UmlNodeLayout = UmlNode & {
 
 export type ClassProps = {
   node: UmlNodeLayout;
-  diagram: DiagramState;
   compiled?: boolean;
   fontSize: number;
   headerHeight: number;
@@ -49,7 +47,6 @@ export type ClassProps = {
 
 export const Class = ({
   node,
-  diagram,
   compiled,
   fontSize,
   headerHeight,
@@ -71,8 +68,6 @@ export const Class = ({
   onExportPng,
   onCopyPng
 }: ClassProps) => {
-  const fields = diagram.showFields ? node.fields : [];
-  const methods = diagram.showMethods ? node.methods : [];
   let cursorY = headerHeight;
   const hasMain = node.methods.some((method) => Boolean(method.isMain));
   const isCompiled = Boolean(compiled && !node.isInvalid);
@@ -108,67 +103,62 @@ export const Class = ({
     : "var(--uml-class-bg)";
   const content: React.ReactNode[] = [];
 
-  if (diagram.showFields) {
+  content.push(
+    <line
+      key={`${node.id}-fields-separator`}
+      x1={0}
+      x2={node.width}
+      y1={headerHeight}
+      y2={headerHeight}
+      stroke={strokeColor}
+      strokeWidth={1}
+      pointerEvents="none"
+    />
+  );
+  cursorY += SECTION_PADDING;
+  node.fields.forEach((field, index) => {
+    const baselineY = cursorY + rowTextBaselineOffset;
     content.push(
-      <line
-        key={`${node.id}-fields-separator`}
-        x1={0}
-        x2={node.width}
-        y1={headerHeight}
-        y2={headerHeight}
-        stroke={strokeColor}
-        strokeWidth={1}
-        pointerEvents="none"
+      <UmlAttribute
+        key={`${node.id}-field-${field.signature}-${index}`}
+        field={field}
+        baselineY={baselineY}
+        fontSize={fontSize}
+        onSelect={onFieldSelect ? () => onFieldSelect(field, node) : undefined}
       />
     );
-    cursorY += SECTION_PADDING;
-    fields.forEach((field, index) => {
-      const baselineY = cursorY + rowTextBaselineOffset;
-      content.push(
-        <UmlAttribute
-          key={`${node.id}-field-${field.signature}-${index}`}
-          field={field}
-          baselineY={baselineY}
-          fontSize={fontSize}
-          onSelect={onFieldSelect ? () => onFieldSelect(field, node) : undefined}
-        />
-      );
-      cursorY += rowHeight;
-    });
-    cursorY += SECTION_PADDING;
-  }
+    cursorY += rowHeight;
+  });
+  cursorY += SECTION_PADDING;
 
-  if (diagram.showMethods) {
-    const lineY = diagram.showFields ? cursorY : headerHeight;
+  content.push(
+    <line
+      key={`${node.id}-methods-separator`}
+      x1={0}
+      x2={node.width}
+      y1={cursorY}
+      y2={cursorY}
+      stroke={strokeColor}
+      strokeWidth={1}
+      pointerEvents="none"
+    />
+  );
+  cursorY += SECTION_PADDING;
+  node.methods.forEach((method, index) => {
+    const baselineY = cursorY + rowTextBaselineOffset;
     content.push(
-      <line
-        key={`${node.id}-methods-separator`}
-        x1={0}
-        x2={node.width}
-        y1={lineY}
-        y2={lineY}
-        stroke={strokeColor}
-        strokeWidth={1}
-        pointerEvents="none"
+      <UmlMethod
+        key={`${node.id}-method-${method.signature}-${index}`}
+        method={method}
+        baselineY={baselineY}
+        fontSize={fontSize}
+        showParameterNames={showParameterNames}
+        onSelect={onMethodSelect ? () => onMethodSelect(method, node) : undefined}
       />
     );
-    cursorY = lineY + SECTION_PADDING;
-    methods.forEach((method, index) => {
-      const baselineY = cursorY + rowTextBaselineOffset;
-      content.push(
-        <UmlMethod
-          key={`${node.id}-method-${method.signature}-${index}`}
-          method={method}
-          baselineY={baselineY}
-          fontSize={fontSize}
-          showParameterNames={showParameterNames}
-          onSelect={onMethodSelect ? () => onMethodSelect(method, node) : undefined}
-        />
-      );
-      cursorY += rowHeight;
-    });
-    cursorY += SECTION_PADDING;
-  }
+    cursorY += rowHeight;
+  });
+  cursorY += SECTION_PADDING;
 
   return (
     <ContextMenu>

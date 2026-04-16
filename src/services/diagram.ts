@@ -73,13 +73,6 @@ const collectOccupiedGridSlots = (
 };
 
 export const createDefaultDiagramState = (): DiagramState => ({
-  version: 1,
-  showFields: true,
-  showMethods: true,
-  showParams: true,
-  showTypes: true,
-  showVisibility: true,
-  showRelations: true,
   nodes: {},
   viewport: {
     panX: 0,
@@ -112,31 +105,6 @@ export const normalizeDiagramState = (input: unknown): DiagramState => {
   })();
 
   return {
-    version: 1,
-    showFields:
-      typeof candidate.showFields === "boolean"
-        ? candidate.showFields
-        : fallback.showFields,
-    showMethods:
-      typeof candidate.showMethods === "boolean"
-        ? candidate.showMethods
-        : fallback.showMethods,
-    showParams:
-      typeof candidate.showParams === "boolean"
-        ? candidate.showParams
-        : fallback.showParams,
-    showTypes:
-      typeof candidate.showTypes === "boolean"
-        ? candidate.showTypes
-        : fallback.showTypes,
-    showVisibility:
-      typeof candidate.showVisibility === "boolean"
-        ? candidate.showVisibility
-        : fallback.showVisibility,
-    showRelations:
-      typeof candidate.showRelations === "boolean"
-        ? candidate.showRelations
-        : fallback.showRelations,
     nodes,
     viewport: {
       panX:

@@ -28,3 +28,4 @@ export const ZOOM_STEP_IN = 1.1; // Incremental zoom-in factor.
 export const ZOOM_STEP_OUT = 0.9; // Incremental zoom-out factor.
 export const DRAG_MOVE_THRESHOLD_PX = 3; // Minimum pointer movement before drag is considered intentional.
 export const PACKAGE_LABEL_BASELINE_OFFSET = 1; // Visual baseline correction for package labels.
+export const ZOOM_COMMIT_DEBOUNCE_MS = 300; // Idle time after the last wheel event before the viewport is persisted.

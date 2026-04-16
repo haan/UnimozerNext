@@ -10,13 +10,6 @@ export type DiagramViewport = {
 };
 
 export type DiagramState = {
-  version: 1;
-  showFields: boolean;
-  showMethods: boolean;
-  showParams: boolean;
-  showTypes: boolean;
-  showVisibility: boolean;
-  showRelations: boolean;
   nodes: Record<string, DiagramNodePosition>;
   viewport: DiagramViewport;
 };
