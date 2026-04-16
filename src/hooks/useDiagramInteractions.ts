@@ -70,7 +70,7 @@ export const useDiagramInteractions = ({
         requestPackedArchiveSync();
       };
 
-      diagramPersistTaskRef.current = diagramPersistTaskRef.current.then(writeTask, writeTask);
+      diagramPersistTaskRef.current = diagramPersistTaskRef.current.then(writeTask, () => {});
     },
     [requestPackedArchiveSync]
   );
