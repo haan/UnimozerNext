@@ -982,15 +982,28 @@ fn force_kill_pid(pid: u32) -> Result<(), String> {
 #[cfg(not(target_os = "windows"))]
 fn force_kill_pid(pid: u32) -> Result<(), String> {
     let status = unsafe { libc::kill(pid as libc::pid_t, libc::SIGKILL) };
-    if status == 0 {
-        return Ok(());
+    if status != 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() == Some(libc::ESRCH) {
+            // Process already gone.
+            return Ok(());
+        }
+        return Err(format!("Failed to terminate JShell process {pid}: {error}"));
     }
-    let error = std::io::Error::last_os_error();
-    if error.raw_os_error() == Some(libc::ESRCH) {
-        // Process already gone.
-        return Ok(());
+    // Reap the process so it doesn't linger as a zombie. ECHILD means the
+    // process is not a direct child of ours (e.g. it was a grandchild), in
+    // which case its parent will reap it and there is nothing for us to do.
+    let mut wstatus = 0i32;
+    let waited = unsafe { libc::waitpid(pid as libc::pid_t, &mut wstatus, 0) };
+    if waited < 0 {
+        let error = std::io::Error::last_os_error();
+        if error.raw_os_error() != Some(libc::ECHILD) {
+            return Err(format!(
+                "Failed to wait for JShell process {pid} after kill: {error}"
+            ));
+        }
     }
-    Err(format!("Failed to terminate JShell process {pid}: {error}"))
+    Ok(())
 }
 
 fn non_empty_option(value: &Option<String>) -> Option<String> {
