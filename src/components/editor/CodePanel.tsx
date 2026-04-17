@@ -554,7 +554,14 @@ export const CodePanel = memo(
           lastEditorValueRef.current = content;
           return;
         }
+        // content came from the editor — no need to echo it back.
         if (content === lastEditorValueRef.current) return;
+        // The model has moved ahead of the last value React received from the
+        // editor (a keystroke landed between React's commit and this effect).
+        // Overwriting with the stale prop would drop that character.
+        if (lastEditorValueRef.current !== null && lastEditorValueRef.current !== modelValue) {
+          return;
+        }
         const selection = editor.getSelection();
         if (debugEnabled) {
           logEvent(

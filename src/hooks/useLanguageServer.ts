@@ -557,18 +557,16 @@ export const useLanguageServer = ({
           const requestSeq = completionRequestSeqRef.current;
           const wordUntil = model.getWordUntilPosition(position);
           const typedPrefix = (wordUntil.word ?? "").trim().toLowerCase();
-          const monacoTriggerKind =
-            typeof context.triggerKind === "number" ? context.triggerKind : undefined;
           // Always request full/invoked completion from JDTLS.
           // Incremental refresh contexts can return a truncated stale subset.
           const lspTriggerKind = 1;
 
           logCompletionDebug(
-            `req#${requestSeq} start monacoKind=${monacoTriggerKind ?? "-"} lspKind=${
-              lspTriggerKind ?? "-"
-            } prefix="${typedPrefix}" pos=${position.lineNumber}:${position.column} uri=${
-              model.uri.path
-            }`
+            `req#${requestSeq} start monacoKind=${
+              typeof context.triggerKind === "number" ? context.triggerKind : "-"
+            } lspKind=${lspTriggerKind} prefix="${typedPrefix}" pos=${
+              position.lineNumber
+            }:${position.column} uri=${model.uri.path}`
           );
 
           try {
@@ -613,7 +611,7 @@ export const useLanguageServer = ({
               return { suggestions: [] };
             }
 
-            const { isIncomplete: serverIncomplete, items } = normalizeCompletionResponse(result);
+            const { isIncomplete: serverIsIncomplete, items } = normalizeCompletionResponse(result);
             const currentPackage = parseCurrentPackage(model.getValue());
             const currentClassName = parseCurrentClassNameFromUriPath(model.uri.path);
             const fallbackRange = {
@@ -646,7 +644,7 @@ export const useLanguageServer = ({
             const truncatedItems = filteredItems.slice(0, maxResults);
 
             logCompletionDebug(
-              `req#${requestSeq} counts total=${items.length} nonBlocked=${nonBlockedItems.length} prefixMatched=${prefixMatchedItems.length} returned=${truncatedItems.length}/${maxResults} serverIncomplete=${serverIncomplete}`
+              `req#${requestSeq} counts total=${items.length} nonBlocked=${nonBlockedItems.length} prefixMatched=${prefixMatchedItems.length} returned=${truncatedItems.length}/${maxResults} serverIncomplete=${serverIsIncomplete}`
             );
 
             if (truncatedItems.length > 0) {
