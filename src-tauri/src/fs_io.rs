@@ -71,6 +71,10 @@ pub fn validate_folder_project_root(root: String) -> CommandResult<()> {
         return Err("Selected path is not a directory.".to_string());
     }
 
+    // Deliberately only check for src/ rather than nbproject/ or project.xml.
+    // Students work exclusively with NetBeans-style Java projects, so false
+    // positives are not a realistic concern. The loose check also allows
+    // opening folders that have Java source but lack IDE-generated metadata.
     if root_path.join("src").is_dir() {
         return Ok(());
     }
