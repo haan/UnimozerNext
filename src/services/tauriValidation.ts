@@ -44,6 +44,10 @@ export const voidResponseSchema = z
   .union([z.null(), z.undefined()])
   .transform(() => undefined);
 
+export const jshellOutputEventSchema = z.object({
+  stdout: z.string()
+});
+
 export const runStartEventSchema = z.object({
   runId: z.number()
 });

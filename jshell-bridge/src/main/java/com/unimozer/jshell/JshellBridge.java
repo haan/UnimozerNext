@@ -11,7 +11,9 @@ import jdk.jshell.VarSnippet;
 
 import java.io.ByteArrayOutputStream;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
@@ -22,11 +24,13 @@ import java.util.Locale;
 
 public final class JshellBridge {
     private static final String RESPONSE_PREFIX = "__UNIMOZER_BRIDGE__:";
+    private static final String CHUNK_PREFIX = "__UNIMOZER_BRIDGE_CHUNK__:";
     private static final String DIAG_POST_PREFIX = "__UNIMOZER_BRIDGE_DIAG__:";
     private final ObjectMapper mapper = new ObjectMapper();
     private final String classpath;
     private final List<String> remoteVmOptions;
     private JShell jshell;
+    private PrintWriter writer;
 
     private JshellBridge(String classpath, List<String> remoteVmOptions) {
         this.classpath = classpath;
@@ -83,6 +87,7 @@ public final class JshellBridge {
     private void run() throws Exception {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
              PrintWriter writer = new PrintWriter(System.out, true, StandardCharsets.UTF_8)) {
+            this.writer = writer;
             String line;
             while ((line = reader.readLine()) != null) {
                 long totalStartNs = System.nanoTime();
@@ -274,15 +279,72 @@ public final class JshellBridge {
         }
     }
 
+    private final class ChunkingOutputStream extends OutputStream {
+        private final ByteArrayOutputStream full = new ByteArrayOutputStream();
+        private final ByteArrayOutputStream lineBuf = new ByteArrayOutputStream();
+
+        @Override
+        public synchronized void write(int b) throws IOException {
+            full.write(b);
+            lineBuf.write(b);
+            if (b == '\n') {
+                flushLine();
+            }
+        }
+
+        @Override
+        public synchronized void write(byte[] b, int off, int len) throws IOException {
+            full.write(b, off, len);
+            for (int i = off; i < off + len; i++) {
+                lineBuf.write(b[i]);
+                if (b[i] == '\n') {
+                    flushLine();
+                }
+            }
+        }
+
+        private void flushLine() {
+            String text = lineBuf.toString(StandardCharsets.UTF_8);
+            lineBuf.reset();
+            // Strip trailing \r\n so the frontend doesn't get a spurious blank line
+            // after each println. Blank lines from println() produce text="" here.
+            int end = text.length();
+            while (end > 0 && (text.charAt(end - 1) == '\n' || text.charAt(end - 1) == '\r')) {
+                end--;
+            }
+            emitChunk(text.substring(0, end));
+        }
+
+        synchronized void flushRemaining() {
+            if (lineBuf.size() > 0) {
+                flushLine();
+            }
+        }
+
+        private void emitChunk(String text) {
+            try {
+                ObjectNode node = mapper.createObjectNode();
+                node.put("stdout", text);
+                writer.println(CHUNK_PREFIX + mapper.writeValueAsString(node));
+                writer.flush();
+            } catch (Exception ignored) {
+            }
+        }
+
+        String getContent() {
+            return full.toString(StandardCharsets.UTF_8);
+        }
+    }
+
     private EvalResult evaluate(String code) {
         EvalResult result = new EvalResult();
         long evalStartNs = System.nanoTime();
         StringBuilder diagnostics = new StringBuilder();
-        ByteArrayOutputStream outBuffer = new ByteArrayOutputStream();
+        ChunkingOutputStream chunkingOut = new ChunkingOutputStream();
         ByteArrayOutputStream errBuffer = new ByteArrayOutputStream();
         PrintStream originalOut = System.out;
         PrintStream originalErr = System.err;
-        System.setOut(new PrintStream(outBuffer, true, StandardCharsets.UTF_8));
+        System.setOut(new PrintStream(chunkingOut, true, StandardCharsets.UTF_8));
         System.setErr(new PrintStream(errBuffer, true, StandardCharsets.UTF_8));
         try {
             List<SnippetEvent> events = jshell.eval(code);
@@ -307,12 +369,13 @@ public final class JshellBridge {
         } finally {
             System.setOut(originalOut);
             System.setErr(originalErr);
+            chunkingOut.flushRemaining();
         }
         if (diagnostics.length() > 0) {
             result.error = diagnostics.toString().trim();
             result.ok = false;
         }
-        result.stdout = outBuffer.toString(StandardCharsets.UTF_8);
+        result.stdout = chunkingOut.getContent();
         result.stderr = errBuffer.toString(StandardCharsets.UTF_8);
         result.evalNs = System.nanoTime() - evalStartNs;
         return result;

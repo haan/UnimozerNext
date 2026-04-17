@@ -64,7 +64,6 @@ export const useRunConsole = ({
   const compileInFlightRef = useRef(false);
   const runCancellationRequestedRef = useRef(false);
   const consoleLinesRef = useRef<string[]>([]);
-  const consoleDroppedRef = useRef(0);
   const consoleFlushRef = useRef<number | null>(null);
 
   const setRunSession = useCallback((id: number | null) => {
@@ -76,10 +75,7 @@ export const useRunConsole = ({
     if (consoleFlushRef.current !== null) return;
     consoleFlushRef.current = window.setTimeout(() => {
       consoleFlushRef.current = null;
-      const lines = consoleLinesRef.current;
-      const dropped = consoleDroppedRef.current;
-      const text = dropped > 0 ? [...lines, `... ${dropped} lines truncated ...`].join("\n") : lines.join("\n");
-      setConsoleOutput(text);
+      setConsoleOutput(consoleLinesRef.current.join("\n"));
     }, CONSOLE_FLUSH_DELAY_MS);
   }, []);
 
@@ -91,9 +87,7 @@ export const useRunConsole = ({
         lines.push(line);
       }
       if (lines.length > CONSOLE_MAX_LINES) {
-        const excess = lines.length - CONSOLE_MAX_LINES;
-        lines.splice(0, excess);
-        consoleDroppedRef.current += excess;
+        lines.splice(0, lines.length - CONSOLE_MAX_LINES);
       }
       flushConsole();
     },
@@ -118,7 +112,6 @@ export const useRunConsole = ({
       window.clearTimeout(consoleFlushRef.current);
       consoleFlushRef.current = null;
     }
-    consoleDroppedRef.current = 0;
     if (text) {
       consoleLinesRef.current = text.split(/\r?\n/);
     } else {

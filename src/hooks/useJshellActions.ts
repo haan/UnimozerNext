@@ -4,7 +4,9 @@ import type { MutableRefObject } from "react";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../models/uml";
 import type { ObjectInstance, ObjectInheritedMethodGroup, ObjectMethod } from "../models/objectBench";
 import { normalizeConstructorArg, resolveConstructorParamClass } from "../services/javaCodegen";
+import { listen } from "@tauri-apps/api/event";
 import { jshellEval, jshellForceStop, jshellInspect, jshellStart, jshellStop } from "../services/jshell";
+import { jshellOutputEventSchema, parseSchemaOrNull } from "../services/tauriValidation";
 
 type CreateObjectArgs = {
   form: { objectName: string; paramValues: string[] };
@@ -437,8 +439,21 @@ export const useJshellActions = ({
         method.returnType.trim() === "void";
 
       const invokeMethod = async () => {
-        const result = await jshellEval(callExpression);
-        handleOutput(result.stdout, result.stderr);
+        let chunksReceived = false;
+        const unlisten = await listen("jshell-output", (event) => {
+          const payload = parseSchemaOrNull(jshellOutputEventSchema, event.payload);
+          if (payload !== null) {
+            appendConsoleOutput(payload.stdout);
+            chunksReceived = true;
+          }
+        });
+        let result;
+        try {
+          result = await jshellEval(callExpression);
+        } finally {
+          unlisten();
+        }
+        handleOutput(chunksReceived ? null : result.stdout, result.stderr);
         if (!result.ok) {
           const message = trimStatus(
             result.error || result.stderr || "Unknown error"

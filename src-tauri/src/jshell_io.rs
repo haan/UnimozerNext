@@ -14,7 +14,7 @@ use std::{
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 use crate::java_tools::{java_executable_name, resolve_resource};
 use crate::BRIDGE_STDERR_BUFFER_MAX_LINES;
@@ -93,6 +93,12 @@ pub struct JshellEvalResponse {
     stderr: Option<String>,
     #[serde(default)]
     error: Option<String>,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct JshellOutputEvent {
+    stdout: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -631,10 +637,12 @@ fn jshell_send_internal<T: for<'de> Deserialize<'de>>(
     session: &mut JshellSession,
     mut request: serde_json::Value,
     diagnostic_command_id: Option<&str>,
+    on_chunk: Option<&dyn Fn(&str)>,
 ) -> Result<(T, JshellSendTiming), String> {
     const BRIDGE_RESPONSE_SCAN_LIMIT: usize = 512;
     const BRIDGE_NOISE_ERROR_PREVIEW_LINES: usize = 200;
     const BRIDGE_RESPONSE_PREFIX: &str = "__UNIMOZER_BRIDGE__:";
+    const BRIDGE_CHUNK_PREFIX: &str = "__UNIMOZER_BRIDGE_CHUNK__:";
 
     let total_begin = Instant::now();
     let stderr_snapshot = || {
@@ -721,6 +729,17 @@ fn jshell_send_internal<T: for<'de> Deserialize<'de>>(
         let decoded = String::from_utf8_lossy(&response);
         let trimmed = decoded.trim_end_matches(|character| character == '\r' || character == '\n');
         if trimmed.is_empty() {
+            continue;
+        }
+
+        if let Some((_, chunk_val)) =
+            parse_prefixed_bridge_response(trimmed, BRIDGE_CHUNK_PREFIX)
+        {
+            if let Some(cb) = on_chunk {
+                if let Some(text) = chunk_val.get("stdout").and_then(|v| v.as_str()) {
+                    cb(text);
+                }
+            }
             continue;
         }
 
@@ -891,7 +910,7 @@ fn jshell_send<T: for<'de> Deserialize<'de>>(
     session: &mut JshellSession,
     request: serde_json::Value,
 ) -> Result<T, String> {
-    jshell_send_internal(session, request, None).map(|(response, _)| response)
+    jshell_send_internal(session, request, None, None).map(|(response, _)| response)
 }
 
 fn jshell_send_timed<T: for<'de> Deserialize<'de>>(
@@ -899,7 +918,15 @@ fn jshell_send_timed<T: for<'de> Deserialize<'de>>(
     request: serde_json::Value,
     command_id: &str,
 ) -> Result<(T, JshellSendTiming), String> {
-    jshell_send_internal(session, request, Some(command_id))
+    jshell_send_internal(session, request, Some(command_id), None)
+}
+
+fn jshell_send_streaming<T: for<'de> Deserialize<'de>>(
+    session: &mut JshellSession,
+    request: serde_json::Value,
+    on_chunk: &dyn Fn(&str),
+) -> Result<T, String> {
+    jshell_send_internal(session, request, None, Some(on_chunk)).map(|(response, _)| response)
 }
 
 fn stop_current_session(state: &JshellState) {
@@ -1245,22 +1272,6 @@ fn start_jshell_session_timed(
     )
 }
 
-fn jshell_eval_internal(state: &JshellState, code: &str) -> Result<JshellEvalResponse, String> {
-    let mut guard = state
-        .current
-        .lock()
-        .map_err(|_| "Failed to lock JShell state".to_string())?;
-    let session = guard
-        .as_mut()
-        .ok_or_else(|| "JShell is not running".to_string())?;
-    jshell_send(
-        session,
-        serde_json::json!({
-            "cmd": "eval",
-            "code": code
-        }),
-    )
-}
 
 fn jshell_eval_internal_timed(
     state: &JshellState,
@@ -1846,8 +1857,56 @@ pub fn jshell_force_stop(state: State<JshellState>) -> Result<bool, String> {
     }
 }
 
+fn jshell_eval_internal_streaming(
+    state: &JshellState,
+    code: &str,
+    app: &tauri::AppHandle,
+) -> Result<JshellEvalResponse, String> {
+    // Batch chunks before emitting events so a tight infinite loop cannot
+    // flood the JS event loop and prevent the Stop button from being handled.
+    // No total cap here — the frontend's rolling line buffer handles size limits
+    // silently, so the student always sees the most recent output without any
+    // tool message injected into the program's output stream.
+    const BATCH_BYTES: usize = 4 * 1024;
+
+    let batch = std::cell::RefCell::new(String::new());
+
+    let mut guard = state
+        .current
+        .lock()
+        .map_err(|_| "Failed to lock JShell state".to_string())?;
+    let session = guard
+        .as_mut()
+        .ok_or_else(|| "JShell is not running".to_string())?;
+
+    let result: JshellEvalResponse = jshell_send_streaming(
+        session,
+        serde_json::json!({ "cmd": "eval", "code": code }),
+        &|chunk| {
+            let mut b = batch.borrow_mut();
+            if !b.is_empty() {
+                b.push('\n');
+            }
+            b.push_str(chunk);
+            if b.len() >= BATCH_BYTES {
+                let _ = app.emit("jshell-output", JshellOutputEvent { stdout: b.clone() });
+                b.clear();
+            }
+        },
+    )?;
+
+    // Flush whatever didn't fill a full batch (normal method completion).
+    let b = batch.borrow();
+    if !b.is_empty() {
+        let _ = app.emit("jshell-output", JshellOutputEvent { stdout: b.clone() });
+    }
+
+    Ok(result)
+}
+
 #[tauri::command]
 pub async fn jshell_eval(
+    app: tauri::AppHandle,
     state: State<'_, JshellState>,
     code: String,
 ) -> Result<JshellEvalResponse, String> {
@@ -1855,9 +1914,11 @@ pub async fn jshell_eval(
         current: state.inner().current.clone(),
         bridge_pid: state.inner().bridge_pid.clone(),
     };
-    tauri::async_runtime::spawn_blocking(move || jshell_eval_internal(&state_owned, &code))
-        .await
-        .map_err(|error| format!("Failed to join JShell eval task: {error}"))?
+    tauri::async_runtime::spawn_blocking(move || {
+        jshell_eval_internal_streaming(&state_owned, &code, &app)
+    })
+    .await
+    .map_err(|error| format!("Failed to join JShell eval task: {error}"))?
 }
 
 #[tauri::command]
