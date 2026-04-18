@@ -14,7 +14,7 @@ import type { ObjectInstance } from "./models/objectBench";
 import type { OpenFile } from "./models/openFile";
 import type { AppSettings, RecentProjectEntry } from "./models/settings";
 import { useSplitRatios } from "./hooks/useSplitRatios";
-import { useVerticalSplit } from "./hooks/useVerticalSplit";
+import { useHorizontalSplit } from "./hooks/useHorizontalSplit";
 import { useRunConsole } from "./hooks/useRunConsole";
 import { useLanguageServer } from "./hooks/useLanguageServer";
 import { useDrafts } from "./hooks/useDrafts";
@@ -276,7 +276,7 @@ export default function AppContainer({
     containerRef: benchContainerRef,
     splitRatio: objectBenchSplitRatio,
     startResize: startBenchResize
-  } = useVerticalSplit({
+  } = useHorizontalSplit({
     ratio: settings.layout.objectBenchSplitRatio,
     onCommit: updateObjectBenchSplitRatioSetting,
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX

@@ -38,45 +38,25 @@ export const AppWorkspacePanels = ({
   consoleMinHeightPx
 }: AppWorkspacePanelsProps) => {
   if (fullscreenMode === "uml") {
+    const {
+      benchContainerRef,
+      objectBenchSplitRatio,
+      startBenchResize,
+      objectBench,
+      showPrivate,
+      showInherited,
+      showStatic,
+      getMethodsForObject,
+      onCallMethod,
+      onRemoveObject,
+      ...diagramPanelProps
+    } = objectBenchSectionProps;
     return (
       <div className="flex flex-1 overflow-hidden">
         <main className="flex flex-1 flex-col bg-background">
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-              <DiagramPanel
-                graph={objectBenchSectionProps.graph}
-                diagram={objectBenchSectionProps.diagram}
-                compiled={objectBenchSectionProps.compiled}
-                showPackages={objectBenchSectionProps.showPackages}
-                showParameterNames={objectBenchSectionProps.showParameterNames}
-                edgeStrokeWidth={objectBenchSectionProps.edgeStrokeWidth}
-                fontSize={objectBenchSectionProps.fontSize}
-                structogramColorsEnabled={objectBenchSectionProps.structogramColorsEnabled}
-                exportDefaultPath={objectBenchSectionProps.exportDefaultPath}
-                onExportStatus={objectBenchSectionProps.onExportStatus}
-                onNodePositionChange={objectBenchSectionProps.onNodePositionChange}
-                onViewportChange={objectBenchSectionProps.onViewportChange}
-                onNodeSelect={objectBenchSectionProps.onNodeSelect}
-                onCompileProject={objectBenchSectionProps.onCompileProject}
-                onCompileClass={objectBenchSectionProps.onCompileClass}
-                onRunMain={objectBenchSectionProps.onRunMain}
-                onCreateObject={objectBenchSectionProps.onCreateObject}
-                onRenameClass={objectBenchSectionProps.onRenameClass}
-                onRegisterZoom={objectBenchSectionProps.onRegisterZoom}
-                onRegisterExport={objectBenchSectionProps.onRegisterExport}
-                onRegisterStructogramExport={objectBenchSectionProps.onRegisterStructogramExport}
-                onAddClass={objectBenchSectionProps.onAddClass}
-                onRemoveClass={objectBenchSectionProps.onRemoveClass}
-                onAddField={objectBenchSectionProps.onAddField}
-                onAddConstructor={objectBenchSectionProps.onAddConstructor}
-                onAddMethod={objectBenchSectionProps.onAddMethod}
-                onFieldSelect={objectBenchSectionProps.onFieldSelect}
-                onMethodSelect={objectBenchSectionProps.onMethodSelect}
-                viewMode={objectBenchSectionProps.viewMode}
-                activeFilePath={objectBenchSectionProps.activeFilePath}
-                caretLineNumber={objectBenchSectionProps.caretLineNumber}
-                onDebugLog={objectBenchSectionProps.onDebugLog}
-              />
+              <DiagramPanel {...diagramPanelProps} />
             </div>
           </div>
         </main>

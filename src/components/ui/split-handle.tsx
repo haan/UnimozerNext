@@ -15,7 +15,7 @@ export const SplitHandle = ({
     return (
       <div
         className="editor-separator-handle absolute top-0 z-10 h-full w-2.5 -translate-x-1/2 cursor-col-resize"
-        style={{ left: `${positionPercent}%` }}
+        style={{ left: `${positionPercent}%`, touchAction: "none" }}
         role="separator"
         aria-orientation="vertical"
         aria-label={ariaLabel}
@@ -29,7 +29,7 @@ export const SplitHandle = ({
   return (
     <div
       className="editor-separator-handle absolute left-0 z-10 h-2.5 w-full -translate-y-1/2 cursor-row-resize"
-      style={{ top: `${positionPercent}%` }}
+      style={{ top: `${positionPercent}%`, touchAction: "none" }}
       role="separator"
       aria-orientation="horizontal"
       aria-label={ariaLabel}

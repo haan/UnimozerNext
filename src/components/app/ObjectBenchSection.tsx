@@ -3,6 +3,7 @@ import type { DiagramState, DiagramViewport } from "../../models/diagram";
 import type { ObjectInstance } from "../../models/objectBench";
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../../models/uml";
 import { OBJECT_BENCH_MIN_HEIGHT_PX } from "../../constants/layout";
+import { SplitHandle } from "../ui/split-handle";
 import { DiagramPanel, type DiagramViewMode } from "../diagram/DiagramPanel";
 import type { ExportControls, ZoomControls } from "../diagram/UmlDiagram";
 import type { StructogramExportControls } from "../structogram/StructogramView";
@@ -138,16 +139,12 @@ export const ObjectBenchSection = ({
           onDebugLog={onDebugLog}
         />
       </div>
-      <div
-        className="editor-separator-handle absolute left-0 z-10 h-2.5 w-full -translate-y-1/2 cursor-row-resize"
-        style={{ top: `${objectBenchSplitRatio * 100}%` }}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="Resize object bench panel"
+      <SplitHandle
+        orientation="horizontal"
+        positionPercent={objectBenchSplitRatio * 100}
+        ariaLabel="Resize object bench panel"
         onPointerDown={startBenchResize}
-      >
-        <div className="editor-separator-line pointer-events-none absolute inset-x-0 top-1/2 h-px -translate-y-1/2" />
-      </div>
+      />
       <div
         className="flex-1 overflow-hidden"
         style={{ minHeight: `${OBJECT_BENCH_MIN_HEIGHT_PX}px` }}
