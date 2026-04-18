@@ -23,6 +23,7 @@ type AddFieldDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (form: AddFieldForm) => Promise<void> | void;
+  existingFieldNames?: string[];
   busy?: boolean;
 };
 
@@ -43,6 +44,7 @@ export const AddFieldDialog = ({
   open,
   onOpenChange,
   onSubmit,
+  existingFieldNames,
   busy
 }: AddFieldDialogProps) => {
   const [form, setForm] = useState<AddFieldForm>(defaultForm);
@@ -76,6 +78,7 @@ export const AddFieldDialog = ({
   const nameValue = form.name.trim();
   const typeValue = form.type.trim();
   const isNameValid = isValidJavaIdentifier(nameValue);
+  const isNameDuplicate = !!nameValue && (existingFieldNames?.includes(nameValue) ?? false);
   const disableSetter = form.isFinal;
 
   return (
@@ -95,9 +98,15 @@ export const AddFieldDialog = ({
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={form.name}
                 required
-                aria-invalid={nameValue ? !isNameValid : false}
+                autoFocus
+                aria-invalid={nameValue ? (!isNameValid || isNameDuplicate) : false}
                 onChange={(event) => update({ name: event.target.value })}
               />
+              {isNameDuplicate ? (
+                <p className="col-start-2 text-xs text-destructive">
+                  A field with this name already exists.
+                </p>
+              ) : null}
             </div>
 
             <div className="grid grid-cols-[90px_1fr] items-center gap-3">
@@ -209,9 +218,8 @@ export const AddFieldDialog = ({
                       onChange={(event) =>
                         update({
                           isFinal: event.target.checked,
-                          includeSetter: event.target.checked
-                            ? false
-                            : form.includeSetter
+                          includeSetter: event.target.checked ? false : form.includeSetter,
+                          useParamPrefix: event.target.checked ? false : form.useParamPrefix
                         })
                       }
                     />
@@ -231,7 +239,7 @@ export const AddFieldDialog = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={disabled || !nameValue || !typeValue || !isNameValid}>
+            <Button type="submit" disabled={disabled || !typeValue || !isNameValid || isNameDuplicate}>
               OK
             </Button>
           </div>

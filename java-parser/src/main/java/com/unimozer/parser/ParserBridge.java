@@ -512,7 +512,7 @@ public class ParserBridge {
     boolean includeSetter = request.includeSetter && !request.field.isFinal && !isInterface;
     String fieldName = request.field.name;
     String capitalized = capitalize(fieldName);
-    String getterName = "get" + capitalized;
+    String getterName = "boolean".equals(request.field.fieldType) ? "is" + capitalized : "get" + capitalized;
     String setterName = "set" + capitalized;
     String paramName = request.useParamPrefix ? "p" + capitalized : fieldName;
 

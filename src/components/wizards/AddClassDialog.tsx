@@ -13,7 +13,6 @@ export type AddClassForm = {
   isAbstract: boolean;
   includeMain: boolean;
   includeJavadoc: boolean;
-  advancedOpen: boolean;
 };
 
 type AddClassDialogProps = {
@@ -31,8 +30,7 @@ const defaultForm: AddClassForm = {
   isFinal: false,
   isAbstract: false,
   includeMain: false,
-  includeJavadoc: false,
-  advancedOpen: false
+  includeJavadoc: false
 };
 
 export const AddClassDialog = ({
@@ -43,11 +41,13 @@ export const AddClassDialog = ({
 }: AddClassDialogProps) => {
   const [form, setForm] = useState<AddClassForm>(defaultForm);
   const [submitting, setSubmitting] = useState(false);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setForm(defaultForm);
       setSubmitting(false);
+      setAdvancedOpen(false);
     }
   }, [open]);
 
@@ -87,6 +87,7 @@ export const AddClassDialog = ({
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={form.name}
                 required
+                autoFocus
                 aria-invalid={nameValue ? !isNameValid : false}
                 onChange={(event) => update({ name: event.target.value })}
               />
@@ -121,13 +122,13 @@ export const AddClassDialog = ({
             <button
               type="button"
               className="inline-flex items-center text-sm font-medium text-muted-foreground hover:text-foreground"
-              onClick={() => update({ advancedOpen: !form.advancedOpen })}
+              onClick={() => setAdvancedOpen((prev) => !prev)}
             >
-              {form.advancedOpen ? "▾" : "▸"} Advanced
+              {advancedOpen ? "▾" : "▸"} Advanced
             </button>
           </div>
 
-          {form.advancedOpen ? (
+          {advancedOpen ? (
             <div className="space-y-3">
               <div className="grid grid-cols-[90px_1fr] items-center gap-3">
                 <label className="text-sm font-medium">Extends:</label>

@@ -46,6 +46,7 @@ type AppDialogsProps = {
   addFieldOpen: boolean;
   onAddFieldOpenChange: (open: boolean) => void;
   onCreateField: (form: AddFieldForm) => void;
+  addFieldExistingNames: string[];
   addConstructorOpen: boolean;
   onAddConstructorOpenChange: (open: boolean) => void;
   addConstructorClassName?: string;
@@ -129,6 +130,7 @@ export const AppDialogs = ({
   addFieldOpen,
   onAddFieldOpenChange,
   onCreateField,
+  addFieldExistingNames,
   addConstructorOpen,
   onAddConstructorOpenChange,
   addConstructorClassName,
@@ -216,6 +218,7 @@ export const AppDialogs = ({
       open={addFieldOpen}
       onOpenChange={onAddFieldOpenChange}
       onSubmit={onCreateField}
+      existingFieldNames={addFieldExistingNames}
       busy={busy}
     />
     <AddConstructorDialog

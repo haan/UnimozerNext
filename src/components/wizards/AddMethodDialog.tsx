@@ -111,6 +111,7 @@ export const AddMethodDialog = ({
   const isNameValid = isValidJavaIdentifier(nameValue);
   const canSubmit = isNameValid && invalidParamIds.size === 0;
   const disableAbstract = form.isStatic;
+  const disableStatic = form.isAbstract;
   const specialReturnTypes = useMemo(
     () =>
       className
@@ -138,6 +139,7 @@ export const AddMethodDialog = ({
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={form.name}
                 required
+                autoFocus
                 aria-invalid={nameValue ? !isNameValid : false}
                 onChange={(event) => update({ name: event.target.value })}
               />
@@ -216,6 +218,7 @@ export const AddMethodDialog = ({
                     <input
                       type="checkbox"
                       checked={form.isStatic}
+                      disabled={disableStatic}
                       onChange={(event) =>
                         update({
                           isStatic: event.target.checked,
@@ -248,7 +251,7 @@ export const AddMethodDialog = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={disabled || !nameValue || !canSubmit}>
+            <Button type="submit" disabled={disabled || !canSubmit}>
               OK
             </Button>
           </div>

@@ -1423,6 +1423,7 @@ export default function AppContainer({
         addFieldOpen={addFieldOpen}
         onAddFieldOpenChange={handleAddFieldOpenChange}
         onCreateField={handleCreateField}
+        addFieldExistingNames={(fieldTarget ?? selectedNode)?.fields.map((f) => f.signature.split(": ")[0]) ?? []}
         addConstructorOpen={addConstructorOpen}
         onAddConstructorOpenChange={handleAddConstructorOpenChange}
         addConstructorClassName={constructorTarget?.name ?? selectedNode?.name}

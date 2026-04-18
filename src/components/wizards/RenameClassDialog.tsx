@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -25,14 +25,16 @@ export const RenameClassDialog = ({
 }: RenameClassDialogProps) => {
   const [name, setName] = useState(className);
   const [submitting, setSubmitting] = useState(false);
+  const classNameRef = useRef(className);
+  classNameRef.current = className;
 
   useEffect(() => {
     if (open) {
-      setName(className);
+      setName(classNameRef.current);
       return;
     }
     setSubmitting(false);
-  }, [className, open]);
+  }, [open]);
 
   const normalizedName = useMemo(() => name.trim().replace(/\.java$/i, ""), [name]);
   const isNameValid = normalizedName.length > 0 && isValidJavaIdentifier(normalizedName);
@@ -69,6 +71,7 @@ export const RenameClassDialog = ({
                 className="h-8 w-full rounded border border-input bg-background px-2 text-sm outline-none focus:ring-1 focus:ring-ring aria-[invalid=true]:border-destructive aria-[invalid=true]:ring-1 aria-[invalid=true]:ring-destructive"
                 value={name}
                 required
+                autoFocus
                 aria-invalid={normalizedName ? !isNameValid : false}
                 onChange={(event) => setName(event.target.value)}
               />
