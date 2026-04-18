@@ -133,7 +133,7 @@ export const registerMonacoThemes = async (
 };
 
 export const resolveMonacoTheme = (theme: string | undefined, darkMode: boolean) => {
-  if (!theme || theme === "default") {
+  if (!theme || theme === "default" || theme === "vs") {
     return darkMode ? INTERNAL_DEFAULT_DARK_THEME_ID : INTERNAL_DEFAULT_LIGHT_THEME_ID;
   }
   return theme;
@@ -255,7 +255,7 @@ const upsertRuleColor = (rules: ThemeRule[], token: string, color: string) => {
 const withJavaDeclarationTokenColors = (
   theme: Monaco.editor.IStandaloneThemeData
 ): Monaco.editor.IStandaloneThemeData => {
-  const rules = Array.isArray(theme.rules) ? sanitizeThemeRules([...theme.rules]) : [];
+  const rules = Array.isArray(theme.rules) ? [...theme.rules] : [];
   const isDark = (theme.base ?? "").toLowerCase().includes("dark");
   const editorForeground = normalizeColor(theme.colors?.["editor.foreground"]);
   const keywordFallback =
@@ -267,8 +267,8 @@ const withJavaDeclarationTokenColors = (
   const keywordColor = findRuleColor(rules, KEYWORD_COLOR_CANDIDATES) ?? keywordFallback;
 
   const typeColor =
-    keywordColor ??
     findRuleColor(rules, TYPE_COLOR_CANDIDATES) ??
+    keywordColor ??
     editorForeground ??
     typeFallback;
 

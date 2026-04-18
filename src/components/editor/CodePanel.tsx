@@ -511,10 +511,6 @@ export const CodePanel = memo(
     const applyTheme = useCallback(
       async (monaco: typeof import("monaco-editor") | null) => {
         if (!monaco) return;
-        if (resolvedTheme === "vs") {
-          monaco.editor.setTheme("vs");
-          return;
-        }
         await registerMonacoThemes(monaco, resolvedTheme);
         monaco.editor.setTheme(resolvedTheme);
       },
