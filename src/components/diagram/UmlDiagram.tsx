@@ -9,6 +9,7 @@ import type { DiagramState, DiagramViewport } from "../../models/diagram";
 import type { UmlConstructor, UmlGraph, UmlNode } from "../../models/uml";
 import { mergeDiagramState } from "../../services/diagram";
 import { basename, joinPath } from "../../services/paths";
+import { renderSvgToCanvas } from "../../services/svgExport";
 import { Association } from "./Association";
 import { Class } from "./Class";
 import { Dependency } from "./Dependency";
@@ -58,6 +59,9 @@ const computeNodeHeight = (
     2 * SECTION_PADDING + node.methods.length * rowHeight
   );
 };
+
+const normalizePngPath = (path: string) =>
+  path.toLowerCase().endsWith(".png") ? path : `${path}.png`;
 
 const resolveExportDirectory = (path: string) => {
   const normalized = path.replace(/[\\/]+$/, "");
@@ -1038,55 +1042,14 @@ export const UmlDiagram = ({
     []
   );
 
-  const renderSvgToCanvas = useCallback(
-    (svg: SVGSVGElement, width: number, height: number) =>
-      new Promise<HTMLCanvasElement>((resolve, reject) => {
-        const serializer = new XMLSerializer();
-        const raw = serializer.serializeToString(svg);
-        const blob = new Blob([raw], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const image = new Image();
-        image.onload = () => {
-          try {
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.max(1, Math.round(width * EXPORT_SCALE));
-            canvas.height = Math.max(1, Math.round(height * EXPORT_SCALE));
-            const ctx = canvas.getContext("2d");
-            if (!ctx) {
-              reject(new Error("Failed to create canvas context."));
-              return;
-            }
-            ctx.imageSmoothingEnabled = true;
-            ctx.scale(EXPORT_SCALE, EXPORT_SCALE);
-            ctx.drawImage(image, 0, 0, width, height);
-            resolve(canvas);
-          } catch (error) {
-            reject(error instanceof Error ? error : new Error(String(error)));
-          } finally {
-            URL.revokeObjectURL(url);
-          }
-        };
-        image.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error("Failed to render SVG."));
-        };
-        image.src = url;
-      }),
-    []
-  );
-
   const renderSvgToPngDataUrl = useCallback(
     async (svg: SVGSVGElement, width: number, height: number) => {
-      const canvas = await renderSvgToCanvas(svg, width, height);
+      const scale = EXPORT_SCALE * Math.max(1, window.devicePixelRatio ?? 1);
+      const canvas = await renderSvgToCanvas(svg, width, height, scale);
       return canvas.toDataURL("image/png");
     },
-    [renderSvgToCanvas]
+    []
   );
-
-  const normalizePngPath = useCallback((path: string) => {
-    if (path.toLowerCase().endsWith(".png")) return path;
-    return `${path}.png`;
-  }, []);
 
   const buildDefaultPath = useCallback(
     (fileName: string) => {
@@ -1122,7 +1085,7 @@ export const UmlDiagram = ({
         await ensureEmbeddedFontCss();
         const payload = buildExportSvg(options.bounds, options.nodeId, options.style);
         if (!payload) {
-          reportExportStatus("UML diagram not ready for export.");
+          toast.error("UML diagram not ready for export.");
           return;
         }
 
@@ -1132,7 +1095,6 @@ export const UmlDiagram = ({
           filters: [{ name: "PNG Image", extensions: ["png"] }]
         });
         if (!selection || typeof selection !== "string") {
-          reportExportStatus("Export cancelled.");
           return;
         }
 
@@ -1157,7 +1119,6 @@ export const UmlDiagram = ({
       buildExportSvg,
       ensureEmbeddedFontCss,
       formatExportError,
-      normalizePngPath,
       renderSvgToPngDataUrl,
       reportExportStatus
     ]
@@ -1182,10 +1143,12 @@ export const UmlDiagram = ({
         if (!payload) {
           throw new Error("UML diagram is not ready for copy.");
         }
+        const scale = EXPORT_SCALE * Math.max(1, window.devicePixelRatio ?? 1);
         const canvas = await renderSvgToCanvas(
           payload.svg,
           payload.width,
-          payload.height
+          payload.height,
+          scale
         );
         const ctx = canvas.getContext("2d");
         if (!ctx) {
@@ -1212,13 +1175,13 @@ export const UmlDiagram = ({
         }
       });
     },
-    [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas]
+    [buildExportSvg, ensureEmbeddedFontCss, formatExportError]
   );
 
   const exportDiagramPng = useCallback(
     async (style?: ExportStyle) => {
       if (!diagramBounds) {
-        reportExportStatus("No UML diagram to export.");
+        toast.error("No UML diagram to export.");
         return;
       }
       const projectName = exportDefaultPath
@@ -1232,7 +1195,7 @@ export const UmlDiagram = ({
         successLabel: "Exported diagram to"
       });
     },
-    [diagramBounds, exportDefaultPath, exportPng, reportExportStatus]
+    [diagramBounds, exportDefaultPath, exportPng]
   );
 
   const copyDiagramPng = useCallback(
@@ -1256,7 +1219,7 @@ export const UmlDiagram = ({
     async (nodeId: string, style?: ExportStyle) => {
       const target = nodesWithLayout.find((node) => node.id === nodeId);
       if (!target) {
-        reportExportStatus("Class not found for export.");
+        toast.error("Class not found for export.");
         return;
       }
       const bounds = {
@@ -1274,7 +1237,7 @@ export const UmlDiagram = ({
         successLabel: `Exported ${target.name} to`
       });
     },
-    [nodesWithLayout, exportPng, reportExportStatus]
+    [nodesWithLayout, exportPng]
   );
 
   const copyNodePng = useCallback(

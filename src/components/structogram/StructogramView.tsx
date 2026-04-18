@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { basename, joinPath } from "../../services/paths";
+import { renderSvgToCanvas } from "../../services/svgExport";
 import type { UmlMethod } from "../../models/uml";
 import type { ZoomControls } from "../diagram/UmlDiagram";
 import {
@@ -305,11 +306,11 @@ export const StructogramView = ({
     if (embeddedFontCss.length > 0) {
       const styleElement = document.createElementNS("http://www.w3.org/2000/svg", "style");
       styleElement.setAttribute("type", "text/css");
-      styleElement.textContent = `${embeddedFontCss}\nsvg, text { font-family: ${exportFontFamily}; }`;
+      styleElement.textContent = `${embeddedFontCss}\nsvg, text, tspan { font-family: ${exportFontFamily}; }`;
       clone.insertBefore(styleElement, clone.firstChild);
     }
     clone.setAttribute("font-family", exportFontFamily);
-    clone.querySelectorAll("text").forEach((element) => {
+    clone.querySelectorAll("text, tspan").forEach((element) => {
       if (!element.getAttribute("font-family")) {
         element.setAttribute("font-family", exportFontFamily);
       }
@@ -345,45 +346,6 @@ export const StructogramView = ({
     return { svg: clone, width, height };
   }, [palette.body, renderMetrics]);
 
-  const renderSvgToCanvas = useCallback(
-    (svg: SVGSVGElement, width: number, height: number) =>
-      new Promise<HTMLCanvasElement>((resolve, reject) => {
-        const serializer = new XMLSerializer();
-        const raw = serializer.serializeToString(svg);
-        const blob = new Blob([raw], { type: "image/svg+xml;charset=utf-8" });
-        const url = URL.createObjectURL(blob);
-        const image = new Image();
-        image.onload = () => {
-          try {
-            const dpr = Math.max(1, window.devicePixelRatio ?? 1);
-            const exportScale = STRUCTOGRAM_EXPORT_SCALE * dpr;
-            const canvas = document.createElement("canvas");
-            canvas.width = Math.max(1, Math.round(width * exportScale));
-            canvas.height = Math.max(1, Math.round(height * exportScale));
-            const ctx = canvas.getContext("2d");
-            if (!ctx) {
-              reject(new Error("Failed to create canvas context."));
-              return;
-            }
-            ctx.imageSmoothingEnabled = true;
-            ctx.scale(exportScale, exportScale);
-            ctx.drawImage(image, 0, 0, width, height);
-            resolve(canvas);
-          } catch (error) {
-            reject(error instanceof Error ? error : new Error(String(error)));
-          } finally {
-            URL.revokeObjectURL(url);
-          }
-        };
-        image.onerror = () => {
-          URL.revokeObjectURL(url);
-          reject(new Error("Failed to render structogram SVG."));
-        };
-        image.src = url;
-      }),
-    []
-  );
-
   const methodFileNamePart = useMemo(
     () => sanitizeFileName(method.name?.trim() || declaration || "structogram"),
     [declaration, method.name]
@@ -410,11 +372,11 @@ export const StructogramView = ({
         filters: [{ name: "PNG Image", extensions: ["png"] }]
       });
       if (!selection || typeof selection !== "string") {
-        reportExportStatus("Export cancelled.");
         return;
       }
 
-      const canvas = await renderSvgToCanvas(payload.svg, payload.width, payload.height);
+      const scale = STRUCTOGRAM_EXPORT_SCALE * Math.max(1, window.devicePixelRatio ?? 1);
+      const canvas = await renderSvgToCanvas(payload.svg, payload.width, payload.height, scale);
       const pngDataUrl = canvas.toDataURL("image/png");
       const base64 = pngDataUrl.split(",")[1] ?? "";
       const targetPath = normalizePngPath(selection);
@@ -433,7 +395,6 @@ export const StructogramView = ({
     ensureEmbeddedFontCss,
     formatExportError,
     methodFileNamePart,
-    renderSvgToCanvas,
     reportExportStatus
   ]);
 
@@ -448,7 +409,8 @@ export const StructogramView = ({
       if (!payload) {
         throw new Error("Structogram is not ready for copy.");
       }
-      const canvas = await renderSvgToCanvas(payload.svg, payload.width, payload.height);
+      const scale = STRUCTOGRAM_EXPORT_SCALE * Math.max(1, window.devicePixelRatio ?? 1);
+      const canvas = await renderSvgToCanvas(payload.svg, payload.width, payload.height, scale);
       const ctx = canvas.getContext("2d");
       if (!ctx) {
         throw new Error("Canvas is unavailable.");
@@ -467,13 +429,12 @@ export const StructogramView = ({
       loading: "Copying structogram to clipboard...",
       success: "Copied structogram to clipboard.",
       error: (error) => {
+        const prefix = "Failed to copy structogram: ";
         const reason = formatExportError(error);
-        return reason.toLowerCase().startsWith("failed to copy structogram")
-          ? reason
-          : `Failed to copy structogram: ${reason}`;
+        return reason.toLowerCase().startsWith(prefix.toLowerCase()) ? reason : `${prefix}${reason}`;
       }
     });
-  }, [buildExportSvg, ensureEmbeddedFontCss, formatExportError, renderSvgToCanvas]);
+  }, [buildExportSvg, ensureEmbeddedFontCss, formatExportError]);
 
   const zoomIn = useCallback(() => {
     setViewScale((prev) => clampViewScale(prev * STRUCTOGRAM_ZOOM_STEP_IN));
