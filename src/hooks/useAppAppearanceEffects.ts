@@ -1,5 +1,8 @@
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect } from "react";
+
+const platformPromise = invoke<string>("get_platform");
 
 import { toDisplayPath } from "../services/paths";
 
@@ -88,21 +91,11 @@ export const useAppAppearanceEffects = ({
   }, [darkMode]);
 
   useEffect(() => {
-    if (typeof navigator === "undefined") {
-      return;
-    }
-    if (!navigator.userAgent.toLowerCase().includes("windows")) {
-      return;
-    }
-    const window = getCurrentWindow();
-    window.setTheme(darkMode ? "dark" : "light").catch(() => undefined);
+    void platformPromise.then((platform) => {
+      if (platform !== "windows") return;
+      getCurrentWindow().setTheme(darkMode ? "dark" : "light").catch(() => undefined);
+    });
   }, [darkMode]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.style.removeProperty("--editor-separator-color");
-    root.style.removeProperty("--editor-separator-hover");
-  }, []);
 
   useEffect(() => {
     const root = document.documentElement;

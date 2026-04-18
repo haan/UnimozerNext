@@ -48,6 +48,17 @@ pub fn settings_path(app: &AppHandle) -> CommandResult<PathBuf> {
     Ok(config_dir.join("settings.json"))
 }
 
+#[tauri::command]
+pub fn get_platform() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "windows"
+    } else if cfg!(target_os = "macos") {
+        "macos"
+    } else {
+        "linux"
+    }
+}
+
 pub fn load_startup_settings(app: &AppHandle) -> AppSettings {
     let Ok(path) = settings_path(app) else {
         return os_default_settings(app);

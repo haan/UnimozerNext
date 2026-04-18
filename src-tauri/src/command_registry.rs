@@ -31,6 +31,7 @@ pub(crate) fn with_invoke_handlers(
         crate::settings_io::read_settings,
         crate::settings_io::read_default_settings,
         crate::settings_io::write_settings,
+        crate::settings_io::get_platform,
         crate::parser_io::parse_uml_graph,
         crate::parser_io::add_field_to_class,
         crate::parser_io::add_constructor_to_class,
