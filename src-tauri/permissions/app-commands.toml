@@ -36,6 +36,7 @@ commands.allow = [
   "read_settings",
   "read_default_settings",
   "write_settings",
+  "get_platform",
   "ls_start",
   "ls_stop",
   "ls_did_open",
