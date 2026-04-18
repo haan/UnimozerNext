@@ -24,7 +24,7 @@ type UseRunConsoleArgs = {
   setBusy: (busy: boolean) => void;
   setStatus: (status: string) => void;
   formatStatus: (input: unknown) => string;
-  preserveConsoleOnCompile?: boolean;
+  preserveConsole?: boolean;
   onCompileInputsSaved?: () => Promise<void>;
   onCompileSuccess?: (outDir: string) => Promise<{ ready: boolean; reason?: string }>;
   onCompileRequested?: () => Promise<void> | void;
@@ -53,7 +53,7 @@ export const useRunConsole = ({
   setBusy,
   setStatus,
   formatStatus,
-  preserveConsoleOnCompile = false,
+  preserveConsole = false,
   onCompileInputsSaved,
   onCompileSuccess,
   onCompileRequested
@@ -211,7 +211,7 @@ export const useRunConsole = ({
 
       setBusy(true);
       const startedAt = new Date().toLocaleTimeString();
-      if (!preserveConsoleOnCompile) {
+      if (!preserveConsole) {
         resetConsole();
       }
       setCompileStatus(null);
@@ -343,7 +343,7 @@ export const useRunConsole = ({
       onCompileRequested,
       onCompileInputsSaved,
       onCompileSuccess,
-      preserveConsoleOnCompile,
+      preserveConsole,
       projectPath,
       replaceLastConsoleLine,
       resetConsole,
@@ -368,7 +368,7 @@ export const useRunConsole = ({
     async (node: UmlNode) => {
       if (!projectPath) return;
       const startedAt = new Date().toLocaleTimeString();
-      if (!preserveConsoleOnCompile) {
+      if (!preserveConsole) {
         resetConsole();
       }
       appendConsole(`[${startedAt}] Run main requested for ${node.name}`);
@@ -378,11 +378,11 @@ export const useRunConsole = ({
           await invoke("cancel_run");
           setRunSession(null);
         }
+        runCancellationRequestedRef.current = false;
         await invoke<number>("run_main", {
           root: projectPath,
           mainClass: node.id
         });
-        runCancellationRequestedRef.current = false;
         setStatus("Run main started.");
       } catch (error) {
         runCancellationRequestedRef.current = false;
@@ -394,7 +394,7 @@ export const useRunConsole = ({
     [
       appendConsole,
       formatStatus,
-      preserveConsoleOnCompile,
+      preserveConsole,
       projectPath,
       resetConsole,
       setRunSession,

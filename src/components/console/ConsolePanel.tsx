@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { cn } from "../../lib/utils";
 import {
   Tooltip,
   TooltipContent,
@@ -45,9 +46,10 @@ export const ConsolePanel = ({ output, fontSize, running, onStop }: ConsolePanel
       ) : null}
       <pre
         ref={scrollRef}
-        className={`flex-1 min-w-0 overflow-y-auto overflow-x-hidden whitespace-pre-wrap break-words px-4 py-3 leading-relaxed ${
-          running ? "pr-16" : ""
-        }`}
+        className={cn(
+          "flex-1 min-w-0 overflow-y-auto overflow-x-hidden whitespace-pre-wrap px-4 py-3 leading-relaxed",
+          running && "pr-16"
+        )}
         style={{
           color: "var(--console-fg)",
           fontFamily: "var(--editor-font)",

@@ -445,7 +445,7 @@ export default function AppContainer({
     setBusy,
     setStatus,
     formatStatus,
-    preserveConsoleOnCompile: debugLogging,
+    preserveConsole: debugLogging,
     onCompileInputsSaved: async () => {
       await markDiskSnapshotCurrentRef.current();
     },
