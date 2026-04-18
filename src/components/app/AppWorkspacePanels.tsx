@@ -39,16 +39,16 @@ export const AppWorkspacePanels = ({
 }: AppWorkspacePanelsProps) => {
   if (fullscreenMode === "uml") {
     const {
-      benchContainerRef,
-      objectBenchSplitRatio,
-      startBenchResize,
-      objectBench,
-      showPrivate,
-      showInherited,
-      showStatic,
-      getMethodsForObject,
-      onCallMethod,
-      onRemoveObject,
+      benchContainerRef: _benchContainerRef,
+      objectBenchSplitRatio: _objectBenchSplitRatio,
+      startBenchResize: _startBenchResize,
+      objectBench: _objectBench,
+      showPrivate: _showPrivate,
+      showInherited: _showInherited,
+      showStatic: _showStatic,
+      getMethodsForObject: _getMethodsForObject,
+      onCallMethod: _onCallMethod,
+      onRemoveObject: _onRemoveObject,
       ...diagramPanelProps
     } = objectBenchSectionProps;
     return (

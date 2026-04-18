@@ -528,6 +528,7 @@ export const UmlDiagram = ({
       return;
     }
     viewRef.current = next;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setView(next);
   }, [diagram.viewport?.panX, diagram.viewport?.panY, diagram.viewport?.zoom]);
 
@@ -790,7 +791,6 @@ export const UmlDiagram = ({
         };
       }),
     [
-      diagram,
       fontReady,
       graph.nodes,
       headerHeight,
