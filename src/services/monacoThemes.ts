@@ -139,7 +139,7 @@ export const resolveMonacoTheme = (theme: string | undefined, darkMode: boolean)
   return theme;
 };
 
-const normalizeColor = (value?: string | null) => {
+export const normalizeColor = (value?: string | null) => {
   if (!value) return null;
   const color = value.trim();
   if (!color) return null;
@@ -162,7 +162,7 @@ const normalizeTokenColor = (value?: string | null): string | null => {
   return normalized ? normalized.slice(1) : null;
 };
 
-const sanitizeThemeRules = (rules: ThemeRule[]): ThemeRule[] =>
+export const sanitizeThemeRules = (rules: ThemeRule[]): ThemeRule[] =>
   rules.map((rule) => {
     const next: ThemeRule = { ...rule };
     const normalizedForeground = normalizeTokenColor(
@@ -193,7 +193,7 @@ const readCssVarColor = (name: string): string | null => {
   return normalizeColor(raw);
 };
 
-const matchesRuleToken = (ruleToken: string, candidate: string): boolean => {
+export const matchesRuleToken = (ruleToken: string, candidate: string): boolean => {
   if (ruleToken === candidate) return true;
   if (ruleToken.startsWith(`${candidate}.`)) return true;
   if (ruleToken.endsWith(`.${candidate}`)) return true;
@@ -201,7 +201,7 @@ const matchesRuleToken = (ruleToken: string, candidate: string): boolean => {
   return false;
 };
 
-const findRuleColor = (rules: ThemeRule[], candidates: string[]): string | null => {
+export const findRuleColor = (rules: ThemeRule[], candidates: string[]): string | null => {
   const candidateList = candidates
     .map((candidate) => candidate.trim().toLowerCase())
     .filter((candidate) => candidate.length > 0);
@@ -233,7 +233,7 @@ const findRuleColor = (rules: ThemeRule[], candidates: string[]): string | null 
   return null;
 };
 
-const upsertRuleColor = (rules: ThemeRule[], token: string, color: string) => {
+export const upsertRuleColor = (rules: ThemeRule[], token: string, color: string) => {
   const normalizedToken = token.trim().toLowerCase();
   const existingIndex = rules.findIndex(
     (rule) => (rule.token ?? "").trim().toLowerCase() === normalizedToken
