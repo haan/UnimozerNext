@@ -47,7 +47,7 @@ type UseClassRenameActionsResult = {
   handleRenameClass: (form: RenameClassForm) => Promise<void>;
 };
 
-const deriveRenamedClassId = (classId: string, oldName: string, newName: string): string | null => {
+export const deriveRenamedClassId = (classId: string, oldName: string, newName: string): string | null => {
   if (classId === oldName) {
     return newName;
   }
