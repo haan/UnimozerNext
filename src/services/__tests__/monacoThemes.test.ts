@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type * as Monaco from "monaco-editor";
 import {
   normalizeColor,
   matchesRuleToken,
@@ -7,6 +8,8 @@ import {
   sanitizeThemeRules,
   resolveMonacoTheme,
 } from "../monacoThemes";
+
+type ThemeRule = Monaco.editor.ITokenThemeRule;
 
 // ---------------------------------------------------------------------------
 // normalizeColor
@@ -156,7 +159,7 @@ describe("findRuleColor", () => {
 
 describe("upsertRuleColor", () => {
   it("adds a new rule when token not present", () => {
-    const rules: { token?: string; foreground?: string }[] = [];
+    const rules: ThemeRule[] = [];
     upsertRuleColor(rules, "keyword", "#0000ff");
     expect(rules).toHaveLength(1);
     expect(rules[0]).toMatchObject({ token: "keyword", foreground: "0000ff" });
@@ -170,7 +173,7 @@ describe("upsertRuleColor", () => {
   });
 
   it("does not add rule when color is invalid", () => {
-    const rules: { token?: string; foreground?: string }[] = [];
+    const rules: ThemeRule[] = [];
     upsertRuleColor(rules, "keyword", "not-a-color");
     expect(rules).toHaveLength(0);
   });
@@ -183,7 +186,7 @@ describe("upsertRuleColor", () => {
   });
 
   it("stores foreground without # prefix", () => {
-    const rules: { token?: string; foreground?: string }[] = [];
+    const rules: ThemeRule[] = [];
     upsertRuleColor(rules, "keyword", "#aabbcc");
     expect(rules[0]!.foreground).toBe("aabbcc");
   });
