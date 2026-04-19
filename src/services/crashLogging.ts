@@ -39,7 +39,7 @@ const toDisplayText = (value: unknown): string => {
   }
 };
 
-const toCrashSnapshot = (value: unknown): CrashSnapshot => {
+export const toCrashSnapshot = (value: unknown): CrashSnapshot => {
   if (value instanceof Error) {
     return {
       message: value.message || value.name || "Unknown error",
@@ -58,12 +58,12 @@ const toCrashSnapshot = (value: unknown): CrashSnapshot => {
 
 const cancellationWords = ["cancel", "canceled", "cancelled", "abort", "aborted"];
 
-const hasCancellationText = (value: string): boolean => {
+export const hasCancellationText = (value: string): boolean => {
   const normalized = value.toLowerCase();
   return cancellationWords.some((word) => normalized.includes(word));
 };
 
-const shouldIgnoreUnhandledRejection = (reason: unknown): boolean => {
+export const shouldIgnoreUnhandledRejection = (reason: unknown): boolean => {
   if (reason instanceof DOMException) {
     return reason.name === "AbortError" || hasCancellationText(reason.message);
   }
