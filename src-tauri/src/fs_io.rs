@@ -416,3 +416,69 @@ fn directory_visit_key(path: &Path) -> io::Result<PathBuf> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_fnv64_empty_input_leaves_hash_unchanged() {
+        let mut hash = FNV64_OFFSET_BASIS;
+        update_fnv64(&mut hash, &[]);
+        assert_eq!(hash, FNV64_OFFSET_BASIS);
+    }
+
+    #[test]
+    fn update_fnv64_known_value_matches_fnv1a_spec() {
+        // FNV-1a of b"abc" — pre-computed reference value.
+        let mut hash = FNV64_OFFSET_BASIS;
+        update_fnv64(&mut hash, b"abc");
+        assert_eq!(hash, 0xe71fa2190541574b);
+    }
+
+    #[test]
+    fn update_fnv64_is_deterministic() {
+        let mut h1 = FNV64_OFFSET_BASIS;
+        let mut h2 = FNV64_OFFSET_BASIS;
+        update_fnv64(&mut h1, b"hello world");
+        update_fnv64(&mut h2, b"hello world");
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn update_fnv64_different_inputs_produce_different_hashes() {
+        let mut h1 = FNV64_OFFSET_BASIS;
+        let mut h2 = FNV64_OFFSET_BASIS;
+        update_fnv64(&mut h1, b"foo");
+        update_fnv64(&mut h2, b"bar");
+        assert_ne!(h1, h2);
+    }
+
+    #[test]
+    fn should_skip_dir_matches_known_skip_names() {
+        assert!(should_skip_dir(Path::new("/some/project/node_modules")));
+        assert!(should_skip_dir(Path::new("/some/project/target")));
+        assert!(should_skip_dir(Path::new("/some/project/.git")));
+        assert!(should_skip_dir(Path::new("/some/project/dist")));
+        assert!(should_skip_dir(Path::new("/some/project/bin")));
+    }
+
+    #[test]
+    fn should_skip_dir_does_not_skip_source_dirs() {
+        assert!(!should_skip_dir(Path::new("/some/project/src")));
+        assert!(!should_skip_dir(Path::new("/some/project/main")));
+        assert!(!should_skip_dir(Path::new("/some/project/lib")));
+    }
+
+    #[test]
+    fn should_skip_dir_is_case_insensitive() {
+        assert!(should_skip_dir(Path::new("/some/project/NODE_MODULES")));
+        assert!(should_skip_dir(Path::new("/some/project/Target")));
+        assert!(should_skip_dir(Path::new("/some/project/DIST")));
+    }
+
+    #[test]
+    fn should_skip_dir_returns_false_for_empty_path() {
+        assert!(!should_skip_dir(Path::new("")));
+    }
+}

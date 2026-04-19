@@ -18,7 +18,18 @@
     "assets:logo-runtime": "node scripts/generate-logo-runtime-assets.mjs",
     "tauri": "tauri",
     "tauri dev": "tauri dev",
-    "tauri:build": "tauri build --no-sign"
+    "tauri:build": "tauri build --no-sign",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
+    "test:unit:ui": "vitest --ui",
+    "test:unit:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test": "npm run lint && npm run typecheck && npm run cargo:test && npm run test:unit",
+    "test:java:parser": "cd java-parser && gradle test --no-daemon",
+    "test:java:jshell": "cd jshell-bridge && gradle test --no-daemon",
+    "test:java": "npm run test:java:parser && npm run test:java:jshell",
+    "test:all": "npm run test && npm run test:java && npm run test:e2e"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.6.0",
@@ -47,24 +58,32 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.35.0",
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/postcss": "^4.1.18",
     "@tauri-apps/cli": "^2.10.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "@vitest/coverage-v8": "^4.1.4",
+    "@vitest/ui": "^4.1.4",
     "autoprefixer": "^10.4.24",
     "eslint": "^9.35.0",
     "eslint-plugin-react": "^7.37.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.0",
     "globals": "^17.3.0",
+    "jsdom": "^29.0.2",
     "postcss": "^8.4.41",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.1.18",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.58.2",
-    "vite": "^8.0.8"
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
   },
   "overrides": {
     "dompurify": "3.3.3"
