@@ -77,3 +77,8 @@ Thumbs.db
 
 # misc
 tmp/
+
+# Test output
+/test-results/
+/playwright-report/
+/coverage/

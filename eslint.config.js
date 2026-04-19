@@ -12,6 +12,7 @@ export default [
       "node_modules/**",
       "src-tauri/target/**",
       "java-parser/build/**",
+      "jshell-bridge/build/**",
       "resources/jdk/**",
       "resources/java-parser/**"
     ]
@@ -44,6 +45,8 @@ export default [
     rules: {
       ...reactHooks.configs.recommended.rules,
       "react/react-in-jsx-scope": "off",
+      // TypeScript's type checker covers undefined-variable errors for .ts/.tsx files.
+      "no-undef": "off",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": [
         "error",
@@ -72,6 +75,21 @@ export default [
     files: ["src/components/ui/**/*.{ts,tsx}"],
     rules: {
       "react-refresh/only-export-components": "off"
+    }
+  },
+  {
+    files: ["e2e/**/*.{ts,tsx}", "src/test/**/*.{ts,tsx}", "src/**/*.{test,spec}.{ts,tsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+        ...globals.node
+      }
+    },
+    rules: {
+      // Playwright fixtures use `use` which triggers the React hooks lint rule falsely.
+      "react-hooks/rules-of-hooks": "off",
+      // TypeScript handles undefined checks for test files.
+      "no-undef": "off"
     }
   }
 ];
