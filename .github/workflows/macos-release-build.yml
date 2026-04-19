@@ -2,6 +2,8 @@ name: macOS Release Build
 
 on:
   push:
+    branches:
+      - prerelease
     tags:
       - "v*"
   workflow_dispatch:
@@ -297,6 +299,10 @@ jobs:
             if [[ "${{ github.ref }}" == refs/tags/* && "${{ vars.PUBLISH_GH_RELEASE }}" == "true" ]]; then
               publish_release="true"
               tag_name="${{ github.ref_name }}"
+            elif [[ "${{ github.ref }}" == "refs/heads/prerelease" ]]; then
+              publish_release="true"
+              tag_name="updater-prerelease"
+              is_prerelease="true"
             fi
           elif [[ "$event_name" == "workflow_dispatch" && "$publish_input" == "true" ]]; then
             if [[ "$channel" == "prerelease" ]]; then

@@ -56,21 +56,27 @@ Before each test/release:
 This publishes to the moving GitHub release tag: `updater-prerelease`.
 
 ### 3.1 Build and publish prerelease assets
-Run both workflows manually from GitHub Actions:
 
-1. `Windows Release Build`
-2. `macOS Release Build`
+From your local machine (no GitHub Actions UI needed):
 
-Use these `workflow_dispatch` inputs:
+```bash
+# bump version first (see section 2), then:
+git push origin HEAD:prerelease
+```
+
+Both `Windows Release Build` and `macOS Release Build` workflows trigger automatically on any push to the `prerelease` branch. Result:
+- assets/manifests are published under release tag `updater-prerelease`
+- Authenticode signing runs automatically (same as a stable release)
+- stale versioned assets for the same platform are pruned **after** publish (no pre-upload delete window)
+
+Note: you do not need to have a `prerelease` branch locally — the refspec `HEAD:prerelease` pushes your current commit directly to that remote branch without creating it locally.
+
+#### Alternative: manual workflow dispatch
+For building from a specific commit that is not your current HEAD, run both workflows manually from GitHub Actions with these `workflow_dispatch` inputs:
 - `ref`: commit/branch to build
 - `publish_release`: `true`
 - `release_channel`: `prerelease`
 - `release_tag`: leave empty
-
-Result:
-- assets/manifests are published under release tag `updater-prerelease`
-- rerunning overwrites that prerelease feed for next test cycle
-- stale versioned assets for the same platform are pruned **after** publish (no pre-upload delete window)
 
 ### 3.2 Configure test app to prerelease channel
 In app:
@@ -186,11 +192,12 @@ Windows CI now supports Authenticode via Azure Trusted Signing.
 
 Current behavior:
 - Authenticode signing runs on tag push runs (`refs/tags/v*`).
+- Authenticode also runs on any push to the `prerelease` branch.
 - Authenticode also runs on `workflow_dispatch` only when all are true:
   - `publish_release=true`
   - `release_channel=prerelease`
   - run was launched from `refs/heads/main` or `refs/heads/prerelease`
-- Installers are signed first (MSI + NSIS), then top-level app `exe/dll` binaries are signed.
+- App `exe/dll` binaries are signed first, then installers are built (embedding the signed binary) and signed.
 - After Authenticode, updater `.sig` files are regenerated for installer artifacts so Tauri updater manifests remain valid.
 
 Required workflow permissions:
@@ -242,6 +249,7 @@ Targets currently resolved by backend:
 - Authenticode step skipped unexpectedly:
   - confirm run is either:
     - a tag push (`refs/tags/v*`), or
+    - a push to the `prerelease` branch, or
     - a manual prerelease publish from `main`/`prerelease`
   - confirm Azure OIDC federation includes your tag and branch subjects/claims
 

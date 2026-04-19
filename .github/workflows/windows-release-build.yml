@@ -2,6 +2,8 @@ name: Windows Release Build
 
 on:
   push:
+    branches:
+      - prerelease
     tags:
       - "v*"
   workflow_dispatch:
@@ -200,7 +202,11 @@ jobs:
             ($releaseChannel -eq "prerelease") -and
             (($runRef -eq "refs/heads/main") -or ($runRef -eq "refs/heads/prerelease"))
 
-          $shouldAuthenticode = $isTagPush -or $isManualPrerelease
+          $isBranchPrerelease =
+            ($eventName -eq "push") -and
+            ($runRef -eq "refs/heads/prerelease")
+
+          $shouldAuthenticode = $isTagPush -or $isManualPrerelease -or $isBranchPrerelease
           "should_authenticode=$($shouldAuthenticode.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
           if ($shouldAuthenticode) {
             Write-Host "Authenticode signing enabled for this run."
@@ -435,6 +441,10 @@ jobs:
             if ("${{ github.ref }}" -like "refs/tags/*" -and "${{ vars.PUBLISH_GH_RELEASE }}" -eq "true") {
               $publishRelease = $true
               $tag = "${{ github.ref_name }}"
+            } elseif ("${{ github.ref }}" -eq "refs/heads/prerelease") {
+              $publishRelease = $true
+              $tag = "updater-prerelease"
+              $isPrerelease = "true"
             }
           } elseif ($eventName -eq "workflow_dispatch" -and $publishInput -eq "true") {
             if ($channel -eq "prerelease") {
