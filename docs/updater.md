@@ -214,9 +214,7 @@ Required GitHub secrets for Tauri updater signatures:
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 
 Azure requirements:
-- Trusted Signing endpoint (West Europe): `https://weu.codesigning.azure.net/`
-- Trusted Signing account: `haala-artifact`
-- Certificate profile: `unimozer-public-signing`
+- An Azure Trusted Signing account with a certificate profile configured for public signing.
 - The GitHub OIDC service principal must have signer permissions on the certificate profile (Artifact Signing signer role).
 
 ## 8) Current endpoints used by app

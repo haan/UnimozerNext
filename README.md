@@ -33,13 +33,9 @@ The original Unimozer focused on UML-first Java learning with BlueJ-like interac
 - Frontend: React + Vite + TypeScript + Monaco.
 - Desktop shell/backend: Tauri (Rust).
 - Java helper modules:
-  - `java-parser/` -> `parser-bridge.jar`
-  - `jshell-bridge/` -> `jshell-bridge.jar`
-- Bundled resources (dev/runtime packaging):
-  - JDK
-  - JDT LS
-  - parser bridge
-  - JShell bridge.
+  - `java-parser/` → `parser-bridge.jar`
+  - `jshell-bridge/` → `jshell-bridge.jar`
+- Bundled runtime resources: JDK, JDT LS, parser bridge, JShell bridge.
 
 ## Repository Layout
 
@@ -50,191 +46,35 @@ unimozer-next/
   java-parser/          Java parser + code-edit bridge
   jshell-bridge/        JShell JSON bridge
   resources/            Bundled runtime resources (folder skeleton tracked)
-  SPEC.md               Product/architecture specification
+  docs/                 Developer notes (testing, updater, known issues)
+  examples/             Six example projects (UML, structogram, JShell, etc.)
+  DEVELOPMENT.md        Full developer setup and build guide
 ```
-
-## Prerequisites (Development)
-
-- Node.js + npm
-- Rust toolchain (cargo)
-- JDK 17+ (to build Java bridge modules)
-- Gradle (required for `java-parser` and `jshell-bridge` module builds)
-
-## External Resources (Required Runtime Payloads)
-
-This repository tracks only some resource folder skeletons (mainly JDK/JDTLS), but does **not** commit large runtime payloads.
-The following payloads are intentionally excluded in `.gitignore`:
-
-- `/resources/jdk/**` (except tracked skeleton folders/files)
-- `/resources/jdtls/**` (except tracked skeleton folders/files)
-- `/resources/java-parser/*.jar`
-- `/resources/jshell-bridge/*.jar`
-
-You must populate these before running `npm run tauri dev` or local `npm run tauri build`.
-
-### 1) Verify tracked directory skeletons
-
-JDK/JDTLS skeleton folders are tracked in git (`.gitkeep`). Verify they exist:
-
-```powershell
-Test-Path resources\jdk\win-x64
-Test-Path resources\jdk\mac-x64
-Test-Path resources\jdk\mac-arm64
-Test-Path resources\jdtls
-```
-
-Create local bridge output folders if missing:
-
-```powershell
-New-Item -ItemType Directory -Force -Path resources\java-parser | Out-Null
-New-Item -ItemType Directory -Force -Path resources\jshell-bridge | Out-Null
-Test-Path resources\java-parser
-Test-Path resources\jshell-bridge
-```
-
-### 2) Install bundled JDK files
-
-Download a **Windows x64 JDK ZIP** (not an installer) and extract it so these files exist:
-
-- `resources/jdk/win-x64/bin/java.exe`
-- `resources/jdk/win-x64/bin/javac.exe`
-
-Important: If the archive extracts as a nested top folder (for example `jdk-xx/...`), move the folder **contents** into `resources/jdk/win-x64/` so `bin/` is directly under `win-x64`.
-
-Verify:
-
-```powershell
-Test-Path resources\jdk\win-x64\bin\java.exe
-Test-Path resources\jdk\win-x64\bin\javac.exe
-```
-
-### 3) Install bundled JDT LS files
-
-Download an Eclipse JDT Language Server distribution archive and extract it so these paths exist:
-
-- `resources/jdtls/plugins/`
-- `resources/jdtls/features/`
-- `resources/jdtls/config_win/config.ini`
-
-Verify:
-
-```powershell
-Test-Path resources\jdtls\plugins
-Test-Path resources\jdtls\features
-Test-Path resources\jdtls\config_win\config.ini
-Get-ChildItem resources\jdtls\plugins\org.eclipse.equinox.launcher_*.jar
-```
-
-### 4) Build local Java bridge JARs
-
-Build and copy bridge artifacts into `resources/`:
-
-```bash
-npm run build:parser
-npm run build:jshell
-```
-
-Expected outputs:
-
-- `resources/java-parser/parser-bridge.jar`
-- `resources/jshell-bridge/jshell-bridge.jar`
-
-Verify:
-
-```powershell
-Test-Path resources\java-parser\parser-bridge.jar
-Test-Path resources\jshell-bridge\jshell-bridge.jar
-```
-
-### 5) Quick preflight checks
-
-Run:
-
-```bash
-npm run typecheck
-npm run cargo:check
-```
-
-Then launch:
-
-```bash
-npm run tauri dev
-```
-
-If resources are missing, common errors include:
-
-- `Bundled Java compiler not found`
-- `Bundled Java runtime not found`
-- `JDT LS not found`
 
 ## Getting Started
 
-1. Install dependencies:
+> **First time?** See [DEVELOPMENT.md](DEVELOPMENT.md) for the full setup guide, including how to populate the required JDK, JDT LS, and bridge JAR resources.
 
 ```bash
 npm install
-```
-
-2. Prepare external resources (JDK, JDT LS, bridge JARs) using the section above.
-
-3. Build Java bridge JARs (recommended after bridge changes):
-
-```bash
 npm run build:parser
 npm run build:jshell
-```
-
-4. Run in development mode:
-
-```bash
 npm run tauri dev
 ```
-
-## Build and Packaging
-
-- Frontend build: `npm run build`
-- Desktop bundle: `npm run tauri build`
-
-Local default config (`src-tauri/tauri.conf.json`) targets Windows installers (`msi`, `nsis`).
-
-Manual target-specific examples:
-
-- Windows target config:
-  - `npx tauri build --config src-tauri/tauri.windows.conf.json`
-- macOS x64 dmg (run on macOS):
-  - `npx tauri build --target x86_64-apple-darwin --bundles dmg --config src-tauri/tauri.macos.x64.conf.json`
-- macOS arm64 dmg (run on macOS):
-  - `npx tauri build --target aarch64-apple-darwin --bundles dmg --config src-tauri/tauri.macos.arm64.conf.json`
 
 ## Useful Scripts
 
 - `npm run dev` - Vite frontend dev server
 - `npm run tauri dev` - full desktop app in dev mode
 - `npm run build` - frontend production build
-- `npm run tauri build` - desktop installer build
+- `npm run tauri:build` - desktop installer build
 - `npm run typecheck` - TypeScript check (`tsc --noEmit`)
 - `npm run cargo:check` - Rust check for `src-tauri`
 - `npm run lint` - ESLint
 - `npm run build:parser` - rebuild parser bridge jar
 - `npm run build:jshell` - rebuild JShell bridge jar
+- `npm run test:all` - run all tests (unit, integration, e2e, Java)
 - `npm run assets:logo-runtime` - regenerate About dialog runtime logo/depth assets
-
-## Logo Runtime Assets
-
-About dialog depth-parallax uses preprocessed runtime files generated from source logo assets.
-
-- Source files:
-  - `public/icon/icon.png`
-  - `public/icon/icon_depthmap.png`
-- Generated runtime files (committed):
-  - `public/icon/icon_runtime.png`
-  - `public/icon/icon_depthmap_runtime.png`
-
-Regenerate runtime assets after changing either source file:
-
-```bash
-npm run assets:logo-runtime
-```
 
 ## Data and Compatibility Notes
 
