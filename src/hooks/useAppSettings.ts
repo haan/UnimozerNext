@@ -80,9 +80,7 @@ export const useAppSettings = (): AppSettingsHook => {
           ...parsed,
           advanced: {
             ...parsed.advanced,
-            debugLogCategories: normalizeDebugLogCategories(parsed.advanced?.debugLogCategories),
-            jshellWarmupDiagnosticMode:
-              parsed.advanced?.jshellWarmupDiagnosticMode === "full" ? "full" : "quick"
+            debugLogCategories: normalizeDebugLogCategories(parsed.advanced?.debugLogCategories)
           },
           recentProjects
         };

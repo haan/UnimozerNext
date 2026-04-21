@@ -111,7 +111,7 @@ export const CreateObjectDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[480px] max-w-[90vw] p-6">
+      <DialogContent className="w-[480px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Create new object</DialogTitle>
         <form
           onSubmit={(event) => {

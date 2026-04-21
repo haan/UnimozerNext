@@ -47,10 +47,6 @@ import { useProjectDiskReload } from "./hooks/useProjectDiskReload";
 import { useWebviewGuard } from "./hooks/useWebviewGuard";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import {
-  jshellWarmupDiagnostic,
-  type JshellWarmupDiagnosticMode
-} from "./services/jshell";
-import {
   CONSOLE_MIN_HEIGHT_PX,
   EDITOR_MIN_HEIGHT_PX,
   UML_DIAGRAM_MIN_HEIGHT_PX
@@ -61,7 +57,7 @@ import {
   removeRecentProject as removeRecentProjectFromList,
   upsertRecentProject
 } from "./services/recentProjects";
-import { joinPath, toDisplayPath } from "./services/paths";
+import { toDisplayPath } from "./services/paths";
 import {
   consumePendingCrashConsoleLines,
   installGlobalCrashHandlers,
@@ -123,7 +119,6 @@ export default function AppContainer({
   );
   const [objectBench, setObjectBench] = useState<ObjectInstance[]>([]);
   const [jshellReady, setJshellReady] = useState(false);
-  const [jshellDiagnosticRunning, setJshellDiagnosticRunning] = useState(false);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const fontSizeRef = useRef(settings.general.fontSize);
@@ -236,7 +231,6 @@ export default function AppContainer({
   );
   const structogramColorsEnabled = settings.structogram.colorsEnabled;
   const updateChannel = settings.advanced.updateChannel;
-  const jshellWarmupDiagnosticMode = settings.advanced.jshellWarmupDiagnosticMode;
   const structogramLoopHeaderColor = settings.structogram.loopHeaderColor;
   const structogramIfHeaderColor = settings.structogram.ifHeaderColor;
   const structogramSwitchHeaderColor = settings.structogram.switchHeaderColor;
@@ -282,6 +276,11 @@ export default function AppContainer({
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
+  const prevOpenFilePathRef = useRef(openFilePath);
+  if (prevOpenFilePathRef.current !== openFilePath) {
+    prevOpenFilePathRef.current = openFilePath;
+    setEditorCaret(null);
+  }
   const umlFullscreen = fullscreenMode === "uml";
   const editorFullscreen = fullscreenMode === "editor";
   const umlNodeLayoutSignature = useMemo(() => {
@@ -479,165 +478,6 @@ export default function AppContainer({
     }
     resetConsoleOutput();
   }, [debugLogging, resetConsoleOutput]);
-
-  const handleRunJshellWarmupDiagnostic = useCallback(async () => {
-    if (!projectPath) {
-      setStatus("Open a project before running JShell diagnostics.");
-      return;
-    }
-    if (busy || jshellDiagnosticRunning) {
-      return;
-    }
-
-    setBusy(true);
-    setJshellDiagnosticRunning(true);
-    setJshellReady(false);
-    setObjectBench([]);
-
-    const startedAt = new Date().toLocaleTimeString();
-    appendConsoleOutput(`[${startedAt}] JShell warmup diagnostic requested`);
-    const classpath =
-      lastCompileOutDirRef.current?.trim() || joinPath(projectPath, "build/classes");
-    appendConsoleOutput(`Diagnostic classpath: ${classpath}`);
-
-    try {
-      await onCompileRequested();
-      setStatus("Running JShell warmup diagnostic...");
-      const report = await jshellWarmupDiagnostic(
-        projectPath,
-        classpath,
-        jshellWarmupDiagnosticMode
-      );
-
-      appendConsoleOutput(
-        `JShell diagnostic temp root: ${toDisplayPath(report.diagnosticRoot)}`
-      );
-      appendConsoleOutput(`Diagnostic mode: ${report.mode}`);
-      appendConsoleOutput(`Diagnostic total: ${report.totalMs}ms`);
-      appendConsoleOutput(`Trace log path: ${toDisplayPath(report.traceLogPath)}`);
-      report.steps.forEach((step, index) => {
-        const snapshotText =
-          typeof step.snapshotMs === "number" ? `${step.snapshotMs}ms` : "n/a";
-        const warmupText =
-          typeof step.warmupMs === "number" ? `${step.warmupMs}ms` : "n/a";
-        const startSpawnText =
-          typeof step.startSpawnMs === "number" ? `${step.startSpawnMs}ms` : "n/a";
-        const startHandshakeText =
-          typeof step.startHandshakeMs === "number" ? `${step.startHandshakeMs}ms` : "n/a";
-        const startReadyText =
-          typeof step.startReadyMs === "number" ? `${step.startReadyMs}ms` : "n/a";
-        const snapshotHostReadText =
-          typeof step.snapshotHostReadMs === "number"
-            ? `${step.snapshotHostReadMs}ms`
-            : "n/a";
-        const snapshotBridgeTotalText =
-          typeof step.snapshotBridgeTotalMs === "number"
-            ? `${step.snapshotBridgeTotalMs}ms`
-            : "n/a";
-        const snapshotGapText =
-          typeof step.snapshotGapMs === "number" ? `${step.snapshotGapMs}ms` : "n/a";
-        appendConsoleOutput(
-          `Step ${index + 1}/${report.steps.length} [${step.profile}] ${step.description}`
-        );
-        appendConsoleOutput(
-          `  Result: ${step.ok ? "OK" : "FAILED"} | start=${step.startMs}ms | snapshot=${snapshotText} | warmup=${warmupText} | total=${step.stepTotalMs}ms`
-        );
-        appendConsoleOutput(
-          `  Start phases: spawn=${startSpawnText} | handshake=${startHandshakeText} | ready=${startReadyText}`
-        );
-        appendConsoleOutput(
-          `  Snapshot bottleneck: hostRead=${snapshotHostReadText} | bridgeTotal=${snapshotBridgeTotalText} | gap=${snapshotGapText}`
-        );
-        if (step.error) {
-          appendConsoleOutput(`  Error: ${step.error}`);
-        }
-      });
-
-      const successfulTotals = report.steps
-        .filter((step) => step.ok)
-        .map((step) => ({ profile: step.profile, totalMs: step.stepTotalMs }));
-      if (successfulTotals.length > 0) {
-        const bestTotal = successfulTotals.reduce((currentBest, entry) =>
-          entry.totalMs < currentBest.totalMs ? entry : currentBest
-        );
-        appendConsoleOutput(
-          `Best total profile: ${bestTotal.profile} (${bestTotal.totalMs}ms)`
-        );
-      }
-
-      const successfulWarmups = report.steps
-        .filter((step) => step.ok && typeof step.warmupMs === "number")
-        .map((step) => ({ profile: step.profile, warmupMs: step.warmupMs as number }));
-      if (successfulWarmups.length > 0) {
-        const best = successfulWarmups.reduce((currentBest, entry) =>
-          entry.warmupMs < currentBest.warmupMs ? entry : currentBest
-        );
-        appendConsoleOutput(
-          `Best warmup profile: ${best.profile} (${best.warmupMs}ms)`
-        );
-      } else {
-        appendConsoleOutput("No successful warmup profile detected.");
-      }
-
-      const snapshotGapCandidates = report.steps
-        .filter(
-          (step) =>
-            typeof step.snapshotGapMs === "number" &&
-            typeof step.snapshotHostReadMs === "number" &&
-            typeof step.snapshotBridgeTotalMs === "number"
-        )
-        .map((step) => ({
-          profile: step.profile,
-          gapMs: step.snapshotGapMs as number,
-          hostReadMs: step.snapshotHostReadMs as number,
-          bridgeTotalMs: step.snapshotBridgeTotalMs as number
-        }));
-      if (snapshotGapCandidates.length > 0) {
-        const highestGap = snapshotGapCandidates.reduce((currentWorst, entry) =>
-          entry.gapMs > currentWorst.gapMs ? entry : currentWorst
-        );
-        appendConsoleOutput(
-          `Largest snapshot host gap: ${highestGap.profile} (gap=${highestGap.gapMs}ms, hostRead=${highestGap.hostReadMs}ms, bridgeTotal=${highestGap.bridgeTotalMs}ms)`
-        );
-      }
-
-      setStatus("JShell warmup diagnostic completed.");
-    } catch (error) {
-      const message = formatStatus(error);
-      appendConsoleOutput(`JShell diagnostic failed: ${message}`);
-      setStatus("JShell warmup diagnostic failed.");
-    } finally {
-      setBusy(false);
-      setJshellDiagnosticRunning(false);
-      setJshellReady(false);
-      setObjectBench([]);
-    }
-  }, [
-    appendConsoleOutput,
-    busy,
-    jshellDiagnosticRunning,
-    jshellWarmupDiagnosticMode,
-    lastCompileOutDirRef,
-    onCompileRequested,
-    projectPath,
-    setBusy,
-    setStatus,
-    setJshellReady,
-    setObjectBench
-  ]);
-
-  const handleJshellWarmupDiagnosticModeChange = useCallback(
-    (mode: JshellWarmupDiagnosticMode) => {
-      updateSettings((prev) => ({
-        ...prev,
-        advanced: {
-          ...prev.advanced,
-          jshellWarmupDiagnosticMode: mode
-        }
-      }));
-    },
-    [updateSettings]
-  );
 
   const {
     showUpdateMenuItem,
@@ -914,10 +754,6 @@ export default function AppContainer({
     updateDraftForPath,
     notifyLsChange
   });
-
-  useEffect(() => {
-    setEditorCaret(null);
-  }, [openFilePath]);
 
   useEffect(() => {
     if (!projectPath || !umlGraph) {
@@ -1410,13 +1246,6 @@ export default function AppContainer({
         onSettingsOpenChange={setSettingsOpen}
         settings={settings}
         onSettingsChange={handleSettingsChange}
-        onRunJshellWarmupDiagnostic={() => {
-          void handleRunJshellWarmupDiagnostic();
-        }}
-        jshellWarmupDiagnosticRunning={jshellDiagnosticRunning}
-        jshellWarmupDiagnosticEnabled={Boolean(projectPath) && !busy}
-        jshellWarmupDiagnosticMode={jshellWarmupDiagnosticMode}
-        onJshellWarmupDiagnosticModeChange={handleJshellWarmupDiagnosticModeChange}
         addClassOpen={addClassOpen}
         onAddClassOpenChange={setAddClassOpen}
         onCreateClass={handleCreateClass}

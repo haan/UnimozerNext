@@ -30,7 +30,6 @@ commands.allow = [
   "jshell_eval",
   "jshell_inspect",
   "jshell_vars",
-  "jshell_warmup_diagnostic",
   "run_main",
   "cancel_run",
   "read_settings",

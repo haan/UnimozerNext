@@ -26,11 +26,6 @@ type SettingsDialogProps = {
   onOpenChange: (open: boolean) => void;
   settings: AppSettings;
   onChange: (next: AppSettings) => void;
-  onRunJshellWarmupDiagnostic?: () => void;
-  jshellWarmupDiagnosticRunning?: boolean;
-  jshellWarmupDiagnosticEnabled?: boolean;
-  jshellWarmupDiagnosticMode?: "quick" | "full";
-  onJshellWarmupDiagnosticModeChange?: (mode: "quick" | "full") => void;
 };
 
 const groups = [
@@ -47,12 +42,7 @@ export const SettingsDialog = ({
   open,
   onOpenChange,
   settings,
-  onChange,
-  onRunJshellWarmupDiagnostic,
-  jshellWarmupDiagnosticRunning = false,
-  jshellWarmupDiagnosticEnabled = false,
-  jshellWarmupDiagnosticMode = "quick",
-  onJshellWarmupDiagnosticModeChange
+  onChange
 }: SettingsDialogProps) => {
   const [activeGroup, setActiveGroup] = useState<SettingsGroup>("General");
   const [themeOptions, setThemeOptions] = useState<ThemeOption[]>([
@@ -148,7 +138,7 @@ export const SettingsDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-160 w-215 max-w-[90vw] overflow-hidden p-0">
+      <DialogContent className="h-160 w-215 max-w-[90vw] overflow-hidden p-0" aria-describedby={undefined}>
         <div className="flex h-full">
           <aside className="flex w-48 flex-col border-r border-border bg-muted/40 p-4">
             <DialogTitle className="mb-4 text-base">Settings</DialogTitle>
@@ -907,46 +897,6 @@ export const SettingsDialog = ({
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">JShell warmup diagnostic</p>
-                    <p className="text-xs text-muted-foreground">
-                      Run host + bridge timing diagnostics and write a JSONL trace in app data.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-32">
-                      <Select
-                        value={jshellWarmupDiagnosticMode}
-                        onValueChange={(value) =>
-                          onJshellWarmupDiagnosticModeChange?.(
-                            value === "full" ? "full" : "quick"
-                          )
-                        }
-                      >
-                        <SelectTrigger className="h-8">
-                          <SelectValue placeholder="Mode" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="quick">Quick</SelectItem>
-                          <SelectItem value="full">Full</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <button
-                      type="button"
-                      className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={onRunJshellWarmupDiagnostic}
-                      disabled={
-                        !onRunJshellWarmupDiagnostic ||
-                        !jshellWarmupDiagnosticEnabled ||
-                        jshellWarmupDiagnosticRunning
-                      }
-                    >
-                      {jshellWarmupDiagnosticRunning ? "Running..." : "Run diagnostic"}
-                    </button>
-                  </div>
-                </div>
               </div>
             ) : (
               <div className="mt-6 rounded-lg border border-dashed border-border bg-background/60 p-6 text-sm text-muted-foreground">

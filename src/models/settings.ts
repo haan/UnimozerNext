@@ -31,7 +31,6 @@ export type AdvancedSettings = {
     jshell: boolean;
   };
   updateChannel: "stable" | "prerelease";
-  jshellWarmupDiagnosticMode: "quick" | "full";
 };
 
 export type StructogramSettings = {

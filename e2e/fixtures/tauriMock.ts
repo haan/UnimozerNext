@@ -40,7 +40,6 @@ const MOCK_SETTINGS = {
       jshell: false,
     },
     updateChannel: "stable",
-    jshellWarmupDiagnosticMode: "quick",
   },
   structogram: {
     colorsEnabled: true,
