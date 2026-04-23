@@ -40,32 +40,6 @@ const jshellEvalResultSchema = z.object({
   error: z.string().nullable().optional()
 });
 
-const jshellWarmupDiagnosticStepSchema = z.object({
-  profile: z.string(),
-  description: z.string(),
-  ok: z.boolean(),
-  startMs: z.number(),
-  startSpawnMs: z.number().nullable().optional(),
-  startHandshakeMs: z.number().nullable().optional(),
-  startReadyMs: z.number().nullable().optional(),
-  snapshotMs: z.number().nullable().optional(),
-  snapshotHostReadMs: z.number().nullable().optional(),
-  snapshotBridgeTotalMs: z.number().nullable().optional(),
-  snapshotGapMs: z.number().nullable().optional(),
-  warmupMs: z.number().nullable().optional(),
-  stepTotalMs: z.number(),
-  details: z.array(z.string()),
-  error: z.string().nullable().optional()
-});
-
-const jshellWarmupDiagnosticResultSchema = z.object({
-  mode: z.enum(["quick", "full"]),
-  totalMs: z.number(),
-  traceLogPath: z.string(),
-  diagnosticRoot: z.string(),
-  steps: z.array(jshellWarmupDiagnosticStepSchema)
-});
-
 const jshellVarsResponseSchema = z.object({
   vars: z.array(jshellFieldSchema)
 });
@@ -87,10 +61,6 @@ export type JshellStartOptions = {
   prefsSystemRoot?: string;
   tempDir?: string;
 };
-
-export type JshellWarmupDiagnosticStep = z.infer<typeof jshellWarmupDiagnosticStepSchema>;
-export type JshellWarmupDiagnosticResult = z.infer<typeof jshellWarmupDiagnosticResultSchema>;
-export type JshellWarmupDiagnosticMode = "quick" | "full";
 
 export const jshellStart = (root: string, classpath: string, options?: JshellStartOptions) =>
   invoke<void>("jshell_start", { root, classpath, options });
@@ -114,17 +84,4 @@ export const jshellInspect = async (varName: string): Promise<JshellInspectResul
 export const jshellVars = async (): Promise<{ vars: JshellField[] }> => {
   const raw = await invoke<unknown>("jshell_vars");
   return parseSchemaOrThrow(jshellVarsResponseSchema, raw, "jshell_vars response");
-};
-
-export const jshellWarmupDiagnostic = async (
-  root: string,
-  classpath: string,
-  mode: JshellWarmupDiagnosticMode = "quick"
-): Promise<JshellWarmupDiagnosticResult> => {
-  const raw = await invoke<unknown>("jshell_warmup_diagnostic", { root, classpath, mode });
-  return parseSchemaOrThrow(
-    jshellWarmupDiagnosticResultSchema,
-    raw,
-    "jshell_warmup_diagnostic response"
-  );
 };

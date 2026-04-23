@@ -122,7 +122,7 @@ export const AddMethodDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[520px] max-w-[92vw] p-6">
+      <DialogContent className="w-[520px] max-w-[92vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">
           Add method{className ? ` to ${className}` : ""}
         </DialogTitle>

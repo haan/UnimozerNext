@@ -83,7 +83,7 @@ export const AddFieldDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[420px] max-w-[90vw] p-6">
+      <DialogContent className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Add a new field</DialogTitle>
         <form
           onSubmit={(event) => {
