@@ -234,12 +234,91 @@ jobs:
           rm -rf "src-tauri/target/release/bundle"
           rm -rf "src-tauri/target/${{ matrix.rust_target }}/release/bundle"
 
+      - name: Import Apple Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${APPLE_CERTIFICATE:-}" ]]; then
+            echo "Missing required secret: APPLE_CERTIFICATE" >&2
+            exit 1
+          fi
+          if [[ -z "${APPLE_CERTIFICATE_PASSWORD:-}" ]]; then
+            echo "Missing required secret: APPLE_CERTIFICATE_PASSWORD" >&2
+            exit 1
+          fi
+          if [[ -z "${APPLE_KEYCHAIN_PASSWORD:-}" ]]; then
+            echo "Missing required secret: APPLE_KEYCHAIN_PASSWORD" >&2
+            exit 1
+          fi
+
+          certificate_path="$RUNNER_TEMP/developer-id-application.p12"
+          keychain_path="$RUNNER_TEMP/app-signing.keychain-db"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$certificate_path"
+
+          security create-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+          security import "$certificate_path" \
+            -k "$keychain_path" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign \
+            -T /usr/bin/security
+          security list-keychains -d user -s "$keychain_path" $(security list-keychains -d user | sed 's/"//g')
+          security default-keychain -d user -s "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$APPLE_KEYCHAIN_PASSWORD" "$keychain_path"
+
+          identity="$(security find-identity -v -p codesigning "$keychain_path" | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' | head -n 1)"
+          if [[ -z "$identity" ]]; then
+            echo "Developer ID Application identity not found in imported certificate." >&2
+            exit 1
+          fi
+          echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "Imported Apple signing identity: $identity"
+
+      - name: Prepare Apple notarization key
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${APPLE_API_KEY:-}" ]]; then
+            echo "Missing required secret: APPLE_API_KEY" >&2
+            exit 1
+          fi
+          if [[ -z "${APPLE_API_KEY_P8:-}" ]]; then
+            echo "Missing required secret: APPLE_API_KEY_P8" >&2
+            exit 1
+          fi
+          if [[ -z "${APPLE_API_ISSUER:-}" ]]; then
+            echo "Missing required secret: APPLE_API_ISSUER" >&2
+            exit 1
+          fi
+
+          notary_dir="$RUNNER_TEMP/apple-notary"
+          mkdir -p "$notary_dir"
+          key_path="$notary_dir/AuthKey_${APPLE_API_KEY}.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$key_path"
+          chmod 600 "$key_path"
+          echo "APPLE_API_KEY_PATH=$key_path" >> "$GITHUB_ENV"
+
       - name: Build Tauri dmg bundles
         env:
           RUST_LOG: tauri_bundler=trace
           RUST_BACKTRACE: "1"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ env.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_PATH: ${{ env.APPLE_API_KEY_PATH }}
         run: npx tauri build --ci --target ${{ matrix.rust_target }} --bundles "app,dmg" --config ${{ matrix.tauri_config }}
 
       - name: Prepare release assets
