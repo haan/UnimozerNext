@@ -41,6 +41,7 @@ pub struct FileNode {
     children: Option<Vec<FileNode>>,
 }
 
+#[cfg(target_os = "windows")]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WindowsMappedDriveAlias {
