@@ -7,7 +7,7 @@ updates:
       day: "monday"
       time: "07:00"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -17,10 +17,12 @@ updates:
       npm-patch:
         update-types:
           - "patch"
+      npm-minor:
+        update-types:
+          - "minor"
     ignore:
       - dependency-name: "*"
         update-types:
-          - "version-update:semver-minor"
           - "version-update:semver-major"
 
   - package-ecosystem: "cargo"
@@ -30,7 +32,7 @@ updates:
       day: "monday"
       time: "07:15"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -40,10 +42,12 @@ updates:
       cargo-patch:
         update-types:
           - "patch"
+      cargo-minor:
+        update-types:
+          - "minor"
     ignore:
       - dependency-name: "*"
         update-types:
-          - "version-update:semver-minor"
           - "version-update:semver-major"
 
   - package-ecosystem: "github-actions"
@@ -53,7 +57,7 @@ updates:
       day: "monday"
       time: "07:30"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -63,10 +67,12 @@ updates:
       gh-actions-patch:
         update-types:
           - "patch"
+      gh-actions-minor:
+        update-types:
+          - "minor"
     ignore:
       - dependency-name: "*"
         update-types:
-          - "version-update:semver-minor"
           - "version-update:semver-major"
 
   - package-ecosystem: "gradle"
@@ -76,7 +82,7 @@ updates:
       day: "monday"
       time: "07:45"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -86,10 +92,12 @@ updates:
       gradle-java-parser-patch:
         update-types:
           - "patch"
+      gradle-java-parser-minor:
+        update-types:
+          - "minor"
     ignore:
       - dependency-name: "*"
         update-types:
-          - "version-update:semver-minor"
           - "version-update:semver-major"
 
   - package-ecosystem: "gradle"
@@ -99,7 +107,7 @@ updates:
       day: "monday"
       time: "08:00"
       timezone: "Europe/Berlin"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
     labels:
@@ -109,8 +117,10 @@ updates:
       gradle-jshell-bridge-patch:
         update-types:
           - "patch"
+      gradle-jshell-bridge-minor:
+        update-types:
+          - "minor"
     ignore:
       - dependency-name: "*"
         update-types:
-          - "version-update:semver-minor"
           - "version-update:semver-major"
