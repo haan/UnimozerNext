@@ -1,6 +1,5 @@
 import js from "@eslint/js";
 import globals from "globals";
-import reactPlugin from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
@@ -33,18 +32,12 @@ export default [
       }
     },
     plugins: {
-      react: reactPlugin,
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh
     },
-    settings: {
-      react: {
-        version: "detect"
-      }
-    },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react/react-in-jsx-scope": "off",
+      "react-hooks/set-state-in-effect": "warn",
       // TypeScript's type checker covers undefined-variable errors for .ts/.tsx files.
       "no-undef": "off",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
