@@ -25,17 +25,6 @@ export const RenameClassDialog = ({
 }: RenameClassDialogProps) => {
   const [name, setName] = useState(className);
   const [submitting, setSubmitting] = useState(false);
-  const reset = () => {
-    setName(className);
-    setSubmitting(false);
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      reset();
-    }
-    onOpenChange(nextOpen);
-  };
 
   const normalizedName = useMemo(() => name.trim().replace(/\.java$/i, ""), [name]);
   const isNameValid = normalizedName.length > 0 && isValidJavaIdentifier(normalizedName);
@@ -49,7 +38,6 @@ export const RenameClassDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ name: normalizedName });
-      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -57,7 +45,7 @@ export const RenameClassDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Rename class</DialogTitle>
         <form

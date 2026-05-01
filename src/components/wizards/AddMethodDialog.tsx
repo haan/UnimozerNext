@@ -48,20 +48,6 @@ export const AddMethodDialog = ({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
 
-  const reset = () => {
-    setForm(defaultForm);
-    setSubmitting(false);
-    setAdvancedOpen(false);
-    setAutoFocusParamId(null);
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      reset();
-    }
-    onOpenChange(nextOpen);
-  };
-
   const update = (patch: Partial<AddMethodForm>) => {
     setForm((prev) => ({ ...prev, ...patch }));
   };
@@ -105,7 +91,6 @@ export const AddMethodDialog = ({
     setSubmitting(true);
     try {
       await onSubmit(form);
-      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -127,7 +112,7 @@ export const AddMethodDialog = ({
   );
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[520px] max-w-[92vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">
           Add method{className ? ` to ${className}` : ""}

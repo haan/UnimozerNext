@@ -31,20 +31,6 @@ export const AddConstructorDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
 
-  const reset = () => {
-    setParams([]);
-    setIncludeJavadoc(false);
-    setSubmitting(false);
-    setAutoFocusParamId(null);
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      reset();
-    }
-    onOpenChange(nextOpen);
-  };
-
   const updateParam = (id: string, patch: Partial<ParameterRow>) => {
     setParams((prev) =>
       prev.map((param) => (param.id === id ? { ...param, ...patch } : param))
@@ -78,7 +64,6 @@ export const AddConstructorDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ params, includeJavadoc });
-      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -89,7 +74,7 @@ export const AddConstructorDialog = ({
   const canSubmit = invalidParamIds.size === 0;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[520px] max-w-[92vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">
           Add constructor{className ? ` to ${className}` : ""}

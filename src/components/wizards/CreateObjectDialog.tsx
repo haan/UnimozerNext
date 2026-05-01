@@ -51,24 +51,9 @@ export const CreateObjectDialog = ({
     return `${base}Next`;
   };
 
-  const initialSuggestion = suggestObjectName(className, existingNames);
-  const [objectName, setObjectName] = useState(initialSuggestion);
+  const [objectName, setObjectName] = useState(() => suggestObjectName(className, existingNames));
   const [paramValues, setParamValues] = useState<string[]>(() => params.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
-
-  const reset = () => {
-    setParamValues(params.map(() => ""));
-    const suggestion = suggestObjectName(className, existingNames);
-    setObjectName(suggestion);
-    setSubmitting(false);
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      reset();
-    }
-    onOpenChange(nextOpen);
-  };
 
   const updateParam = (index: number, value: string) => {
     setParamValues((prev) => {
@@ -97,7 +82,6 @@ export const CreateObjectDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ objectName: trimmedName, paramValues });
-      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -110,7 +94,7 @@ export const CreateObjectDialog = ({
   }, [className, constructorLabel]);
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[480px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Create new object</DialogTitle>
         <form

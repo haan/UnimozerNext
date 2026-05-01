@@ -105,8 +105,8 @@ const fitSwitchGeometry = (
       return { leftRun, rightRun };
     };
 
-    const { leftRun } = computeRuns();
-    let { rightRun } = computeRuns();
+    const { leftRun, rightRun: rightRunInit } = computeRuns();
+    let rightRun = rightRunInit;
     if (leftRun < minimumRun) {
       caseWidths = distributeExtraWidth(caseWidths, leftIndices, Math.ceil(minimumRun - leftRun));
       ({ rightRun } = computeRuns());

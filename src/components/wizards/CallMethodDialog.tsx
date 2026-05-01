@@ -99,18 +99,6 @@ export const CallMethodDialog = ({
   const [paramValues, setParamValues] = useState<string[]>(() => params.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
 
-  const reset = () => {
-    setParamValues(params.map(() => ""));
-    setSubmitting(false);
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      reset();
-    }
-    onOpenChange(nextOpen);
-  };
-
   const updateParam = (index: number, value: string) => {
     setParamValues((prev) => {
       const next = [...prev];
@@ -124,7 +112,6 @@ export const CallMethodDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ paramValues });
-      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -169,7 +156,7 @@ export const CallMethodDialog = ({
   });
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[520px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Call method</DialogTitle>
         <form

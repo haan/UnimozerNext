@@ -51,19 +51,6 @@ export const AddFieldDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  const reset = () => {
-    setForm(defaultForm);
-    setSubmitting(false);
-    setAdvancedOpen(false);
-  };
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      reset();
-    }
-    onOpenChange(nextOpen);
-  };
-
   const update = (patch: Partial<AddFieldForm>) => {
     setForm((prev) => ({ ...prev, ...patch }));
   };
@@ -73,7 +60,6 @@ export const AddFieldDialog = ({
     setSubmitting(true);
     try {
       await onSubmit(form);
-      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -88,7 +74,7 @@ export const AddFieldDialog = ({
   const disableSetter = form.isFinal;
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Add a new field</DialogTitle>
         <form

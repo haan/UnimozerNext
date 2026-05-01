@@ -342,6 +342,7 @@ export const useAppUpdater = ({
     if (updaterSupport !== "enabled") {
       return;
     }
+    // Defer to avoid calling setChecking(true) synchronously inside an effect body.
     const checkHandle = window.setTimeout(() => {
       void performCheck(false);
     }, 0);
