@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -31,14 +31,19 @@ export const AddConstructorDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) {
-      setParams([]);
-      setIncludeJavadoc(false);
-      setSubmitting(false);
-      setAutoFocusParamId(null);
+  const reset = () => {
+    setParams([]);
+    setIncludeJavadoc(false);
+    setSubmitting(false);
+    setAutoFocusParamId(null);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset();
     }
-  }, [open]);
+    onOpenChange(nextOpen);
+  };
 
   const updateParam = (id: string, patch: Partial<ParameterRow>) => {
     setParams((prev) =>
@@ -73,6 +78,7 @@ export const AddConstructorDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ params, includeJavadoc });
+      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -83,7 +89,7 @@ export const AddConstructorDialog = ({
   const canSubmit = invalidParamIds.size === 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[520px] max-w-[92vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">
           Add constructor{className ? ` to ${className}` : ""}

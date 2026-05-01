@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -43,13 +43,18 @@ export const AddClassDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
-  useEffect(() => {
-    if (!open) {
-      setForm(defaultForm);
-      setSubmitting(false);
-      setAdvancedOpen(false);
+  const reset = () => {
+    setForm(defaultForm);
+    setSubmitting(false);
+    setAdvancedOpen(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset();
     }
-  }, [open]);
+    onOpenChange(nextOpen);
+  };
 
   const update = (patch: Partial<AddClassForm>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -60,6 +65,7 @@ export const AddClassDialog = ({
     setSubmitting(true);
     try {
       await onSubmit(form);
+      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -71,7 +77,7 @@ export const AddClassDialog = ({
   const isNameValid = isValidJavaIdentifier(nameValue);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Add a new class</DialogTitle>
         <form

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -25,13 +25,17 @@ export const RenameClassDialog = ({
 }: RenameClassDialogProps) => {
   const [name, setName] = useState(className);
   const [submitting, setSubmitting] = useState(false);
-  useEffect(() => {
-    if (open) {
-      setName(className);
-      return;
-    }
+  const reset = () => {
+    setName(className);
     setSubmitting(false);
-  }, [className, open]);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset();
+    }
+    onOpenChange(nextOpen);
+  };
 
   const normalizedName = useMemo(() => name.trim().replace(/\.java$/i, ""), [name]);
   const isNameValid = normalizedName.length > 0 && isValidJavaIdentifier(normalizedName);
@@ -45,6 +49,7 @@ export const RenameClassDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ name: normalizedName });
+      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -52,7 +57,7 @@ export const RenameClassDialog = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Rename class</DialogTitle>
         <form

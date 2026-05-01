@@ -37,7 +37,6 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-hooks/set-state-in-effect": "warn",
       // TypeScript's type checker covers undefined-variable errors for .ts/.tsx files.
       "no-undef": "off",
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],

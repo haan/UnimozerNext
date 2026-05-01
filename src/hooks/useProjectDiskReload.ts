@@ -46,7 +46,7 @@ export const useProjectDiskReload = ({
   setStatus,
   formatStatus
 }: UseProjectDiskReloadArgs): UseProjectDiskReloadResult => {
-  const [reloadFromDiskDialogOpen, setReloadFromDiskDialogOpen] = useState(false);
+  const [reloadDialogScopeKey, setReloadDialogScopeKey] = useState<string | null>(null);
   const pendingDetectedTokenRef = useRef<string | null>(null);
   const pendingBusyTokenRef = useRef<string | null>(null);
   const lastObservedTokenRef = useRef<string | null>(null);
@@ -57,6 +57,7 @@ export const useProjectDiskReload = ({
     () => reloadScopeKey(projectStorageMode, projectPath),
     [projectPath, projectStorageMode]
   );
+  const reloadFromDiskDialogOpen = reloadDialogScopeKey !== null && reloadDialogScopeKey === scopeKey;
 
   const readDiskToken = useCallback(async (): Promise<string | null> => {
     if (!scopeKey) {
@@ -113,12 +114,12 @@ export const useProjectDiskReload = ({
   }, [readDiskToken, reloadCurrentProjectFromDisk]);
 
   const confirmReloadFromDisk = useCallback(() => {
-    setReloadFromDiskDialogOpen(false);
+    setReloadDialogScopeKey(null);
     void performReload();
   }, [performReload]);
 
   const ignoreReloadFromDisk = useCallback(() => {
-    setReloadFromDiskDialogOpen(false);
+    setReloadDialogScopeKey(null);
     if (pendingDetectedTokenRef.current !== null) {
       lastObservedTokenRef.current = pendingDetectedTokenRef.current;
     }
@@ -127,17 +128,20 @@ export const useProjectDiskReload = ({
   }, [setStatus]);
 
   const onReloadFromDiskDialogOpenChange = useCallback((open: boolean) => {
-    setReloadFromDiskDialogOpen(open);
     if (!open) {
+      setReloadDialogScopeKey(null);
       pendingDetectedTokenRef.current = null;
+      return;
     }
-  }, []);
+    if (scopeKey) {
+      setReloadDialogScopeKey(scopeKey);
+    }
+  }, [scopeKey]);
 
   useEffect(() => {
     lastObservedTokenRef.current = null;
     pendingDetectedTokenRef.current = null;
     pendingBusyTokenRef.current = null;
-    setReloadFromDiskDialogOpen(false);
   }, [scopeKey]);
 
   useEffect(() => {
@@ -169,7 +173,7 @@ export const useProjectDiskReload = ({
 
       if (hasPendingProjectChanges) {
         pendingDetectedTokenRef.current = token;
-        setReloadFromDiskDialogOpen(true);
+        setReloadDialogScopeKey(scopeKey);
         setStatus("Files changed on disk. Reload to overwrite local changes or ignore.");
         return;
       }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -35,11 +35,6 @@ export const CreateObjectDialog = ({
   onSubmit,
   busy
 }: CreateObjectDialogProps) => {
-  const [objectName, setObjectName] = useState("");
-  const [paramValues, setParamValues] = useState<string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
-  const lastSuggestedRef = useRef("");
-
   const suggestObjectName = (name: string, names: string[]) => {
     const baseRaw = name.trim();
     const base =
@@ -53,23 +48,27 @@ export const CreateObjectDialog = ({
         return candidate;
       }
     }
-    return `${base}${Date.now()}`;
+    return `${base}Next`;
   };
 
-  useEffect(() => {
-    if (!open) {
-      setObjectName("");
-      setParamValues([]);
-      setSubmitting(false);
-      return;
-    }
+  const initialSuggestion = suggestObjectName(className, existingNames);
+  const [objectName, setObjectName] = useState(initialSuggestion);
+  const [paramValues, setParamValues] = useState<string[]>(() => params.map(() => ""));
+  const [submitting, setSubmitting] = useState(false);
+
+  const reset = () => {
     setParamValues(params.map(() => ""));
     const suggestion = suggestObjectName(className, existingNames);
-    if (!objectName.trim() || objectName === lastSuggestedRef.current) {
-      setObjectName(suggestion);
+    setObjectName(suggestion);
+    setSubmitting(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset();
     }
-    lastSuggestedRef.current = suggestion;
-  }, [open, params, className, existingNames, objectName]);
+    onOpenChange(nextOpen);
+  };
 
   const updateParam = (index: number, value: string) => {
     setParamValues((prev) => {
@@ -98,6 +97,7 @@ export const CreateObjectDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ objectName: trimmedName, paramValues });
+      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -110,7 +110,7 @@ export const CreateObjectDialog = ({
   }, [className, constructorLabel]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[480px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Create new object</DialogTitle>
         <form

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -96,17 +96,20 @@ export const CallMethodDialog = ({
   onSubmit,
   busy
 }: CallMethodDialogProps) => {
-  const [paramValues, setParamValues] = useState<string[]>([]);
+  const [paramValues, setParamValues] = useState<string[]>(() => params.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!open) {
-      setParamValues([]);
-      setSubmitting(false);
-      return;
-    }
+  const reset = () => {
     setParamValues(params.map(() => ""));
-  }, [open, params]);
+    setSubmitting(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset();
+    }
+    onOpenChange(nextOpen);
+  };
 
   const updateParam = (index: number, value: string) => {
     setParamValues((prev) => {
@@ -121,6 +124,7 @@ export const CallMethodDialog = ({
     setSubmitting(true);
     try {
       await onSubmit({ paramValues });
+      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -165,7 +169,7 @@ export const CallMethodDialog = ({
   });
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[520px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Call method</DialogTitle>
         <form

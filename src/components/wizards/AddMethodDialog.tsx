@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -48,14 +48,19 @@ export const AddMethodDialog = ({
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) {
-      setForm(defaultForm);
-      setSubmitting(false);
-      setAdvancedOpen(false);
-      setAutoFocusParamId(null);
+  const reset = () => {
+    setForm(defaultForm);
+    setSubmitting(false);
+    setAdvancedOpen(false);
+    setAutoFocusParamId(null);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      reset();
     }
-  }, [open]);
+    onOpenChange(nextOpen);
+  };
 
   const update = (patch: Partial<AddMethodForm>) => {
     setForm((prev) => ({ ...prev, ...patch }));
@@ -100,6 +105,7 @@ export const AddMethodDialog = ({
     setSubmitting(true);
     try {
       await onSubmit(form);
+      reset();
       onOpenChange(false);
     } finally {
       setSubmitting(false);
@@ -121,7 +127,7 @@ export const AddMethodDialog = ({
   );
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="w-[520px] max-w-[92vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">
           Add method{className ? ` to ${className}` : ""}
