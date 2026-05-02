@@ -230,7 +230,6 @@ export const useUmlGraph = ({
       const mockGraph = buildMockGraph(tree, projectPath);
       lastGoodGraphRef.current = mockGraph;
       setUmlGraph(mockGraph);
-      setUmlStatus(null);
       return;
     }
 
@@ -260,8 +259,10 @@ export const useUmlGraph = ({
     drainParseQueue
   ]);
 
+  const suppressUmlStatus = projectStorageMode === "scratch" && !!tree && !hasJavaFiles(tree);
+
   return {
-    umlStatus,
+    umlStatus: suppressUmlStatus ? null : umlStatus,
     lastGoodGraphRef
   };
 };

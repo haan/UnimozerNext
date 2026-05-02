@@ -47,6 +47,14 @@ type UpdateCandidate = {
   summary: UpdateSummary;
 };
 
+type UpdateUiState = {
+  channel: UpdateChannel;
+  summary: UpdateSummary | null;
+  sourceChannel: UpdateChannel | null;
+  blockedReason: string | null;
+  availableOpen: boolean;
+};
+
 const parseVersion = (value: string): ParsedVersion | null => {
   const normalized = value.trim().split("+")[0] ?? "";
   if (!normalized) {
@@ -156,6 +164,14 @@ const pickAheadUpdate = (candidates: UpdateCandidate[]): UpdateCandidate | null 
   });
 };
 
+const createEmptyUpdateUiState = (channel: UpdateChannel): UpdateUiState => ({
+  channel,
+  summary: null,
+  sourceChannel: null,
+  blockedReason: null,
+  availableOpen: false
+});
+
 export const useAppUpdater = ({
   channel,
   setStatus
@@ -165,11 +181,18 @@ export const useAppUpdater = ({
   );
   const [checking, setChecking] = useState(false);
   const [installing, setInstalling] = useState(false);
-  const [updateSummary, setUpdateSummary] = useState<UpdateSummary | null>(null);
-  const [updateSourceChannel, setUpdateSourceChannel] = useState<UpdateChannel | null>(null);
-  const [blockedReason, setBlockedReason] = useState<string | null>(null);
-  const [updateAvailableOpen, setUpdateAvailableOpen] = useState(false);
+  const [updateUiState, setUpdateUiState] = useState<UpdateUiState>(() =>
+    createEmptyUpdateUiState(channel)
+  );
   const activeCheckTokenRef = useRef(0);
+  const currentUpdateUiState =
+    updaterSupport === "enabled" && updateUiState.channel === channel
+      ? updateUiState
+      : createEmptyUpdateUiState(channel);
+  const updateSummary = currentUpdateUiState.summary;
+  const updateSourceChannel = currentUpdateUiState.sourceChannel;
+  const blockedReason = currentUpdateUiState.blockedReason;
+  const updateAvailableOpen = currentUpdateUiState.availableOpen;
 
   useEffect(() => {
     let cancelled = false;
@@ -254,10 +277,14 @@ export const useAppUpdater = ({
         }
 
         if (!installability.installable) {
-          setUpdateSummary(null);
-          setUpdateSourceChannel(null);
           const reason = installability.reason ?? BLOCKED_UPDATE_MESSAGE;
-          setBlockedReason(reason);
+          setUpdateUiState({
+            channel,
+            summary: null,
+            sourceChannel: null,
+            blockedReason: reason,
+            availableOpen: false
+          });
           if (manual) {
             setStatus(BLOCKED_UPDATE_MESSAGE);
             toast(BLOCKED_UPDATE_MESSAGE, {
@@ -269,19 +296,20 @@ export const useAppUpdater = ({
 
         const selected = pickAheadUpdate(candidates);
         if (selected) {
-          setUpdateSummary(selected.summary);
-          setUpdateSourceChannel(selected.channel);
-          setBlockedReason(null);
+          setUpdateUiState({
+            channel,
+            summary: selected.summary,
+            sourceChannel: selected.channel,
+            blockedReason: null,
+            availableOpen: manual
+          });
           if (manual) {
             setStatus(`Update ${selected.summary.version} is available.`);
-            setUpdateAvailableOpen(true);
           }
           return;
         }
 
-        setUpdateSummary(null);
-        setUpdateSourceChannel(null);
-        setBlockedReason(null);
+        setUpdateUiState(createEmptyUpdateUiState(channel));
         if (manual) {
           setStatus("You are up to date.");
           toast.success("You are up to date.");
@@ -290,9 +318,13 @@ export const useAppUpdater = ({
         if (activeCheckTokenRef.current !== checkToken) {
           return;
         }
-        setUpdateSummary(null);
-        setUpdateSourceChannel(null);
-        setBlockedReason(error instanceof Error ? error.message : String(error));
+        setUpdateUiState({
+          channel,
+          summary: null,
+          sourceChannel: null,
+          blockedReason: error instanceof Error ? error.message : String(error),
+          availableOpen: false
+        });
         if (manual) {
           setStatus("Could not check for updates.");
           toast.error("Could not check for updates.");
@@ -307,14 +339,16 @@ export const useAppUpdater = ({
   );
 
   useEffect(() => {
-    setUpdateSummary(null);
-    setUpdateSourceChannel(null);
-    setBlockedReason(null);
-    setUpdateAvailableOpen(false);
     if (updaterSupport !== "enabled") {
       return;
     }
-    void performCheck(false);
+    // Defer to avoid calling setChecking(true) synchronously inside an effect body.
+    const checkHandle = window.setTimeout(() => {
+      void performCheck(false);
+    }, 0);
+    return () => {
+      window.clearTimeout(checkHandle);
+    };
   }, [channel, performCheck, updaterSupport]);
 
   const checkForUpdates = useCallback(() => {
@@ -328,12 +362,16 @@ export const useAppUpdater = ({
     if (updaterSupport !== "enabled" || !updateSummary) {
       return;
     }
-    setUpdateAvailableOpen(true);
-  }, [updateSummary, updaterSupport]);
+    setUpdateUiState((prev) =>
+      prev.channel === channel ? { ...prev, availableOpen: true } : prev
+    );
+  }, [channel, updateSummary, updaterSupport]);
 
   const handleUpdateAvailableOpenChange = useCallback((open: boolean) => {
-    setUpdateAvailableOpen(open);
-  }, []);
+    setUpdateUiState((prev) =>
+      prev.channel === channel ? { ...prev, availableOpen: open } : prev
+    );
+  }, [channel]);
 
   const installUpdate = useCallback(async () => {
     if (updaterSupport !== "enabled" || installing) {
@@ -348,10 +386,7 @@ export const useAppUpdater = ({
       if (result.installed) {
         setStatus(message);
         toast.success(message);
-        setUpdateAvailableOpen(false);
-        setUpdateSummary(null);
-        setUpdateSourceChannel(null);
-        setBlockedReason(null);
+        setUpdateUiState(createEmptyUpdateUiState(channel));
       } else {
         setStatus(message);
         toast.error(message);

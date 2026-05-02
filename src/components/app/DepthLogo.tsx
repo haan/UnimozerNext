@@ -59,6 +59,7 @@ void main() {
 `;
 
 type Point2D = { x: number; y: number };
+type StaticFallback = { runtimeIconSrc: string; src: string };
 
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
 
@@ -176,28 +177,23 @@ export const DepthLogo = ({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [renderWebGl, setRenderWebGl] = useState(false);
-  const [staticSrc, setStaticSrc] = useState(runtimeIconSrc);
+  const [staticFallback, setStaticFallback] = useState<StaticFallback | null>(null);
+  const staticSrc =
+    staticFallback?.runtimeIconSrc === runtimeIconSrc ? staticFallback.src : runtimeIconSrc;
 
   const handleStaticError = useCallback(() => {
     if (staticSrc !== originalFallbackSrc) {
-      setStaticSrc(originalFallbackSrc);
+      setStaticFallback({ runtimeIconSrc, src: originalFallbackSrc });
       return;
     }
     if (staticSrc !== FINAL_ICON_FALLBACK_SRC) {
-      setStaticSrc(FINAL_ICON_FALLBACK_SRC);
+      setStaticFallback({ runtimeIconSrc, src: FINAL_ICON_FALLBACK_SRC });
     }
-  }, [originalFallbackSrc, staticSrc]);
-
-  useEffect(() => {
-    setStaticSrc(runtimeIconSrc);
-  }, [runtimeIconSrc]);
+  }, [originalFallbackSrc, runtimeIconSrc, staticSrc]);
 
   useEffect(() => {
     const container = containerRef.current;
     const canvas = canvasRef.current;
-
-    setRenderWebGl(false);
-    setStaticSrc(runtimeIconSrc);
 
     if (!open || !container || !canvas) {
       if (container) {
@@ -292,7 +288,7 @@ export const DepthLogo = ({
       event.preventDefault();
       contextLost = true;
       setRenderWebGl(false);
-      setStaticSrc(runtimeIconSrc);
+      setStaticFallback(null);
     };
 
     const initialize = async () => {
@@ -419,7 +415,7 @@ export const DepthLogo = ({
       }}
       aria-label={ariaLabel}
     >
-      {renderWebGl ? (
+      {open && renderWebGl ? (
         <canvas
           ref={canvasRef}
           className="h-full w-full object-contain"

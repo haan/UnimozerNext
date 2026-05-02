@@ -213,7 +213,7 @@ export const useProjectIO = ({
       }
     ) => {
       const diagramFile = joinPath(root, "unimozer.json");
-      let baseState: DiagramState | null = null;
+      let baseState: DiagramState | null;
       let loadedFromDisk = false;
       let stateWasNormalized = false;
       let stateWasHydratedFromMemory = false;

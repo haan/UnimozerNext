@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -96,17 +96,8 @@ export const CallMethodDialog = ({
   onSubmit,
   busy
 }: CallMethodDialogProps) => {
-  const [paramValues, setParamValues] = useState<string[]>([]);
+  const [paramValues, setParamValues] = useState<string[]>(() => params.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setParamValues([]);
-      setSubmitting(false);
-      return;
-    }
-    setParamValues(params.map(() => ""));
-  }, [open, params]);
 
   const updateParam = (index: number, value: string) => {
     setParamValues((prev) => {

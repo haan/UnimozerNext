@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -47,15 +47,6 @@ export const AddMethodDialog = ({
   const [submitting, setSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setForm(defaultForm);
-      setSubmitting(false);
-      setAdvancedOpen(false);
-      setAutoFocusParamId(null);
-    }
-  }, [open]);
 
   const update = (patch: Partial<AddMethodForm>) => {
     setForm((prev) => ({ ...prev, ...patch }));

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -50,14 +50,6 @@ export const AddFieldDialog = ({
   const [form, setForm] = useState<AddFieldForm>(defaultForm);
   const [submitting, setSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setForm(defaultForm);
-      setSubmitting(false);
-      setAdvancedOpen(false);
-    }
-  }, [open]);
 
   const update = (patch: Partial<AddFieldForm>) => {
     setForm((prev) => ({ ...prev, ...patch }));

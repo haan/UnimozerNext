@@ -194,12 +194,14 @@ export const AppDialogs = ({
       onChange={onSettingsChange}
     />
     <AddClassDialog
+      key={`add-class-${addClassOpen}`}
       open={addClassOpen}
       onOpenChange={onAddClassOpenChange}
       onSubmit={onCreateClass}
       busy={busy}
     />
     <AddFieldDialog
+      key={`add-field-${addFieldOpen}-${JSON.stringify(addFieldExistingNames)}`}
       open={addFieldOpen}
       onOpenChange={onAddFieldOpenChange}
       onSubmit={onCreateField}
@@ -207,6 +209,7 @@ export const AppDialogs = ({
       busy={busy}
     />
     <AddConstructorDialog
+      key={`add-constructor-${addConstructorOpen}-${addConstructorClassName ?? ""}`}
       open={addConstructorOpen}
       onOpenChange={onAddConstructorOpenChange}
       onSubmit={onCreateConstructor}
@@ -214,6 +217,7 @@ export const AppDialogs = ({
       busy={busy}
     />
     <AddMethodDialog
+      key={`add-method-${addMethodOpen}-${addMethodClassName ?? ""}`}
       open={addMethodOpen}
       onOpenChange={onAddMethodOpenChange}
       onSubmit={onCreateMethod}
@@ -221,6 +225,7 @@ export const AppDialogs = ({
       busy={busy}
     />
     <CreateObjectDialog
+      key={`create-object-${createObjectOpen}-${createObjectClassName}-${createObjectConstructorLabel}`}
       open={createObjectOpen}
       onOpenChange={onCreateObjectOpenChange}
       onSubmit={onCreateObject}
@@ -231,6 +236,7 @@ export const AppDialogs = ({
       busy={busy}
     />
     <CallMethodDialog
+      key={`call-method-${callMethodOpen}-${callMethodObjectName}-${callMethodLabel}`}
       open={callMethodOpen}
       onOpenChange={onCallMethodOpenChange}
       onSubmit={onCallMethod}
@@ -242,6 +248,7 @@ export const AppDialogs = ({
       busy={busy}
     />
     <RenameClassDialog
+      key={`rename-class-${renameClassOpen}-${renameClassName}`}
       open={renameClassOpen}
       onOpenChange={onRenameClassOpenChange}
       className={renameClassName}

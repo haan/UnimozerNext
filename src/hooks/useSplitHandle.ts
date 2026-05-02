@@ -29,13 +29,11 @@ export const useSplitHandle = ({
   onCommit
 }: UseSplitHandleArgs): UseSplitHandleResult => {
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const [ratio, setRatio] = useState(initialRatio);
+  const [ratioState, setRatioState] = useState({ initialRatio, ratio: initialRatio });
+  const ratio =
+    ratioState.initialRatio === initialRatio ? ratioState.ratio : initialRatio;
   const ratioRef = useRef(ratio);
   const [isResizing, setIsResizing] = useState(false);
-
-  useEffect(() => {
-    setRatio(initialRatio);
-  }, [initialRatio]);
 
   useEffect(() => {
     ratioRef.current = ratio;
@@ -51,12 +49,18 @@ export const useSplitHandle = ({
         let x = event.clientX - rect.left;
         x = Math.max(minBefore, Math.min(rect.width - minAfter, x));
         const next = x / rect.width;
-        setRatio(snapRatio !== undefined && Math.abs(next - snapRatio) <= snapDistance ? snapRatio : next);
+        setRatioState({
+          initialRatio,
+          ratio: snapRatio !== undefined && Math.abs(next - snapRatio) <= snapDistance ? snapRatio : next
+        });
       } else {
         let y = event.clientY - rect.top;
         y = Math.max(minBefore, Math.min(rect.height - minAfter, y));
         const next = y / rect.height;
-        setRatio(snapRatio !== undefined && Math.abs(next - snapRatio) <= snapDistance ? snapRatio : next);
+        setRatioState({
+          initialRatio,
+          ratio: snapRatio !== undefined && Math.abs(next - snapRatio) <= snapDistance ? snapRatio : next
+        });
       }
     };
 
@@ -75,7 +79,7 @@ export const useSplitHandle = ({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
     };
-  }, [isResizing, minBefore, minAfter, onCommit, orientation, snapDistance, snapRatio]);
+  }, [initialRatio, isResizing, minBefore, minAfter, onCommit, orientation, snapDistance, snapRatio]);
 
   const startResize = useCallback((event: ReactPointerEvent<HTMLElement>) => {
     event.preventDefault();

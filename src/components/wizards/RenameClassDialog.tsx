@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -25,16 +25,6 @@ export const RenameClassDialog = ({
 }: RenameClassDialogProps) => {
   const [name, setName] = useState(className);
   const [submitting, setSubmitting] = useState(false);
-  const classNameRef = useRef(className);
-  classNameRef.current = className;
-
-  useEffect(() => {
-    if (open) {
-      setName(classNameRef.current);
-      return;
-    }
-    setSubmitting(false);
-  }, [open]);
 
   const normalizedName = useMemo(() => name.trim().replace(/\.java$/i, ""), [name]);
   const isNameValid = normalizedName.length > 0 && isValidJavaIdentifier(normalizedName);

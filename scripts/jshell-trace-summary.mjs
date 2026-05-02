@@ -39,7 +39,8 @@ const parseJsonl = (raw, filePath) => {
       events.push(JSON.parse(line));
     } catch (error) {
       throw new Error(
-        `Invalid JSON at ${path.basename(filePath)}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`
+        `Invalid JSON at ${path.basename(filePath)}:${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error }
       );
     }
   });

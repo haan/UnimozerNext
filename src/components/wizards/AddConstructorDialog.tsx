@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -30,15 +30,6 @@ export const AddConstructorDialog = ({
   const [includeJavadoc, setIncludeJavadoc] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [autoFocusParamId, setAutoFocusParamId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) {
-      setParams([]);
-      setIncludeJavadoc(false);
-      setSubmitting(false);
-      setAutoFocusParamId(null);
-    }
-  }, [open]);
 
   const updateParam = (id: string, patch: Partial<ParameterRow>) => {
     setParams((prev) =>

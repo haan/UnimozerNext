@@ -142,7 +142,7 @@ export const useCompileJshellLifecycle = ({
 
         logDebug(`JShell warmup start (token=${token})`);
         setStatus("Warming up object bench runtime...");
-        let timeoutHandle: number | null = window.setTimeout(() => {
+        const timeoutHandle: number | null = window.setTimeout(() => {
           if (jshellStartTokenRef.current !== token) {
             return;
           }
@@ -198,7 +198,6 @@ export const useCompileJshellLifecycle = ({
         } finally {
           if (timeoutHandle !== null) {
             window.clearTimeout(timeoutHandle);
-            timeoutHandle = null;
           }
         }
       };

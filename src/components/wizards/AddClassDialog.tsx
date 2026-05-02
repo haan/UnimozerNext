@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
@@ -42,14 +42,6 @@ export const AddClassDialog = ({
   const [form, setForm] = useState<AddClassForm>(defaultForm);
   const [submitting, setSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      setForm(defaultForm);
-      setSubmitting(false);
-      setAdvancedOpen(false);
-    }
-  }, [open]);
 
   const update = (patch: Partial<AddClassForm>) => {
     setForm((prev) => ({ ...prev, ...patch }));

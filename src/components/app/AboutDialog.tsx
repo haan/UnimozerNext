@@ -64,7 +64,12 @@ export const AboutDialog = ({ open, onOpenChange }: AboutDialogProps) => {
             v{appVersion}
           </div>
         ) : null}
-        <DepthLogo open={open} className="mx-auto h-44 w-44" ariaLabel="Unimozer Next logo" />
+        <DepthLogo
+          key={`depth-logo-${open}`}
+          open={open}
+          className="mx-auto h-44 w-44"
+          ariaLabel="Unimozer Next logo"
+        />
         <DialogTitle className="mt-4 text-2xl">Unimozer Next</DialogTitle>
         <DialogDescription className="mx-auto mt-1 max-w-xl text-sm">
           A modern desktop rewrite of Unimozer for UML-first Java learning.
