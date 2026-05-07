@@ -1375,7 +1375,7 @@ export const UmlDiagram = ({
       <g data-uml-layer="packages" transform={layerTransform}>
         {packages.map((pkg) => {
           const labelWidth = Math.ceil(
-            measureTextWidth(pkg.name, `600 ${umlFontSize}px ${UML_FONT_FAMILY}`) +
+            measureTextWidth(pkg.name, `600 ${umlFontSize}px ${resolvedFontFamily}`) +
               TEXT_PADDING
           );
           const handlePackagePointerDown = (event: React.PointerEvent<SVGRectElement>) => {
