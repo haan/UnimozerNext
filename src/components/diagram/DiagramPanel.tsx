@@ -236,6 +236,7 @@ export const DiagramPanel = ({
                     <StructogramView
                       method={resolvedMethodContext.method}
                       fontSize={fontSize}
+                      fontFamily={fontFamily}
                       colorsEnabled={structogramColorsEnabled}
                       exportDefaultPath={exportDefaultPath}
                       onExportStatus={onExportStatus}

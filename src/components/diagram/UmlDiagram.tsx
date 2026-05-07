@@ -458,7 +458,7 @@ export const UmlDiagram = ({
     scale: clamp(diagram.viewport?.zoom ?? DEFAULT_VIEW_SCALE, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE)
   }));
   const viewRef = useRef(view);
-  const [fontReady, setFontReady] = useState(false);
+  const [fontLoadedFor, setFontLoadedFor] = useState("");
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
   const normalizedEdgeStrokeWidth = clamp(edgeStrokeWidth, 1, 2);
   const resolvedFontFamily = useMemo(
@@ -604,9 +604,10 @@ export const UmlDiagram = ({
 
   useEffect(() => {
     let cancelled = false;
+    const key = `${resolvedFontFamily}:${umlFontSize}`;
     const ensureFont = async () => {
       if (typeof document === "undefined" || !document.fonts) {
-        if (!cancelled) setFontReady(true);
+        if (!cancelled) setFontLoadedFor(key);
         return;
       }
       try {
@@ -618,13 +619,13 @@ export const UmlDiagram = ({
       } catch {
         // If font loading fails, we still want a layout pass.
       }
-      if (!cancelled) setFontReady(true);
+      if (!cancelled) setFontLoadedFor(key);
     };
     void ensureFont();
     return () => {
       cancelled = true;
     };
-  }, [fontFamily, umlFontSize]);
+  }, [fontFamily, resolvedFontFamily, umlFontSize]);
 
   useEffect(() => {
     void ensureEmbeddedFontCss();
@@ -800,14 +801,14 @@ export const UmlDiagram = ({
           ...node,
           x: position.x,
           y: position.y,
-          width: fontReady
+          width: fontLoadedFor === `${resolvedFontFamily}:${umlFontSize}`
             ? computeNodeWidth(node, umlFontSize, showParameterNames, resolvedFontFamily)
             : NODE_WIDTH,
           height: computeNodeHeight(node, headerHeight, rowHeight)
         };
       }),
     [
-      fontReady,
+      fontLoadedFor,
       graph.nodes,
       headerHeight,
       layoutNodes,
