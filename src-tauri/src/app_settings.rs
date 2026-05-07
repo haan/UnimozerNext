@@ -14,6 +14,10 @@ struct UmlSettings {
     show_parameter_names: bool,
     #[serde(default = "default_edge_stroke_width")]
     edge_stroke_width: f32,
+    #[serde(default = "default_uml_line_height")]
+    line_height: f32,
+    #[serde(default = "default_false")]
+    high_contrast_edges: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -23,6 +27,8 @@ struct GeneralSettings {
     font_size: u32,
     #[serde(default = "default_false")]
     dark_mode: bool,
+    #[serde(default = "default_font_family")]
+    font_family: String,
 }
 
 impl Default for GeneralSettings {
@@ -30,6 +36,7 @@ impl Default for GeneralSettings {
         Self {
             font_size: default_font_size(),
             dark_mode: default_false(),
+            font_family: default_font_family(),
         }
     }
 }
@@ -246,6 +253,7 @@ impl Default for AppSettings {
             general: GeneralSettings {
                 font_size: default_font_size(),
                 dark_mode: default_false(),
+                font_family: default_font_family(),
             },
             uml: UmlSettings {
                 show_dependencies: true,
@@ -254,6 +262,8 @@ impl Default for AppSettings {
                 code_highlight: default_true(),
                 show_parameter_names: default_true(),
                 edge_stroke_width: default_edge_stroke_width(),
+                line_height: default_uml_line_height(),
+                high_contrast_edges: default_false(),
             },
             object_bench: ObjectBenchSettings {
                 show_private_object_fields: default_true(),
@@ -322,6 +332,14 @@ pub(crate) enum DebugLogCategory {
 
 fn default_font_size() -> u32 {
     12
+}
+
+fn default_font_family() -> String {
+    "JetBrains Mono".to_string()
+}
+
+fn default_uml_line_height() -> f32 {
+    1.6
 }
 
 fn default_editor_theme() -> String {

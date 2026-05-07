@@ -5,6 +5,8 @@ export type UmlSettings = {
   showSwingAttributes: boolean;
   showParameterNames: boolean;
   edgeStrokeWidth: number;
+  lineHeight: number;
+  highContrastEdges: boolean;
 };
 
 export type EditorSettings = {
@@ -44,6 +46,7 @@ export type StructogramSettings = {
 export type GeneralSettings = {
   fontSize: number;
   darkMode: boolean;
+  fontFamily: string;
 };
 
 export type ObjectBenchSettings = {

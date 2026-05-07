@@ -240,8 +240,11 @@ export default function AppContainer({
   const showPackages = settings.uml.showPackages;
   const showParameterNames = settings.uml.showParameterNames;
   const edgeStrokeWidth = settings.uml.edgeStrokeWidth;
+  const umlLineHeight = settings.uml.lineHeight;
+  const highContrastEdges = settings.uml.highContrastEdges;
   const fontSize = settings.general.fontSize;
   const darkMode = settings.general.darkMode;
+  const fontFamily = settings.general.fontFamily;
   const showPrivateObjectFields =
     settings.objectBench.showPrivateObjectFields;
   const showInheritedObjectFields =
@@ -502,6 +505,7 @@ export default function AppContainer({
     projectStorageMode,
     packedArchivePath,
     darkMode,
+    fontFamily,
     structogramLoopHeaderColor,
     structogramIfHeaderColor,
     structogramSwitchHeaderColor,
@@ -1165,7 +1169,10 @@ export default function AppContainer({
           showPackages,
           showParameterNames,
           edgeStrokeWidth,
+          umlLineHeight,
+          highContrastEdges,
           fontSize,
+          fontFamily,
           structogramColorsEnabled,
           exportDefaultPath,
           onExportStatus: handleExportStatus,
@@ -1209,6 +1216,7 @@ export default function AppContainer({
           dirty,
           darkMode,
           fontSize,
+          fontFamily,
           theme: settings.editor.theme,
           tabSize: settings.editor.tabSize,
           insertSpaces: settings.editor.insertSpaces,

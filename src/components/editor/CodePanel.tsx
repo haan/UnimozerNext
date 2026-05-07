@@ -23,6 +23,7 @@ export type CodePanelProps = {
   dirty: boolean;
   darkMode: boolean;
   fontSize: number;
+  fontFamily?: string;
   theme: string;
   tabSize: number;
   insertSpaces: boolean;
@@ -283,6 +284,7 @@ export const CodePanel = memo(
     content,
     darkMode,
     fontSize,
+    fontFamily,
     theme,
     tabSize,
     insertSpaces,
@@ -731,7 +733,9 @@ export const CodePanel = memo(
               }}
               options={{
                 fontSize,
-                fontFamily: "var(--editor-font)",
+                fontFamily: fontFamily && fontFamily !== "system"
+                  ? `"${fontFamily}", monospace`
+                  : "var(--editor-font)",
                 minimap: { enabled: false },
                 scrollBeyondLastLine: false,
                 padding: { top: 8 },

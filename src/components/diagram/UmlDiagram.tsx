@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
@@ -196,17 +196,18 @@ const measureFontMetrics = (font: string, fontSize: number): FontMetrics => {
 const computeNodeWidth = (
   node: UmlNode,
   fontSize: number,
-  showParameterNames: boolean
+  showParameterNames: boolean,
+  fontFamily: string = UML_FONT_FAMILY
 ) => {
   const padding = TEXT_PADDING;
-  const nameWidth = measureTextWidth(node.name, `600 ${fontSize}px ${UML_FONT_FAMILY}`);
+  const nameWidth = measureTextWidth(node.name, `600 ${fontSize}px ${fontFamily}`);
   const fieldWidth = Math.max(
     0,
     ...node.fields.map((field) => {
       const visibility = field.visibility ? `${field.visibility} ` : "";
       return measureTextWidth(
         `${visibility}${field.signature}`,
-        `${fontSize}px ${UML_FONT_FAMILY}`
+        `${fontSize}px ${fontFamily}`
       );
     })
   );
@@ -217,7 +218,7 @@ const computeNodeWidth = (
       const signature = formatMethodSignature(method, showParameterNames);
       return measureTextWidth(
         `${visibility}${signature}`,
-        `${fontSize}px ${UML_FONT_FAMILY}`
+        `${fontSize}px ${fontFamily}`
       );
     })
   );
@@ -352,7 +353,10 @@ export type UmlDiagramProps = {
   showPackages?: boolean;
   showParameterNames?: boolean;
   edgeStrokeWidth?: number;
+  umlLineHeight?: number;
+  highContrastEdges?: boolean;
   fontSize?: number;
+  fontFamily?: string;
   exportDefaultPath?: string | null;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onViewportChange?: (viewport: DiagramViewport, commit: boolean) => void;
@@ -421,7 +425,10 @@ export const UmlDiagram = ({
   showPackages,
   showParameterNames = true,
   edgeStrokeWidth = 1,
+  umlLineHeight,
+  highContrastEdges = false,
   fontSize,
+  fontFamily,
   exportDefaultPath,
   onNodePositionChange,
   onViewportChange,
@@ -456,17 +463,22 @@ export const UmlDiagram = ({
   const [fontReady, setFontReady] = useState(false);
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
   const normalizedEdgeStrokeWidth = clamp(edgeStrokeWidth, 1, 2);
+  const resolvedFontFamily =
+    fontFamily && fontFamily !== "system"
+      ? `"${fontFamily}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
+      : UML_FONT_FAMILY;
   const bodyFontMetrics = useMemo(
-    () => measureFontMetrics(`${umlFontSize}px ${UML_FONT_FAMILY}`, umlFontSize),
-    [umlFontSize]
+    () => measureFontMetrics(`${umlFontSize}px ${resolvedFontFamily}`, umlFontSize),
+    [umlFontSize, resolvedFontFamily]
   );
   const headerFontMetrics = useMemo(
-    () => measureFontMetrics(`600 ${umlFontSize}px ${UML_FONT_FAMILY}`, umlFontSize),
-    [umlFontSize]
+    () => measureFontMetrics(`600 ${umlFontSize}px ${resolvedFontFamily}`, umlFontSize),
+    [umlFontSize, resolvedFontFamily]
   );
   const headerHeight = umlFontSize + 2 * HEADER_VERTICAL_PADDING;
+  const effectiveLineHeight = umlLineHeight ?? UML_LINE_HEIGHT;
   const rowHeight = Math.max(
-    Math.round(umlFontSize * UML_LINE_HEIGHT),
+    Math.round(umlFontSize * effectiveLineHeight),
     Math.ceil(bodyFontMetrics.height + 4)
   );
   const rowTextBaselineOffset = useMemo(() => {
@@ -784,7 +796,7 @@ export const UmlDiagram = ({
           x: position.x,
           y: position.y,
           width: fontReady
-            ? computeNodeWidth(node, umlFontSize, showParameterNames)
+            ? computeNodeWidth(node, umlFontSize, showParameterNames, resolvedFontFamily)
             : NODE_WIDTH,
           height: computeNodeHeight(node, headerHeight, rowHeight)
         };
@@ -794,6 +806,7 @@ export const UmlDiagram = ({
       graph.nodes,
       headerHeight,
       layoutNodes,
+      resolvedFontFamily,
       rowHeight,
       showParameterNames,
       umlFontSize
@@ -1277,10 +1290,18 @@ export const UmlDiagram = ({
     };
   }, [copyDiagramPng, copyNodePng, exportDiagramPng, exportNodePng, onRegisterExport]);
 
+  const highContrastStyle = highContrastEdges
+    ? ({
+        "--uml-edge-stroke": "hsl(var(--foreground))",
+        "--uml-edge-marker-stroke": "hsl(var(--foreground))"
+      } as CSSProperties)
+    : undefined;
+
   return (
     <svg
       ref={svgRef}
       className="h-full w-full select-none touch-none"
+      style={highContrastStyle}
       role="img"
       onContextMenu={(event) => {
         const target = event.target as Element | null;

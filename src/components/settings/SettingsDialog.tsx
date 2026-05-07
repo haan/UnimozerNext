@@ -21,6 +21,18 @@ import {
 import { loadEditorThemeOptions, type ThemeOption } from "../../services/monacoThemes";
 import { readDefaultSettings } from "../../services/settings";
 
+const FONT_OPTIONS: { value: string; label: string }[] = [
+  { value: "JetBrains Mono", label: "JetBrains Mono" },
+  { value: "Cascadia Code", label: "Cascadia Code" },
+  { value: "Consolas", label: "Consolas" },
+  { value: "Menlo", label: "Menlo" },
+  { value: "Monaco", label: "Monaco" },
+  { value: "Courier New", label: "Courier New" },
+  { value: "Ubuntu Mono", label: "Ubuntu Mono" },
+  { value: "Liberation Mono", label: "Liberation Mono" },
+  { value: "system", label: "System default" }
+];
+
 type SettingsDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -225,6 +237,48 @@ export const SettingsDialog = ({
                     </Tooltip>
                   </TooltipProvider>
                 </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Font face</p>
+                    <p className="text-xs text-muted-foreground">
+                      Monospace font used in the editor, console, and UML panels.
+                    </p>
+                  </div>
+                  <div className="w-56">
+                    <Select
+                      value={settings.general.fontFamily}
+                      onValueChange={(value) =>
+                        onChange({
+                          ...settings,
+                          general: {
+                            ...settings.general,
+                            fontFamily: value
+                          }
+                        })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select font" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FONT_OPTIONS.map((option) => (
+                          <SelectItem
+                            key={option.value}
+                            value={option.value}
+                            style={
+                              option.value !== "system"
+                                ? { fontFamily: `"${option.value}", monospace` }
+                                : { fontFamily: "ui-monospace, monospace" }
+                            }
+                          >
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
               </div>
             ) : activeGroup === "UML" ? (
               <div className="mt-4 grid gap-2">
@@ -339,6 +393,56 @@ export const SettingsDialog = ({
                       {settings.uml.edgeStrokeWidth.toFixed(1)}
                     </span>
                   </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">Line height</p>
+                    <p className="text-xs text-muted-foreground">
+                      Row spacing in UML class boxes.
+                    </p>
+                  </div>
+                  <div className="flex w-44 items-center gap-3">
+                    <Slider
+                      value={[settings.uml.lineHeight]}
+                      min={1.0}
+                      max={2.5}
+                      step={0.1}
+                      onValueChange={(value) =>
+                        onChange({
+                          ...settings,
+                          uml: {
+                            ...settings.uml,
+                            lineHeight: Math.round((value[0] ?? 1.6) * 10) / 10
+                          }
+                        })
+                      }
+                    />
+                    <span className="w-9 text-right text-xs text-muted-foreground">
+                      {settings.uml.lineHeight.toFixed(1)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">High contrast edges</p>
+                    <p className="text-xs text-muted-foreground">
+                      Render UML relationship lines at full foreground color instead of muted.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.uml.highContrastEdges}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        uml: {
+                          ...settings.uml,
+                          highContrastEdges: checked
+                        }
+                      })
+                    }
+                  />
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
