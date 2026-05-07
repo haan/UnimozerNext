@@ -17,7 +17,7 @@ struct UmlSettings {
     #[serde(default = "default_uml_line_height")]
     line_height: f32,
     #[serde(default = "default_false")]
-    high_contrast_edges: bool,
+    high_contrast: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -263,7 +263,7 @@ impl Default for AppSettings {
                 show_parameter_names: default_true(),
                 edge_stroke_width: default_edge_stroke_width(),
                 line_height: default_uml_line_height(),
-                high_contrast_edges: default_false(),
+                high_contrast: default_false(),
             },
             object_bench: ObjectBenchSettings {
                 show_private_object_fields: default_true(),

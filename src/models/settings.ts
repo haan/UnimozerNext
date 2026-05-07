@@ -6,7 +6,7 @@ export type UmlSettings = {
   showParameterNames: boolean;
   edgeStrokeWidth: number;
   lineHeight: number;
-  highContrastEdges: boolean;
+  highContrast: boolean;
 };
 
 export type EditorSettings = {

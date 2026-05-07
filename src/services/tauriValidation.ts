@@ -153,7 +153,7 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
     showParameterNames: z.boolean(),
     edgeStrokeWidth: z.number(),
     lineHeight: z.number(),
-    highContrastEdges: z.boolean()
+    highContrast: z.boolean()
   }),
   objectBench: z.object({
     showPrivateObjectFields: z.boolean(),

@@ -426,19 +426,19 @@ export const SettingsDialog = ({
 
                 <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
                   <div>
-                    <p className="text-sm font-medium">High contrast edges</p>
+                    <p className="text-sm font-medium">High contrast</p>
                     <p className="text-xs text-muted-foreground">
-                      Render UML relationship lines at full foreground color instead of muted.
+                      Increase border and edge contrast for better visibility.
                     </p>
                   </div>
                   <Switch
-                    checked={settings.uml.highContrastEdges}
+                    checked={settings.uml.highContrast}
                     onCheckedChange={(checked) =>
                       onChange({
                         ...settings,
                         uml: {
                           ...settings.uml,
-                          highContrastEdges: checked
+                          highContrast: checked
                         }
                       })
                     }

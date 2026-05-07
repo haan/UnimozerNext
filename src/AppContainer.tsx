@@ -241,7 +241,7 @@ export default function AppContainer({
   const showParameterNames = settings.uml.showParameterNames;
   const edgeStrokeWidth = settings.uml.edgeStrokeWidth;
   const umlLineHeight = settings.uml.lineHeight;
-  const highContrastEdges = settings.uml.highContrastEdges;
+  const highContrast = settings.uml.highContrast;
   const fontSize = settings.general.fontSize;
   const darkMode = settings.general.darkMode;
   const fontFamily = settings.general.fontFamily;
@@ -506,6 +506,7 @@ export default function AppContainer({
     packedArchivePath,
     darkMode,
     fontFamily,
+    highContrast,
     structogramLoopHeaderColor,
     structogramIfHeaderColor,
     structogramSwitchHeaderColor,
@@ -1170,7 +1171,6 @@ export default function AppContainer({
           showParameterNames,
           edgeStrokeWidth,
           umlLineHeight,
-          highContrastEdges,
           fontSize,
           fontFamily,
           structogramColorsEnabled,

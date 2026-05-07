@@ -29,7 +29,6 @@ export type DiagramPanelProps = {
   showParameterNames?: boolean;
   edgeStrokeWidth?: number;
   umlLineHeight?: number;
-  highContrastEdges?: boolean;
   fontSize?: number;
   fontFamily?: string;
   structogramColorsEnabled?: boolean;
@@ -94,7 +93,7 @@ export const DiagramPanel = ({
   showParameterNames,
   edgeStrokeWidth,
   umlLineHeight,
-  highContrastEdges,
+
   fontSize,
   fontFamily,
   structogramColorsEnabled,
@@ -204,7 +203,7 @@ export const DiagramPanel = ({
                 showParameterNames={showParameterNames}
                 edgeStrokeWidth={edgeStrokeWidth}
                 umlLineHeight={umlLineHeight}
-                highContrastEdges={highContrastEdges}
+
                 fontSize={fontSize}
                 fontFamily={fontFamily}
                 exportDefaultPath={exportDefaultPath}

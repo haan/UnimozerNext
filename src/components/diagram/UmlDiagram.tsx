@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeImage } from "@tauri-apps/plugin-clipboard-manager";
@@ -354,7 +354,6 @@ export type UmlDiagramProps = {
   showParameterNames?: boolean;
   edgeStrokeWidth?: number;
   umlLineHeight?: number;
-  highContrastEdges?: boolean;
   fontSize?: number;
   fontFamily?: string;
   exportDefaultPath?: string | null;
@@ -426,7 +425,7 @@ export const UmlDiagram = ({
   showParameterNames = true,
   edgeStrokeWidth = 1,
   umlLineHeight,
-  highContrastEdges = false,
+
   fontSize,
   fontFamily,
   exportDefaultPath,
@@ -1290,18 +1289,10 @@ export const UmlDiagram = ({
     };
   }, [copyDiagramPng, copyNodePng, exportDiagramPng, exportNodePng, onRegisterExport]);
 
-  const highContrastStyle = highContrastEdges
-    ? ({
-        "--uml-edge-stroke": "hsl(var(--foreground))",
-        "--uml-edge-marker-stroke": "hsl(var(--foreground))"
-      } as CSSProperties)
-    : undefined;
-
   return (
     <svg
       ref={svgRef}
       className="h-full w-full select-none touch-none"
-      style={highContrastStyle}
       role="img"
       onContextMenu={(event) => {
         const target = event.target as Element | null;

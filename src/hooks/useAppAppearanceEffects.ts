@@ -61,6 +61,7 @@ type UseAppAppearanceEffectsArgs = {
   packedArchivePath: string | null;
   darkMode: boolean;
   fontFamily: string;
+  highContrast: boolean;
   structogramLoopHeaderColor: string;
   structogramIfHeaderColor: string;
   structogramSwitchHeaderColor: string;
@@ -74,6 +75,7 @@ export const useAppAppearanceEffects = ({
   packedArchivePath,
   darkMode,
   fontFamily,
+  highContrast,
   structogramLoopHeaderColor,
   structogramIfHeaderColor,
   structogramSwitchHeaderColor,
@@ -102,6 +104,10 @@ export const useAppAppearanceEffects = ({
   useEffect(() => {
     document.documentElement.style.setProperty("--uml-font", buildFontStack(fontFamily));
   }, [fontFamily]);
+
+  useEffect(() => {
+    document.documentElement.dataset.umlContrast = highContrast ? "high" : "";
+  }, [highContrast]);
 
   useEffect(() => {
     void platformPromise.then((platform) => {

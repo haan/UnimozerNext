@@ -148,6 +148,22 @@ body,
   body {
     @apply bg-background text-foreground;
   }
+
+  /* High contrast UML mode — light theme base + theme-neutral overrides */
+  :root[data-uml-contrast="high"] {
+    --uml-edge-stroke: hsl(var(--foreground) / 0.9);
+    --uml-edge-marker-stroke: hsl(var(--foreground) / 0.9);
+    --uml-class-border: hsl(var(--foreground) / 0.8);
+    --uml-package-border: hsl(var(--foreground) / 0.7);
+    --uml-class-compiled-border: hsl(118 35% 38%);
+    --uml-class-invalid-border: hsl(12 75% 45%);
+  }
+
+  /* High contrast UML mode — dark theme overrides */
+  :root[data-theme="dark"][data-uml-contrast="high"] {
+    --uml-class-compiled-border: hsl(132 40% 58%);
+    --uml-class-invalid-border: hsl(14 82% 62%);
+  }
 }
 
 /* Hide Monaco hover status bar row (e.g. "View Problem") */

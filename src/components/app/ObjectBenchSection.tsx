@@ -20,7 +20,6 @@ type ObjectBenchSectionProps = {
   showParameterNames?: boolean;
   edgeStrokeWidth?: number;
   umlLineHeight?: number;
-  highContrastEdges?: boolean;
   fontSize: number;
   fontFamily?: string;
   structogramColorsEnabled?: boolean;
@@ -68,7 +67,7 @@ export const ObjectBenchSection = ({
   showParameterNames,
   edgeStrokeWidth,
   umlLineHeight,
-  highContrastEdges,
+
   fontSize,
   fontFamily,
   structogramColorsEnabled,
@@ -118,7 +117,7 @@ export const ObjectBenchSection = ({
           showParameterNames={showParameterNames}
           edgeStrokeWidth={edgeStrokeWidth}
           umlLineHeight={umlLineHeight}
-          highContrastEdges={highContrastEdges}
+
           fontSize={fontSize}
           fontFamily={fontFamily}
           structogramColorsEnabled={structogramColorsEnabled}
