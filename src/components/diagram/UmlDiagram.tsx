@@ -462,10 +462,11 @@ export const UmlDiagram = ({
   const [fontReady, setFontReady] = useState(false);
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
   const normalizedEdgeStrokeWidth = clamp(edgeStrokeWidth, 1, 2);
-  const resolvedFontFamily =
-    fontFamily && fontFamily !== "system"
-      ? `"${fontFamily}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
-      : UML_FONT_FAMILY;
+  const resolvedFontFamily = !fontFamily
+    ? UML_FONT_FAMILY
+    : fontFamily === "system"
+      ? `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
+      : `"${fontFamily}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
   const bodyFontMetrics = useMemo(
     () => measureFontMetrics(`${umlFontSize}px ${resolvedFontFamily}`, umlFontSize),
     [umlFontSize, resolvedFontFamily]
@@ -606,8 +607,10 @@ export const UmlDiagram = ({
         return;
       }
       try {
-        await document.fonts.load(`400 ${umlFontSize}px "JetBrains Mono"`);
-        await document.fonts.load(`600 ${umlFontSize}px "JetBrains Mono"`);
+        const fontSpec =
+          fontFamily && fontFamily !== "system" ? `"${fontFamily}"` : "ui-monospace";
+        await document.fonts.load(`400 ${umlFontSize}px ${fontSpec}`);
+        await document.fonts.load(`600 ${umlFontSize}px ${fontSpec}`);
         await document.fonts.ready;
       } catch {
         // If font loading fails, we still want a layout pass.
@@ -618,7 +621,7 @@ export const UmlDiagram = ({
     return () => {
       cancelled = true;
     };
-  }, [umlFontSize]);
+  }, [fontFamily, umlFontSize]);
 
   useEffect(() => {
     void ensureEmbeddedFontCss();

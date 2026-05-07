@@ -48,10 +48,11 @@ const resolveStructogramColor = (
 };
 
 const FONT_FALLBACK_STACK = ', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+const SYSTEM_FONT_STACK = `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
 
 const buildFontStack = (fontFamily: string) =>
   fontFamily === "system"
-    ? `ui-monospace${FONT_FALLBACK_STACK}`
+    ? SYSTEM_FONT_STACK
     : `"${fontFamily}"${FONT_FALLBACK_STACK}`;
 
 type UseAppAppearanceEffectsArgs = {
