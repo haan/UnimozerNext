@@ -149,20 +149,30 @@ body,
     @apply bg-background text-foreground;
   }
 
-  /* High contrast UML mode — light theme base + theme-neutral overrides */
+  /* High contrast UML mode — light theme */
   :root[data-uml-contrast="high"] {
     --uml-edge-stroke: hsl(var(--foreground) / 0.9);
     --uml-edge-marker-stroke: hsl(var(--foreground) / 0.9);
+    --uml-class-bg: #f5e070;
     --uml-class-border: hsl(var(--foreground) / 0.8);
-    --uml-package-border: hsl(var(--foreground) / 0.7);
+    --uml-class-compiled-bg: #96e090;
     --uml-class-compiled-border: hsl(118 35% 38%);
+    --uml-class-invalid-bg: #f5a898;
     --uml-class-invalid-border: hsl(12 75% 45%);
+    --uml-package-bg: #c2ba9a;
+    --uml-package-border: hsl(var(--foreground) / 0.7);
+    --uml-package-name-bg: #e0cc88;
   }
 
-  /* High contrast UML mode — dark theme overrides */
+  /* High contrast UML mode — dark theme */
   :root[data-theme="dark"][data-uml-contrast="high"] {
+    --uml-class-bg: #1a4a28;
+    --uml-class-compiled-bg: #1a5535;
     --uml-class-compiled-border: hsl(132 40% 58%);
+    --uml-class-invalid-bg: #7a2020;
     --uml-class-invalid-border: hsl(14 82% 62%);
+    --uml-package-bg: #1e1e28;
+    --uml-package-name-bg: #282835;
   }
 }
 
