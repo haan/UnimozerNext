@@ -425,7 +425,6 @@ export const UmlDiagram = ({
   showParameterNames = true,
   edgeStrokeWidth = 1,
   umlLineHeight,
-
   fontSize,
   fontFamily,
   exportDefaultPath,
@@ -462,11 +461,15 @@ export const UmlDiagram = ({
   const [fontReady, setFontReady] = useState(false);
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
   const normalizedEdgeStrokeWidth = clamp(edgeStrokeWidth, 1, 2);
-  const resolvedFontFamily = !fontFamily
-    ? UML_FONT_FAMILY
-    : fontFamily === "system"
-      ? `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
-      : `"${fontFamily}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
+  const resolvedFontFamily = useMemo(
+    () =>
+      !fontFamily
+        ? UML_FONT_FAMILY
+        : fontFamily === "system"
+          ? `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
+          : `"${fontFamily}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
+    [fontFamily]
+  );
   const bodyFontMetrics = useMemo(
     () => measureFontMetrics(`${umlFontSize}px ${resolvedFontFamily}`, umlFontSize),
     [umlFontSize, resolvedFontFamily]

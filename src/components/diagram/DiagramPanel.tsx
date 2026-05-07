@@ -93,7 +93,6 @@ export const DiagramPanel = ({
   showParameterNames,
   edgeStrokeWidth,
   umlLineHeight,
-
   fontSize,
   fontFamily,
   structogramColorsEnabled,

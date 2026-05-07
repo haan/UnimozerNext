@@ -143,7 +143,7 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
   general: z.object({
     fontSize: z.number(),
     darkMode: z.boolean(),
-    fontFamily: z.string().default("JetBrains Mono")
+    fontFamily: z.string().min(1).default("JetBrains Mono")
   }),
   uml: z.object({
     showDependencies: z.boolean(),

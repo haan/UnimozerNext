@@ -67,7 +67,6 @@ export const ObjectBenchSection = ({
   showParameterNames,
   edgeStrokeWidth,
   umlLineHeight,
-
   fontSize,
   fontFamily,
   structogramColorsEnabled,
