@@ -205,15 +205,18 @@ export const StructogramView = ({
     return embeddedFontCssLoadRef.current;
   }, []);
   const estimateRawTextWidth = useCallback(
-    (value: string) => measureTextWidth(value, measureFont),
-    [measureFont]
+    (value: string) => {
+      void fontLoadedFor; // refreshes after font loads for accurate measurements
+      return measureTextWidth(value, measureFont);
+    },
+    [fontLoadedFor, measureFont]
   );
   const layout = useMemo(
     () =>
       buildStructogramLayout(method.controlTree, {
         estimateTextWidth: estimateRawTextWidth
       }),
-    [estimateRawTextWidth, fontLoadedFor, method.controlTree]
+    [estimateRawTextWidth, method.controlTree]
   );
   const declaration = useMemo(() => toMethodDeclaration(method), [method]);
   const palette = colorsEnabled ? STRUCTOGRAM_COLORS : STRUCTOGRAM_MONOCHROME_COLORS;
@@ -240,7 +243,7 @@ export const StructogramView = ({
       svgWidth,
       svgHeight
     };
-  }, [declaration, estimateRawTextWidth, fontLoadedFor, layout]);
+  }, [declaration, estimateRawTextWidth, layout]);
 
   useEffect(() => {
     let cancelled = false;
