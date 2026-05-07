@@ -311,7 +311,6 @@ export const CodePanel = memo(
     );
     const scopeHighlightingRef = useRef(scopeHighlighting);
     const autoCloseCommentsRef = useRef(autoCloseComments);
-    useEffect(() => { scopeHighlightingRef.current = scopeHighlighting; }, [scopeHighlighting]);
     useEffect(() => { autoCloseCommentsRef.current = autoCloseComments; }, [autoCloseComments]);
     const resolvedTheme = resolveMonacoTheme(theme, darkMode);
     const debugEnabled = Boolean(debugLogging && onDebugLog);
@@ -336,6 +335,79 @@ export const CodePanel = memo(
     useEffect(() => {
       void applyTheme(monacoRef.current);
     }, [applyTheme]);
+
+    const refreshScopeDecorations = useCallback(() => {
+      const editor = editorRef.current;
+      if (!editor) {
+        return;
+      }
+      if (scopeRefreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(scopeRefreshFrameRef.current);
+      }
+      scopeRefreshFrameRef.current = window.requestAnimationFrame(() => {
+        scopeRefreshFrameRef.current = null;
+        const model = editor.getModel();
+        if (!model) {
+          return;
+        }
+        if (!scopeHighlightingRef.current || !monacoRef.current) {
+          deltaModelDecorations(
+            model,
+            scopeDecorationIdsByUriRef.current,
+            []
+          );
+          return;
+        }
+        const decorations = createScopeDecorations(monacoRef.current, model);
+        deltaModelDecorations(
+          model,
+          scopeDecorationIdsByUriRef.current,
+          decorations
+        );
+      });
+    }, []);
+
+    const refreshSelectionDecorations = useCallback(() => {
+      const editor = editorRef.current;
+      if (!editor) {
+        return;
+      }
+      if (selectionRefreshFrameRef.current !== null) {
+        window.cancelAnimationFrame(selectionRefreshFrameRef.current);
+      }
+      selectionRefreshFrameRef.current = window.requestAnimationFrame(() => {
+        selectionRefreshFrameRef.current = null;
+        const model = editor.getModel();
+        if (!model) {
+          return;
+        }
+        if (!scopeHighlightingRef.current || !monacoRef.current) {
+          deltaModelDecorations(
+            model,
+            selectionDecorationIdsByUriRef.current,
+            []
+          );
+          return;
+        }
+        const selections = editor.getSelections() ?? [];
+        const decorations = createScopeSelectionDecorations(
+          monacoRef.current,
+          model,
+          selections
+        );
+        deltaModelDecorations(
+          model,
+          selectionDecorationIdsByUriRef.current,
+          decorations
+        );
+      });
+    }, []);
+
+    useEffect(() => {
+      scopeHighlightingRef.current = scopeHighlighting;
+      refreshScopeDecorations();
+      refreshSelectionDecorations();
+    }, [refreshScopeDecorations, refreshSelectionDecorations, scopeHighlighting]);
 
   useEffect(() => {
     const scopeDecorationIdsByUri = scopeDecorationIdsByUriRef.current;
@@ -401,65 +473,6 @@ export const CodePanel = memo(
     const registerEditorEventListeners = useCallback(
       (editor: MonacoEditorType.IStandaloneCodeEditor) => {
         subscriptionsRef.current.forEach((subscription) => subscription.dispose());
-
-        const refreshScopeDecorations = () => {
-          if (scopeRefreshFrameRef.current !== null) {
-            window.cancelAnimationFrame(scopeRefreshFrameRef.current);
-          }
-          scopeRefreshFrameRef.current = window.requestAnimationFrame(() => {
-            scopeRefreshFrameRef.current = null;
-            const model = editor.getModel();
-            if (!model) {
-              return;
-            }
-            if (!scopeHighlightingRef.current || !monacoRef.current) {
-              deltaModelDecorations(
-                model,
-                scopeDecorationIdsByUriRef.current,
-                []
-              );
-              return;
-            }
-            const decorations = createScopeDecorations(monacoRef.current, model);
-            deltaModelDecorations(
-              model,
-              scopeDecorationIdsByUriRef.current,
-              decorations
-            );
-          });
-        };
-
-        const refreshSelectionDecorations = () => {
-          if (selectionRefreshFrameRef.current !== null) {
-            window.cancelAnimationFrame(selectionRefreshFrameRef.current);
-          }
-          selectionRefreshFrameRef.current = window.requestAnimationFrame(() => {
-            selectionRefreshFrameRef.current = null;
-            const model = editor.getModel();
-            if (!model) {
-              return;
-            }
-            if (!scopeHighlightingRef.current || !monacoRef.current) {
-              deltaModelDecorations(
-                model,
-                selectionDecorationIdsByUriRef.current,
-                []
-              );
-              return;
-            }
-            const selections = editor.getSelections() ?? [];
-            const decorations = createScopeSelectionDecorations(
-              monacoRef.current,
-              model,
-              selections
-            );
-            deltaModelDecorations(
-              model,
-              selectionDecorationIdsByUriRef.current,
-              decorations
-            );
-          });
-        };
 
         const tryAutoCloseBlockComments = () => {
           if (!autoCloseCommentsRef.current) {
@@ -655,7 +668,7 @@ export const CodePanel = memo(
         refreshScopeDecorations();
         refreshSelectionDecorations();
       },
-      [debugEnabled, logEvent, onCaretChange]
+      [debugEnabled, logEvent, onCaretChange, refreshScopeDecorations, refreshSelectionDecorations]
     );
 
     useEffect(() => {
