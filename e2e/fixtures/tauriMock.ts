@@ -2,7 +2,7 @@ import { test as base } from "@playwright/test";
 
 // Default mock AppSettings returned from read_settings.
 const MOCK_SETTINGS = {
-  general: { fontSize: 14, darkMode: false },
+  general: { fontSize: 14, darkMode: false, fontFamily: "JetBrains Mono" },
   uml: {
     showDependencies: true,
     codeHighlight: true,
@@ -10,6 +10,8 @@ const MOCK_SETTINGS = {
     showSwingAttributes: false,
     showParameterNames: true,
     edgeStrokeWidth: 1,
+    lineHeight: 1.6,
+    highContrast: false,
   },
   objectBench: {
     showPrivateObjectFields: false,
