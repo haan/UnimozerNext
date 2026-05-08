@@ -106,9 +106,15 @@ export const useDrafts = ({
         for (const entry of entries) {
           const { path, content: draftContent } = entry;
           const uri = await resolveInternalFileUri(path);
-          const model = monacoInstance
-            ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
-            : null;
+          // Only use the Monaco model for the active file — inactive cached models
+          // may be stale relative to fileDrafts and would corrupt the draft.
+          const model =
+            path === openFilePath && monacoInstance
+              ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
+              : null;
+          // Snapshot version before the async roundtrip so we can detect user
+          // edits that arrived while waiting for the LSP response.
+          const versionBefore = model?.getVersionId();
 
           try {
             const edits = await invokeValidated<LspTextEdit[]>(
@@ -119,8 +125,12 @@ export const useDrafts = ({
             );
             successCount++;
             if (edits && edits.length > 0) {
-              let next = draftContent;
               if (model && monacoInstance) {
+                if (model.getVersionId() !== versionBefore) {
+                  // Content changed during the LSP roundtrip; skip to avoid
+                  // applying stale edits to the user's latest typing.
+                  continue;
+                }
                 const monacoEdits = [...edits]
                   .sort(sortTextEditsDescending)
                   .map((edit) => ({
@@ -133,15 +143,12 @@ export const useDrafts = ({
                     text: edit.newText
                   }));
                 model.pushEditOperations([], monacoEdits, () => null);
-                next = model.getValue();
-                if (openFilePath === path) {
-                  setContent(next);
-                }
+                const next = model.getValue();
+                setContent(next);
+                formatted[path] = next;
               } else {
-                next = applyTextEdits(draftContent, edits);
-              }
-              formatted[path] = next;
-              if (openFilePath !== path || !model) {
+                const next = applyTextEdits(draftContent, edits);
+                formatted[path] = next;
                 notifyLsChangeImmediate(path, next);
               }
             }
@@ -251,33 +258,33 @@ export const useDrafts = ({
   const formatUmlFiles = useCallback(async () => {
     if (!lsReadyRef.current || formatInProgressRef.current) return;
     formatInProgressRef.current = true;
-    const umlNodePaths = umlGraph?.nodes?.length ? umlGraph.nodes.map((node) => node.path) : [];
-    const targetPaths =
-      umlNodePaths.length > 0
-        ? Array.from(new Set([...umlNodePaths, ...Object.keys(fileDrafts)]))
-        : Object.keys(fileDrafts);
-    if (targetPaths.length === 0) return;
-
-    const entries: { path: string; content: string; savedBaseline?: string }[] = [];
-    for (const path of targetPaths) {
-      const draft = fileDrafts[path];
-      if (draft) {
-        entries.push({ path, content: draft.content });
-        continue;
-      }
-      try {
-        const text = await invokeValidated("read_text_file", stringSchema, "read_text_file response", { path });
-        // savedBaseline preserves the unformatted disk content so the draft is
-        // marked dirty after formatting (format without save must not silently
-        // discard the change indicator for files not yet in the draft map).
-        entries.push({ path, content: text, savedBaseline: text });
-      } catch {
-        // Skip files we cannot read.
-      }
-    }
-    if (entries.length === 0) return;
-
     try {
+      const umlNodePaths = umlGraph?.nodes?.length ? umlGraph.nodes.map((node) => node.path) : [];
+      const targetPaths =
+        umlNodePaths.length > 0
+          ? Array.from(new Set([...umlNodePaths, ...Object.keys(fileDrafts)]))
+          : Object.keys(fileDrafts);
+      if (targetPaths.length === 0) return;
+
+      const entries: { path: string; content: string; savedBaseline?: string }[] = [];
+      for (const path of targetPaths) {
+        const draft = fileDrafts[path];
+        if (draft) {
+          entries.push({ path, content: draft.content });
+          continue;
+        }
+        try {
+          const text = await invokeValidated("read_text_file", stringSchema, "read_text_file response", { path });
+          // savedBaseline preserves the unformatted disk content so the draft is
+          // marked dirty after formatting (format without save must not silently
+          // discard the change indicator for files not yet in the draft map).
+          entries.push({ path, content: text, savedBaseline: text });
+        } catch {
+          // Skip files we cannot read.
+        }
+      }
+      if (entries.length === 0) return;
+
       const { formatted, successCount } = await applyLspFormats(entries);
       const formattedCount = Object.keys(formatted).length;
 
