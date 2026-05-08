@@ -84,6 +84,87 @@ export const useDrafts = ({
     [fileDrafts]
   );
 
+  const applyLspFormats = useCallback(
+    async (entries: { path: string; content: string }[]): Promise<Record<string, string>> => {
+      const formatted: Record<string, string> = {};
+      const tempOpened: string[] = [];
+      const monacoInstance = monacoRef.current;
+
+      for (const entry of entries) {
+        if (!isLsOpen(entry.path)) {
+          notifyLsOpen(entry.path, entry.content);
+          tempOpened.push(entry.path);
+        } else {
+          notifyLsChangeImmediate(entry.path, entry.content);
+        }
+      }
+
+      for (const entry of entries) {
+        const { path, content: draftContent } = entry;
+        const uri = await resolveInternalFileUri(path);
+        const model = monacoInstance
+          ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
+          : null;
+
+        try {
+          const edits = await invokeValidated<LspTextEdit[]>(
+            "ls_format_document",
+            lspTextEditArraySchema,
+            "ls_format_document response",
+            { uri, tabSize: settingsEditor.tabSize, insertSpaces: settingsEditor.insertSpaces }
+          );
+          if (edits && edits.length > 0) {
+            let next = draftContent;
+            if (model && monacoInstance) {
+              const monacoEdits = [...edits]
+                .sort(sortTextEditsDescending)
+                .map((edit) => ({
+                  range: new monacoInstance.Range(
+                    edit.range.start.line + 1,
+                    edit.range.start.character + 1,
+                    edit.range.end.line + 1,
+                    edit.range.end.character + 1
+                  ),
+                  text: edit.newText
+                }));
+              model.pushEditOperations([], monacoEdits, () => null);
+              next = model.getValue();
+              if (openFilePath === path) {
+                setContent(next);
+              }
+            } else {
+              next = applyTextEdits(draftContent, edits);
+            }
+            formatted[path] = next;
+            if (openFilePath !== path || !model) {
+              notifyLsChangeImmediate(path, next);
+            }
+          }
+        } catch {
+          // Formatting failed; keep original content.
+        }
+      }
+
+      for (const path of tempOpened) {
+        notifyLsClose(path);
+      }
+
+      return formatted;
+    },
+    [
+      isLsOpen,
+      monacoRef,
+      notifyLsChangeImmediate,
+      notifyLsClose,
+      notifyLsOpen,
+      openFilePath,
+      setContent,
+      settingsEditor,
+      getInternalFileUri,
+      resolveInternalFileUri
+    ]
+  );
+
   const formatAndSaveUmlFiles = useCallback(
     async (setStatusMessage: boolean) => {
       const dirtyDraftPaths = Object.entries(fileDrafts)
@@ -119,83 +200,16 @@ export const useDrafts = ({
       }
       if (entries.length === 0) return 0;
 
-      const formatted: Record<string, string> = {};
-      const tempOpened: string[] = [];
-      const monacoInstance = monacoRef.current;
+      const formatted: Record<string, string> =
+        lsReadyRef.current && settingsEditor.autoFormatOnSave
+          ? await applyLspFormats(entries)
+          : {};
 
       if (lsReadyRef.current && settingsEditor.autoFormatOnSave) {
         for (const entry of entries) {
-          const path = entry.path;
-          const text = entry.content;
-          if (!isLsOpen(path)) {
-            notifyLsOpen(path, text);
-            tempOpened.push(path);
-          } else {
-            notifyLsChangeImmediate(path, text);
+          if (entry.hasDraft && formatted[entry.path]) {
+            updateDraftForPath(entry.path, formatted[entry.path]);
           }
-        }
-
-        for (const entry of entries) {
-          const path = entry.path;
-          const draftContent = entry.content;
-          const uri = await resolveInternalFileUri(path);
-          const model = monacoInstance
-            ? monacoInstance.editor.getModel(
-                monacoInstance.Uri.parse(getInternalFileUri(path))
-              )
-            : null;
-          const tabSize = settingsEditor.tabSize;
-          const insertSpaces = settingsEditor.insertSpaces;
-
-          try {
-            const edits = await invokeValidated<LspTextEdit[]>(
-              "ls_format_document",
-              lspTextEditArraySchema,
-              "ls_format_document response",
-              {
-                uri,
-                tabSize,
-                insertSpaces
-              }
-            );
-            if (edits && edits.length > 0) {
-              let next = draftContent;
-              const editedOpenModel = Boolean(model && openFilePath === path);
-              if (model && monacoInstance) {
-                const monacoEdits = [...edits]
-                  .sort(sortTextEditsDescending)
-                  .map((edit) => ({
-                    range: new monacoInstance.Range(
-                      edit.range.start.line + 1,
-                      edit.range.start.character + 1,
-                      edit.range.end.line + 1,
-                      edit.range.end.character + 1
-                    ),
-                    text: edit.newText
-                  }));
-                model.pushEditOperations([], monacoEdits, () => null);
-                next = model.getValue();
-                if (openFilePath === path) {
-                  setContent(next);
-                }
-              } else {
-                next = applyTextEdits(draftContent, edits);
-              }
-              formatted[path] = next;
-              if (entry.hasDraft) {
-                updateDraftForPath(path, next);
-              }
-              if (!editedOpenModel) {
-                notifyLsChangeImmediate(path, next);
-              }
-            }
-          } catch {
-            // Formatting failed; keep original content.
-          }
-        }
-
-        for (const path of tempOpened) {
-          notifyLsClose(path);
         }
       }
 
@@ -223,22 +237,16 @@ export const useDrafts = ({
       return entries.length;
     },
     [
+      applyLspFormats,
       fileDrafts,
-      isLsOpen,
       lsReadyRef,
-      monacoRef,
-      notifyLsChangeImmediate,
-      notifyLsClose,
-      notifyLsOpen,
       openFilePath,
       setContent,
       setLastSavedContent,
       setStatus,
       settingsEditor,
       umlGraph,
-      updateDraftForPath,
-      getInternalFileUri,
-      resolveInternalFileUri
+      updateDraftForPath
     ]
   );
 
@@ -267,90 +275,17 @@ export const useDrafts = ({
     }
     if (entries.length === 0) return;
 
-    const tempOpened: string[] = [];
-    const monacoInstance = monacoRef.current;
+    const formatted = await applyLspFormats(entries);
+    const formattedCount = Object.keys(formatted).length;
 
-    for (const entry of entries) {
-      if (!isLsOpen(entry.path)) {
-        notifyLsOpen(entry.path, entry.content);
-        tempOpened.push(entry.path);
-      } else {
-        notifyLsChangeImmediate(entry.path, entry.content);
-      }
-    }
-
-    let formattedCount = 0;
-    for (const entry of entries) {
-      const { path, content: draftContent } = entry;
-      const uri = await resolveInternalFileUri(path);
-      const model = monacoInstance
-        ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
-        : null;
-
-      try {
-        const edits = await invokeValidated<LspTextEdit[]>(
-          "ls_format_document",
-          lspTextEditArraySchema,
-          "ls_format_document response",
-          { uri, tabSize: settingsEditor.tabSize, insertSpaces: settingsEditor.insertSpaces }
-        );
-        if (edits && edits.length > 0) {
-          let next = draftContent;
-          if (model && monacoInstance) {
-            const monacoEdits = [...edits]
-              .sort(sortTextEditsDescending)
-              .map((edit) => ({
-                range: new monacoInstance.Range(
-                  edit.range.start.line + 1,
-                  edit.range.start.character + 1,
-                  edit.range.end.line + 1,
-                  edit.range.end.character + 1
-                ),
-                text: edit.newText
-              }));
-            model.pushEditOperations([], monacoEdits, () => null);
-            next = model.getValue();
-            if (openFilePath === path) {
-              setContent(next);
-            }
-          } else {
-            next = applyTextEdits(draftContent, edits);
-          }
-          updateDraftForPath(path, next);
-          if (openFilePath !== path || !model) {
-            notifyLsChangeImmediate(path, next);
-          }
-          formattedCount++;
-        }
-      } catch {
-        // Formatting failed; keep original content.
-      }
-    }
-
-    for (const path of tempOpened) {
-      notifyLsClose(path);
+    for (const [path, next] of Object.entries(formatted)) {
+      updateDraftForPath(path, next);
     }
 
     if (formattedCount > 0) {
       setStatus(formattedCount === 1 ? "Formatted 1 file." : `Formatted ${formattedCount} files.`);
     }
-  }, [
-    fileDrafts,
-    isLsOpen,
-    lsReadyRef,
-    monacoRef,
-    notifyLsChangeImmediate,
-    notifyLsClose,
-    notifyLsOpen,
-    openFilePath,
-    setContent,
-    setStatus,
-    settingsEditor,
-    umlGraph,
-    updateDraftForPath,
-    getInternalFileUri,
-    resolveInternalFileUri
-  ]);
+  }, [applyLspFormats, fileDrafts, lsReadyRef, setStatus, umlGraph, updateDraftForPath]);
 
   return {
     fileDrafts,

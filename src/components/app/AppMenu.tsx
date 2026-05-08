@@ -61,6 +61,7 @@ type AppMenuProps = {
   onCopy: () => void;
   onPaste: () => void;
   onFormatDocument: () => void;
+  formatDisabled: boolean;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onZoomReset: () => void;
@@ -137,6 +138,7 @@ export const AppMenu = ({
   onCopy,
   onPaste,
   onFormatDocument,
+  formatDisabled,
   onZoomIn,
   onZoomOut,
   onZoomReset,
@@ -262,7 +264,7 @@ export const AppMenu = ({
               <MenubarShortcut>{isMac ? "⌘V" : "Ctrl+V"}</MenubarShortcut>
             </MenubarItem>
             <MenubarSeparator />
-            <MenubarItem onClick={onFormatDocument} disabled={editDisabled}>
+            <MenubarItem onClick={onFormatDocument} disabled={formatDisabled}>
               Format
               <MenubarShortcut>{isMac ? "⌥⇧F" : "Alt+Shift+F"}</MenubarShortcut>
             </MenubarItem>

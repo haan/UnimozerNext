@@ -1140,6 +1140,7 @@ export default function AppContainer({
           void handlePaste();
         }}
         onFormatDocument={handleFormatDocument}
+        formatDisabled={busy || !projectPath}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onZoomReset={handleZoomReset}
