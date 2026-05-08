@@ -284,7 +284,7 @@ export const SettingsDialog = ({
                   <div>
                     <p className="text-sm font-medium">High contrast</p>
                     <p className="text-xs text-muted-foreground">
-                      Increase border and edge contrast for better visibility.
+                      Apply vivid colors and stronger borders to the UML diagram and object bench.
                     </p>
                   </div>
                   <Switch
