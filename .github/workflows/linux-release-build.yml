@@ -209,6 +209,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPIMAGE_EXTRACT_AND_RUN: "1"
+          ARCH: x86_64
+          NO_STRIP: "true"
         run: npx tauri build --ci --bundles appimage --config src-tauri/tauri.linux-release.conf.json
 
       - name: Prepare release assets
