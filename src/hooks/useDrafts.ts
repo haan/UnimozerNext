@@ -118,6 +118,12 @@ export const useDrafts = ({
           // Snapshot version before the async roundtrip so we can detect user
           // edits that arrived while waiting for the LSP response.
           const versionBefore = model?.getVersionId();
+          // Guard against edits made between the bulk sync loop and this
+          // per-file snapshot: if the model already diverged from the draft
+          // we synced, the LSP will format stale content — skip it.
+          if (model && model.getValue() !== draftContent) {
+            continue;
+          }
 
           try {
             const edits = await invokeValidated<LspTextEdit[]>(
@@ -184,6 +190,7 @@ export const useDrafts = ({
       setContent,
       settingsEditor,
       getInternalFileUri,
+      openFilePathRef,
       resolveInternalFileUri
     ]
   );

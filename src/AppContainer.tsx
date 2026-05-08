@@ -280,7 +280,9 @@ export default function AppContainer({
   });
   const openFilePath = openFile?.path ?? null;
   const openFilePathRef = useRef<string | null>(openFilePath);
-  openFilePathRef.current = openFilePath;
+  useEffect(() => {
+    openFilePathRef.current = openFilePath;
+  }, [openFilePath]);
   const prevOpenFilePathRef = useRef(openFilePath);
   if (prevOpenFilePathRef.current !== openFilePath) {
     prevOpenFilePathRef.current = openFilePath;
