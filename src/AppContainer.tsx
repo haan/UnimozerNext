@@ -929,8 +929,9 @@ export default function AppContainer({
 
   const handleFormatDocument = useCallback(() => {
     if (busy || !projectPath) return;
-    void formatUmlFiles();
-  }, [busy, formatUmlFiles, projectPath]);
+    setBusy(true);
+    void formatUmlFiles().finally(() => setBusy(false));
+  }, [busy, formatUmlFiles, projectPath, setBusy]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
