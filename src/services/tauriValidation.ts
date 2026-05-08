@@ -142,7 +142,9 @@ const recentProjectEntrySchema = z.object({
 export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
   general: z.object({
     fontSize: z.number(),
-    darkMode: z.boolean()
+    darkMode: z.boolean(),
+    fontFamily: z.string().min(1).default("JetBrains Mono"),
+    highContrast: z.boolean().default(false)
   }),
   uml: z.object({
     showDependencies: z.boolean(),
@@ -150,7 +152,8 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
     showPackages: z.boolean(),
     showSwingAttributes: z.boolean(),
     showParameterNames: z.boolean(),
-    edgeStrokeWidth: z.number()
+    edgeStrokeWidth: z.number(),
+    lineHeight: z.number().default(1.6)
   }),
   objectBench: z.object({
     showPrivateObjectFields: z.boolean(),

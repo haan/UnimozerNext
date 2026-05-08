@@ -196,17 +196,18 @@ const measureFontMetrics = (font: string, fontSize: number): FontMetrics => {
 const computeNodeWidth = (
   node: UmlNode,
   fontSize: number,
-  showParameterNames: boolean
+  showParameterNames: boolean,
+  fontFamily: string = UML_FONT_FAMILY
 ) => {
   const padding = TEXT_PADDING;
-  const nameWidth = measureTextWidth(node.name, `600 ${fontSize}px ${UML_FONT_FAMILY}`);
+  const nameWidth = measureTextWidth(node.name, `600 ${fontSize}px ${fontFamily}`);
   const fieldWidth = Math.max(
     0,
     ...node.fields.map((field) => {
       const visibility = field.visibility ? `${field.visibility} ` : "";
       return measureTextWidth(
         `${visibility}${field.signature}`,
-        `${fontSize}px ${UML_FONT_FAMILY}`
+        `${fontSize}px ${fontFamily}`
       );
     })
   );
@@ -217,7 +218,7 @@ const computeNodeWidth = (
       const signature = formatMethodSignature(method, showParameterNames);
       return measureTextWidth(
         `${visibility}${signature}`,
-        `${fontSize}px ${UML_FONT_FAMILY}`
+        `${fontSize}px ${fontFamily}`
       );
     })
   );
@@ -352,7 +353,9 @@ export type UmlDiagramProps = {
   showPackages?: boolean;
   showParameterNames?: boolean;
   edgeStrokeWidth?: number;
+  umlLineHeight?: number;
   fontSize?: number;
+  fontFamily?: string;
   exportDefaultPath?: string | null;
   onNodePositionChange: (id: string, x: number, y: number, commit: boolean) => void;
   onViewportChange?: (viewport: DiagramViewport, commit: boolean) => void;
@@ -421,7 +424,9 @@ export const UmlDiagram = ({
   showPackages,
   showParameterNames = true,
   edgeStrokeWidth = 1,
+  umlLineHeight,
   fontSize,
+  fontFamily,
   exportDefaultPath,
   onNodePositionChange,
   onViewportChange,
@@ -453,20 +458,30 @@ export const UmlDiagram = ({
     scale: clamp(diagram.viewport?.zoom ?? DEFAULT_VIEW_SCALE, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE)
   }));
   const viewRef = useRef(view);
-  const [fontReady, setFontReady] = useState(false);
+  const [fontLoadedFor, setFontLoadedFor] = useState("");
   const umlFontSize = fontSize ?? UML_FONT_SIZE;
   const normalizedEdgeStrokeWidth = clamp(edgeStrokeWidth, 1, 2);
+  const resolvedFontFamily = useMemo(
+    () =>
+      !fontFamily
+        ? UML_FONT_FAMILY
+        : fontFamily === "system"
+          ? `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`
+          : `"${fontFamily}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`,
+    [fontFamily]
+  );
   const bodyFontMetrics = useMemo(
-    () => measureFontMetrics(`${umlFontSize}px ${UML_FONT_FAMILY}`, umlFontSize),
-    [umlFontSize]
+    () => measureFontMetrics(`${umlFontSize}px ${resolvedFontFamily}`, umlFontSize),
+    [umlFontSize, resolvedFontFamily]
   );
   const headerFontMetrics = useMemo(
-    () => measureFontMetrics(`600 ${umlFontSize}px ${UML_FONT_FAMILY}`, umlFontSize),
-    [umlFontSize]
+    () => measureFontMetrics(`600 ${umlFontSize}px ${resolvedFontFamily}`, umlFontSize),
+    [umlFontSize, resolvedFontFamily]
   );
   const headerHeight = umlFontSize + 2 * HEADER_VERTICAL_PADDING;
+  const effectiveLineHeight = umlLineHeight ?? UML_LINE_HEIGHT;
   const rowHeight = Math.max(
-    Math.round(umlFontSize * UML_LINE_HEIGHT),
+    Math.round(umlFontSize * effectiveLineHeight),
     Math.ceil(bodyFontMetrics.height + 4)
   );
   const rowTextBaselineOffset = useMemo(() => {
@@ -589,25 +604,28 @@ export const UmlDiagram = ({
 
   useEffect(() => {
     let cancelled = false;
+    const key = `${resolvedFontFamily}:${umlFontSize}`;
     const ensureFont = async () => {
       if (typeof document === "undefined" || !document.fonts) {
-        if (!cancelled) setFontReady(true);
+        if (!cancelled) setFontLoadedFor(key);
         return;
       }
       try {
-        await document.fonts.load(`400 ${umlFontSize}px "JetBrains Mono"`);
-        await document.fonts.load(`600 ${umlFontSize}px "JetBrains Mono"`);
+        const fontSpec =
+          fontFamily && fontFamily !== "system" ? `"${fontFamily}"` : "ui-monospace";
+        await document.fonts.load(`400 ${umlFontSize}px ${fontSpec}`);
+        await document.fonts.load(`600 ${umlFontSize}px ${fontSpec}`);
         await document.fonts.ready;
       } catch {
         // If font loading fails, we still want a layout pass.
       }
-      if (!cancelled) setFontReady(true);
+      if (!cancelled) setFontLoadedFor(key);
     };
     void ensureFont();
     return () => {
       cancelled = true;
     };
-  }, [umlFontSize]);
+  }, [fontFamily, resolvedFontFamily, umlFontSize]);
 
   useEffect(() => {
     void ensureEmbeddedFontCss();
@@ -783,17 +801,18 @@ export const UmlDiagram = ({
           ...node,
           x: position.x,
           y: position.y,
-          width: fontReady
-            ? computeNodeWidth(node, umlFontSize, showParameterNames)
+          width: fontLoadedFor === `${resolvedFontFamily}:${umlFontSize}`
+            ? computeNodeWidth(node, umlFontSize, showParameterNames, resolvedFontFamily)
             : NODE_WIDTH,
           height: computeNodeHeight(node, headerHeight, rowHeight)
         };
       }),
     [
-      fontReady,
+      fontLoadedFor,
       graph.nodes,
       headerHeight,
       layoutNodes,
+      resolvedFontFamily,
       rowHeight,
       showParameterNames,
       umlFontSize
@@ -1363,7 +1382,7 @@ export const UmlDiagram = ({
       <g data-uml-layer="packages" transform={layerTransform}>
         {packages.map((pkg) => {
           const labelWidth = Math.ceil(
-            measureTextWidth(pkg.name, `600 ${umlFontSize}px ${UML_FONT_FAMILY}`) +
+            measureTextWidth(pkg.name, `600 ${umlFontSize}px ${resolvedFontFamily}`) +
               TEXT_PADDING
           );
           const handlePackagePointerDown = (event: React.PointerEvent<SVGRectElement>) => {

@@ -39,6 +39,7 @@ export type StructogramExportControls = {
 type StructogramViewProps = {
   method: UmlMethod;
   fontSize?: number;
+  fontFamily?: string;
   colorsEnabled?: boolean;
   exportDefaultPath?: string | null;
   onExportStatus?: (message: string) => void;
@@ -81,14 +82,11 @@ const measureTextWidth = (() => {
   };
 })();
 
-const resolveMeasureFont = () => {
-  if (typeof document === "undefined") {
-    return `${STRUCTOGRAM_FONT_SIZE}px ${STRUCTOGRAM_FONT_FAMILY_FALLBACK}`;
-  }
-  const rootStyles = getComputedStyle(document.documentElement);
-  const umlFont = rootStyles.getPropertyValue("--uml-font").trim();
-  const fontFamily = umlFont.length > 0 ? umlFont : STRUCTOGRAM_FONT_FAMILY_FALLBACK;
-  return `${STRUCTOGRAM_FONT_SIZE}px ${fontFamily}`;
+const resolveFontFamilyStack = (fontFamily: string | undefined) => {
+  if (!fontFamily) return STRUCTOGRAM_FONT_FAMILY_FALLBACK;
+  if (fontFamily === "system")
+    return `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
+  return `"${fontFamily}", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
 };
 
 const resolveUmlFontFamily = () => {
@@ -174,6 +172,7 @@ const resolveExportDirectory = (path: string) => {
 export const StructogramView = ({
   method,
   fontSize,
+  fontFamily,
   colorsEnabled = true,
   exportDefaultPath,
   onExportStatus,
@@ -183,7 +182,11 @@ export const StructogramView = ({
   const svgRef = useRef<SVGSVGElement | null>(null);
   const embeddedFontCssRef = useRef("");
   const embeddedFontCssLoadRef = useRef<Promise<string> | null>(null);
-  const [measureFont, setMeasureFont] = useState(() => resolveMeasureFont());
+  const measureFont = useMemo(
+    () => `${STRUCTOGRAM_FONT_SIZE}px ${resolveFontFamilyStack(fontFamily)}`,
+    [fontFamily]
+  );
+  const [fontLoadedFor, setFontLoadedFor] = useState("");
   const [viewScale, setViewScale] = useState(STRUCTOGRAM_DEFAULT_VIEW_SCALE);
   const ensureEmbeddedFontCss = useCallback(async () => {
     if (embeddedFontCssRef.current.length > 0) {
@@ -202,8 +205,11 @@ export const StructogramView = ({
     return embeddedFontCssLoadRef.current;
   }, []);
   const estimateRawTextWidth = useCallback(
-    (value: string) => measureTextWidth(value, measureFont),
-    [measureFont]
+    (value: string) => {
+      void fontLoadedFor; // refreshes after font loads for accurate measurements
+      return measureTextWidth(value, measureFont);
+    },
+    [fontLoadedFor, measureFont]
   );
   const layout = useMemo(
     () =>
@@ -240,26 +246,25 @@ export const StructogramView = ({
   }, [declaration, estimateRawTextWidth, layout]);
 
   useEffect(() => {
-    if (typeof document === "undefined" || !document.fonts) {
-      return;
-    }
     let cancelled = false;
     const refreshAfterFontsReady = async () => {
-      try {
-        await document.fonts.load(`400 ${STRUCTOGRAM_FONT_SIZE}px "JetBrains Mono"`);
-        await document.fonts.ready;
-      } catch {
-        // Use fallback metrics when font loading is unavailable.
+      if (typeof document !== "undefined" && document.fonts) {
+        try {
+          const fontSpec =
+            fontFamily && fontFamily !== "system" ? `"${fontFamily}"` : "ui-monospace";
+          await document.fonts.load(`400 ${STRUCTOGRAM_FONT_SIZE}px ${fontSpec}`);
+          await document.fonts.ready;
+        } catch {
+          // Use fallback metrics when font loading is unavailable.
+        }
       }
-      if (!cancelled) {
-        setMeasureFont(resolveMeasureFont());
-      }
+      if (!cancelled) setFontLoadedFor(measureFont);
     };
     void refreshAfterFontsReady();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [fontFamily, measureFont]);
 
   useEffect(() => {
     void ensureEmbeddedFontCss();

@@ -19,7 +19,9 @@ type ObjectBenchSectionProps = {
   showPackages?: boolean;
   showParameterNames?: boolean;
   edgeStrokeWidth?: number;
+  umlLineHeight?: number;
   fontSize: number;
+  fontFamily?: string;
   structogramColorsEnabled?: boolean;
   exportDefaultPath?: string | null;
   onExportStatus?: (message: string) => void;
@@ -64,7 +66,9 @@ export const ObjectBenchSection = ({
   showPackages,
   showParameterNames,
   edgeStrokeWidth,
+  umlLineHeight,
   fontSize,
+  fontFamily,
   structogramColorsEnabled,
   exportDefaultPath,
   onExportStatus,
@@ -111,7 +115,10 @@ export const ObjectBenchSection = ({
           showPackages={showPackages}
           showParameterNames={showParameterNames}
           edgeStrokeWidth={edgeStrokeWidth}
+          umlLineHeight={umlLineHeight}
+
           fontSize={fontSize}
+          fontFamily={fontFamily}
           structogramColorsEnabled={structogramColorsEnabled}
           exportDefaultPath={exportDefaultPath}
           onExportStatus={onExportStatus}

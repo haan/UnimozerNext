@@ -47,12 +47,22 @@ const resolveStructogramColor = (
     : configuredColor;
 };
 
+const FONT_FALLBACK_STACK = ', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace';
+const SYSTEM_FONT_STACK = `ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace`;
+
+const buildFontStack = (fontFamily: string) =>
+  fontFamily === "system"
+    ? SYSTEM_FONT_STACK
+    : `"${fontFamily}"${FONT_FALLBACK_STACK}`;
+
 type UseAppAppearanceEffectsArgs = {
   titlePrefix: string;
   projectPath: string | null;
   projectStorageMode: "folder" | "packed" | "scratch" | null;
   packedArchivePath: string | null;
   darkMode: boolean;
+  fontFamily: string;
+  highContrast: boolean;
   structogramLoopHeaderColor: string;
   structogramIfHeaderColor: string;
   structogramSwitchHeaderColor: string;
@@ -65,6 +75,8 @@ export const useAppAppearanceEffects = ({
   projectStorageMode,
   packedArchivePath,
   darkMode,
+  fontFamily,
+  highContrast,
   structogramLoopHeaderColor,
   structogramIfHeaderColor,
   structogramSwitchHeaderColor,
@@ -89,6 +101,14 @@ export const useAppAppearanceEffects = ({
     root.dataset.theme = darkMode ? "dark" : "light";
     root.style.colorScheme = darkMode ? "dark" : "light";
   }, [darkMode]);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty("--uml-font", buildFontStack(fontFamily));
+  }, [fontFamily]);
+
+  useEffect(() => {
+    document.documentElement.dataset.highContrast = highContrast ? "high" : "";
+  }, [highContrast]);
 
   useEffect(() => {
     void platformPromise.then((platform) => {
