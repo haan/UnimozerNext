@@ -241,7 +241,7 @@ export default function AppContainer({
   const showParameterNames = settings.uml.showParameterNames;
   const edgeStrokeWidth = settings.uml.edgeStrokeWidth;
   const umlLineHeight = settings.uml.lineHeight;
-  const highContrast = settings.uml.highContrast;
+  const highContrast = settings.general.highContrast;
   const fontSize = settings.general.fontSize;
   const darkMode = settings.general.darkMode;
   const fontFamily = settings.general.fontFamily;

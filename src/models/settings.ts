@@ -6,7 +6,6 @@ export type UmlSettings = {
   showParameterNames: boolean;
   edgeStrokeWidth: number;
   lineHeight: number;
-  highContrast: boolean;
 };
 
 export type EditorSettings = {
@@ -47,6 +46,7 @@ export type GeneralSettings = {
   fontSize: number;
   darkMode: boolean;
   fontFamily: string;
+  highContrast: boolean;
 };
 
 export type ObjectBenchSettings = {

@@ -143,7 +143,8 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
   general: z.object({
     fontSize: z.number(),
     darkMode: z.boolean(),
-    fontFamily: z.string().min(1).default("JetBrains Mono")
+    fontFamily: z.string().min(1).default("JetBrains Mono"),
+    highContrast: z.boolean().default(false)
   }),
   uml: z.object({
     showDependencies: z.boolean(),
@@ -152,8 +153,7 @@ export const appSettingsSchema: z.ZodType<AppSettings> = z.object({
     showSwingAttributes: z.boolean(),
     showParameterNames: z.boolean(),
     edgeStrokeWidth: z.number(),
-    lineHeight: z.number().default(1.6),
-    highContrast: z.boolean().default(false)
+    lineHeight: z.number().default(1.6)
   }),
   objectBench: z.object({
     showPrivateObjectFields: z.boolean(),

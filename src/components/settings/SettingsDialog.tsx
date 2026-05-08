@@ -279,6 +279,27 @@ export const SettingsDialog = ({
                     </Select>
                   </div>
                 </div>
+
+                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
+                  <div>
+                    <p className="text-sm font-medium">High contrast</p>
+                    <p className="text-xs text-muted-foreground">
+                      Increase border and edge contrast for better visibility.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={settings.general.highContrast}
+                    onCheckedChange={(checked) =>
+                      onChange({
+                        ...settings,
+                        general: {
+                          ...settings.general,
+                          highContrast: checked
+                        }
+                      })
+                    }
+                  />
+                </div>
               </div>
             ) : activeGroup === "UML" ? (
               <div className="mt-4 grid gap-2">
@@ -422,27 +443,6 @@ export const SettingsDialog = ({
                       {settings.uml.lineHeight.toFixed(1)}
                     </span>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">
-                  <div>
-                    <p className="text-sm font-medium">High contrast</p>
-                    <p className="text-xs text-muted-foreground">
-                      Increase border and edge contrast for better visibility.
-                    </p>
-                  </div>
-                  <Switch
-                    checked={settings.uml.highContrast}
-                    onCheckedChange={(checked) =>
-                      onChange({
-                        ...settings,
-                        uml: {
-                          ...settings.uml,
-                          highContrast: checked
-                        }
-                      })
-                    }
-                  />
                 </div>
 
                 <div className="flex items-center justify-between rounded-lg bg-muted/45 dark:bg-background px-4 py-3">

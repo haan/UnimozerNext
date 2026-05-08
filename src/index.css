@@ -149,7 +149,7 @@ body,
     @apply bg-background text-foreground;
   }
 
-  /* High contrast UML mode — light theme */
+  /* High contrast mode — light theme */
   :root[data-uml-contrast="high"] {
     --uml-edge-stroke: hsl(var(--foreground) / 0.9);
     --uml-edge-marker-stroke: hsl(var(--foreground) / 0.9);
@@ -162,9 +162,11 @@ body,
     --uml-package-bg: #c2ba9a;
     --uml-package-border: hsl(var(--foreground) / 0.7);
     --uml-package-name-bg: #e0cc88;
+    --objectbench-card-bg: 0 90% 84%;
+    --objectbench-card-border: 0 70% 52%;
   }
 
-  /* High contrast UML mode — dark theme */
+  /* High contrast mode — dark theme */
   :root[data-theme="dark"][data-uml-contrast="high"] {
     --uml-class-bg: #1a4a28;
     --uml-class-compiled-bg: #1a5535;
@@ -173,6 +175,8 @@ body,
     --uml-class-invalid-border: hsl(14 82% 62%);
     --uml-package-bg: #1e1e28;
     --uml-package-name-bg: #282835;
+    --objectbench-card-bg: 0 35% 22%;
+    --objectbench-card-border: 0 50% 45%;
   }
 }
 

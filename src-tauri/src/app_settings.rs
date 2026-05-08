@@ -16,8 +16,6 @@ struct UmlSettings {
     edge_stroke_width: f32,
     #[serde(default = "default_uml_line_height")]
     line_height: f32,
-    #[serde(default = "default_false")]
-    high_contrast: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -29,6 +27,8 @@ struct GeneralSettings {
     dark_mode: bool,
     #[serde(default = "default_font_family")]
     font_family: String,
+    #[serde(default = "default_false")]
+    high_contrast: bool,
 }
 
 impl Default for GeneralSettings {
@@ -37,6 +37,7 @@ impl Default for GeneralSettings {
             font_size: default_font_size(),
             dark_mode: default_false(),
             font_family: default_font_family(),
+            high_contrast: default_false(),
         }
     }
 }
@@ -254,6 +255,7 @@ impl Default for AppSettings {
                 font_size: default_font_size(),
                 dark_mode: default_false(),
                 font_family: default_font_family(),
+                high_contrast: default_false(),
             },
             uml: UmlSettings {
                 show_dependencies: true,
@@ -263,7 +265,6 @@ impl Default for AppSettings {
                 show_parameter_names: default_true(),
                 edge_stroke_width: default_edge_stroke_width(),
                 line_height: default_uml_line_height(),
-                high_contrast: default_false(),
             },
             object_bench: ObjectBenchSettings {
                 show_private_object_fields: default_true(),
