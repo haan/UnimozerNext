@@ -37,6 +37,7 @@ type UseDraftsResult = {
   setFileDrafts: Dispatch<SetStateAction<Record<string, FileDraft>>>;
   updateDraftForPath: (path: string, nextContent: string, savedOverride?: string) => void;
   formatAndSaveUmlFiles: (setStatusMessage: boolean) => Promise<number>;
+  formatUmlFiles: () => Promise<void>;
   hasUnsavedChanges: boolean;
 };
 
@@ -241,11 +242,122 @@ export const useDrafts = ({
     ]
   );
 
+  const formatUmlFiles = useCallback(async () => {
+    if (!lsReadyRef.current) return;
+    const umlNodePaths = umlGraph?.nodes?.length ? umlGraph.nodes.map((node) => node.path) : [];
+    const targetPaths =
+      umlNodePaths.length > 0
+        ? Array.from(new Set([...umlNodePaths, ...Object.keys(fileDrafts)]))
+        : Object.keys(fileDrafts);
+    if (targetPaths.length === 0) return;
+
+    const entries: { path: string; content: string }[] = [];
+    for (const path of targetPaths) {
+      const draft = fileDrafts[path];
+      if (draft) {
+        entries.push({ path, content: draft.content });
+        continue;
+      }
+      try {
+        const text = await invokeValidated("read_text_file", stringSchema, "read_text_file response", { path });
+        entries.push({ path, content: text });
+      } catch {
+        // Skip files we cannot read.
+      }
+    }
+    if (entries.length === 0) return;
+
+    const tempOpened: string[] = [];
+    const monacoInstance = monacoRef.current;
+
+    for (const entry of entries) {
+      if (!isLsOpen(entry.path)) {
+        notifyLsOpen(entry.path, entry.content);
+        tempOpened.push(entry.path);
+      } else {
+        notifyLsChangeImmediate(entry.path, entry.content);
+      }
+    }
+
+    let formattedCount = 0;
+    for (const entry of entries) {
+      const { path, content: draftContent } = entry;
+      const uri = await resolveInternalFileUri(path);
+      const model = monacoInstance
+        ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
+        : null;
+
+      try {
+        const edits = await invokeValidated<LspTextEdit[]>(
+          "ls_format_document",
+          lspTextEditArraySchema,
+          "ls_format_document response",
+          { uri, tabSize: settingsEditor.tabSize, insertSpaces: settingsEditor.insertSpaces }
+        );
+        if (edits && edits.length > 0) {
+          let next = draftContent;
+          if (model && monacoInstance) {
+            const monacoEdits = [...edits]
+              .sort(sortTextEditsDescending)
+              .map((edit) => ({
+                range: new monacoInstance.Range(
+                  edit.range.start.line + 1,
+                  edit.range.start.character + 1,
+                  edit.range.end.line + 1,
+                  edit.range.end.character + 1
+                ),
+                text: edit.newText
+              }));
+            model.pushEditOperations([], monacoEdits, () => null);
+            next = model.getValue();
+            if (openFilePath === path) {
+              setContent(next);
+            }
+          } else {
+            next = applyTextEdits(draftContent, edits);
+          }
+          updateDraftForPath(path, next);
+          if (openFilePath !== path || !model) {
+            notifyLsChangeImmediate(path, next);
+          }
+          formattedCount++;
+        }
+      } catch {
+        // Formatting failed; keep original content.
+      }
+    }
+
+    for (const path of tempOpened) {
+      notifyLsClose(path);
+    }
+
+    if (formattedCount > 0) {
+      setStatus(formattedCount === 1 ? "Formatted 1 file." : `Formatted ${formattedCount} files.`);
+    }
+  }, [
+    fileDrafts,
+    isLsOpen,
+    lsReadyRef,
+    monacoRef,
+    notifyLsChangeImmediate,
+    notifyLsClose,
+    notifyLsOpen,
+    openFilePath,
+    setContent,
+    setStatus,
+    settingsEditor,
+    umlGraph,
+    updateDraftForPath,
+    getInternalFileUri,
+    resolveInternalFileUri
+  ]);
+
   return {
     fileDrafts,
     setFileDrafts,
     updateDraftForPath,
     formatAndSaveUmlFiles,
+    formatUmlFiles,
     hasUnsavedChanges
   };
 };

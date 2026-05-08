@@ -362,6 +362,7 @@ export default function AppContainer({
     setFileDrafts,
     updateDraftForPath,
     formatAndSaveUmlFiles,
+    formatUmlFiles,
     hasUnsavedChanges
   } = useDrafts({
     umlGraph,
@@ -920,6 +921,22 @@ export default function AppContainer({
     return saved;
   }, [awaitDiagramPersistence, handleSaveAs, markDiskSnapshotCurrent]);
 
+  const handleFormatDocument = useCallback(() => {
+    if (busy || !projectPath) return;
+    void formatUmlFiles();
+  }, [busy, formatUmlFiles, projectPath]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        handleFormatDocument();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleFormatDocument]);
+
   const {
     confirmProjectActionOpen,
     pendingProjectAction,
@@ -1122,6 +1139,7 @@ export default function AppContainer({
         onPaste={() => {
           void handlePaste();
         }}
+        onFormatDocument={handleFormatDocument}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onZoomReset={handleZoomReset}
