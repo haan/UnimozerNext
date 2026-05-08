@@ -99,54 +99,56 @@ export const useDrafts = ({
         }
       }
 
-      for (const entry of entries) {
-        const { path, content: draftContent } = entry;
-        const uri = await resolveInternalFileUri(path);
-        const model = monacoInstance
-          ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
-          : null;
+      try {
+        for (const entry of entries) {
+          const { path, content: draftContent } = entry;
+          const uri = await resolveInternalFileUri(path);
+          const model = monacoInstance
+            ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
+            : null;
 
-        try {
-          const edits = await invokeValidated<LspTextEdit[]>(
-            "ls_format_document",
-            lspTextEditArraySchema,
-            "ls_format_document response",
-            { uri, tabSize: settingsEditor.tabSize, insertSpaces: settingsEditor.insertSpaces }
-          );
-          if (edits && edits.length > 0) {
-            let next = draftContent;
-            if (model && monacoInstance) {
-              const monacoEdits = [...edits]
-                .sort(sortTextEditsDescending)
-                .map((edit) => ({
-                  range: new monacoInstance.Range(
-                    edit.range.start.line + 1,
-                    edit.range.start.character + 1,
-                    edit.range.end.line + 1,
-                    edit.range.end.character + 1
-                  ),
-                  text: edit.newText
-                }));
-              model.pushEditOperations([], monacoEdits, () => null);
-              next = model.getValue();
-              if (openFilePath === path) {
-                setContent(next);
+          try {
+            const edits = await invokeValidated<LspTextEdit[]>(
+              "ls_format_document",
+              lspTextEditArraySchema,
+              "ls_format_document response",
+              { uri, tabSize: settingsEditor.tabSize, insertSpaces: settingsEditor.insertSpaces }
+            );
+            if (edits && edits.length > 0) {
+              let next = draftContent;
+              if (model && monacoInstance) {
+                const monacoEdits = [...edits]
+                  .sort(sortTextEditsDescending)
+                  .map((edit) => ({
+                    range: new monacoInstance.Range(
+                      edit.range.start.line + 1,
+                      edit.range.start.character + 1,
+                      edit.range.end.line + 1,
+                      edit.range.end.character + 1
+                    ),
+                    text: edit.newText
+                  }));
+                model.pushEditOperations([], monacoEdits, () => null);
+                next = model.getValue();
+                if (openFilePath === path) {
+                  setContent(next);
+                }
+              } else {
+                next = applyTextEdits(draftContent, edits);
               }
-            } else {
-              next = applyTextEdits(draftContent, edits);
+              formatted[path] = next;
+              if (openFilePath !== path || !model) {
+                notifyLsChangeImmediate(path, next);
+              }
             }
-            formatted[path] = next;
-            if (openFilePath !== path || !model) {
-              notifyLsChangeImmediate(path, next);
-            }
+          } catch {
+            // Formatting failed; keep original content.
           }
-        } catch {
-          // Formatting failed; keep original content.
         }
-      }
-
-      for (const path of tempOpened) {
-        notifyLsClose(path);
+      } finally {
+        for (const path of tempOpened) {
+          notifyLsClose(path);
+        }
       }
 
       return formatted;
@@ -284,6 +286,8 @@ export const useDrafts = ({
 
     if (formattedCount > 0) {
       setStatus(formattedCount === 1 ? "Formatted 1 file." : `Formatted ${formattedCount} files.`);
+    } else {
+      setStatus("Already formatted.");
     }
   }, [applyLspFormats, fileDrafts, lsReadyRef, setStatus, umlGraph, updateDraftForPath]);
 
