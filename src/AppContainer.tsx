@@ -371,7 +371,6 @@ export default function AppContainer({
     hasUnsavedChanges
   } = useDrafts({
     umlGraph,
-    openFilePath,
     setContent,
     setLastSavedContent,
     settingsEditor: settings.editor,

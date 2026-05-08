@@ -17,7 +17,6 @@ import type { Monaco } from "@monaco-editor/react";
 
 type UseDraftsArgs = {
   umlGraph: UmlGraph | null;
-  openFilePath: string | null;
   setContent: (next: string) => void;
   setLastSavedContent: (next: string) => void;
   settingsEditor: AppSettings["editor"];
@@ -44,7 +43,6 @@ type UseDraftsResult = {
 
 export const useDrafts = ({
   umlGraph,
-  openFilePath,
   setContent,
   setLastSavedContent,
   settingsEditor,
@@ -245,7 +243,7 @@ export const useDrafts = ({
         if (entry.hasDraft) {
           updateDraftForPath(path, contents, contents);
         }
-        if (openFilePath === path) {
+        if (openFilePathRef.current === path) {
           setLastSavedContent(contents);
           if (formatted[path]) {
             setContent(contents);
@@ -262,7 +260,7 @@ export const useDrafts = ({
       applyLspFormats,
       fileDrafts,
       lsReadyRef,
-      openFilePath,
+      openFilePathRef,
       setContent,
       setLastSavedContent,
       setStatus,
