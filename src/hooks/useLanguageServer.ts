@@ -485,6 +485,7 @@ type UseLanguageServerResult = {
   notifyLsClose: (path: string) => void;
   notifyLsChange: (path: string, text: string) => void;
   notifyLsChangeImmediate: (path: string, text: string) => void;
+  syncLsDocument: (path: string, text: string) => Promise<void>;
   resetLsState: () => void;
 };
 
@@ -1265,6 +1266,7 @@ export const useLanguageServer = ({
     notifyLsClose,
     notifyLsChange,
     notifyLsChangeImmediate,
+    syncLsDocument: sendLsDidChange,
     resetLsState
   };
 };

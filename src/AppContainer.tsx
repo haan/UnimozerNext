@@ -279,6 +279,10 @@ export default function AppContainer({
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
+  const openFilePathRef = useRef<string | null>(openFilePath);
+  useEffect(() => {
+    openFilePathRef.current = openFilePath;
+  }, [openFilePath]);
   const prevOpenFilePathRef = useRef(openFilePath);
   if (prevOpenFilePathRef.current !== openFilePath) {
     prevOpenFilePathRef.current = openFilePath;
@@ -303,6 +307,7 @@ export default function AppContainer({
     notifyLsClose,
     notifyLsChange,
     notifyLsChangeImmediate,
+    syncLsDocument,
     resetLsState
   } = useLanguageServer({
     projectPath,
@@ -362,17 +367,18 @@ export default function AppContainer({
     setFileDrafts,
     updateDraftForPath,
     formatAndSaveUmlFiles,
+    formatUmlFiles,
     hasUnsavedChanges
   } = useDrafts({
     umlGraph,
-    openFilePath,
     setContent,
     setLastSavedContent,
     settingsEditor: settings.editor,
     monacoRef,
     lsReadyRef,
+    openFilePathRef,
     isLsOpen,
-    notifyLsOpen,
+    syncLsDocument,
     notifyLsChangeImmediate,
     notifyLsClose,
     resolveInternalFileUri,
@@ -920,6 +926,23 @@ export default function AppContainer({
     return saved;
   }, [awaitDiagramPersistence, handleSaveAs, markDiskSnapshotCurrent]);
 
+  const handleFormatDocument = useCallback(() => {
+    if (busy || !projectPath) return;
+    setBusy(true);
+    void formatUmlFiles().finally(() => setBusy(false));
+  }, [busy, formatUmlFiles, projectPath, setBusy]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.altKey && event.shiftKey && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        handleFormatDocument();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleFormatDocument]);
+
   const {
     confirmProjectActionOpen,
     pendingProjectAction,
@@ -1122,6 +1145,8 @@ export default function AppContainer({
         onPaste={() => {
           void handlePaste();
         }}
+        onFormatDocument={handleFormatDocument}
+        formatDisabled={busy || !projectPath}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onZoomReset={handleZoomReset}
