@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type { MutableRefObject } from "react";
 import type { Dispatch, SetStateAction } from "react";
@@ -58,6 +58,7 @@ export const useDrafts = ({
   setStatus
 }: UseDraftsArgs): UseDraftsResult => {
   const [fileDrafts, setFileDrafts] = useState<Record<string, FileDraft>>({});
+  const formatInProgressRef = useRef(false);
 
   const updateDraftForPath = useCallback(
     (path: string, nextContent: string, savedOverride?: string) => {
@@ -85,8 +86,11 @@ export const useDrafts = ({
   );
 
   const applyLspFormats = useCallback(
-    async (entries: { path: string; content: string }[]): Promise<Record<string, string>> => {
+    async (
+      entries: { path: string; content: string }[]
+    ): Promise<{ formatted: Record<string, string>; successCount: number }> => {
       const formatted: Record<string, string> = {};
+      let successCount = 0;
       const tempOpened: string[] = [];
       const monacoInstance = monacoRef.current;
 
@@ -113,6 +117,7 @@ export const useDrafts = ({
               "ls_format_document response",
               { uri, tabSize: settingsEditor.tabSize, insertSpaces: settingsEditor.insertSpaces }
             );
+            successCount++;
             if (edits && edits.length > 0) {
               let next = draftContent;
               if (model && monacoInstance) {
@@ -150,7 +155,7 @@ export const useDrafts = ({
         }
       }
 
-      return formatted;
+      return { formatted, successCount };
     },
     [
       isLsOpen,
@@ -201,18 +206,10 @@ export const useDrafts = ({
       }
       if (entries.length === 0) return 0;
 
-      const formatted: Record<string, string> =
-        lsReadyRef.current && settingsEditor.autoFormatOnSave
-          ? await applyLspFormats(entries)
-          : {};
-
-      if (lsReadyRef.current && settingsEditor.autoFormatOnSave) {
-        for (const entry of entries) {
-          if (entry.hasDraft && formatted[entry.path]) {
-            updateDraftForPath(entry.path, formatted[entry.path]);
-          }
-        }
-      }
+      const shouldFormat = lsReadyRef.current && settingsEditor.autoFormatOnSave;
+      const formatted: Record<string, string> = shouldFormat
+        ? (await applyLspFormats(entries)).formatted
+        : {};
 
       for (const entry of entries) {
         const path = entry.path;
@@ -252,7 +249,8 @@ export const useDrafts = ({
   );
 
   const formatUmlFiles = useCallback(async () => {
-    if (!lsReadyRef.current) return;
+    if (!lsReadyRef.current || formatInProgressRef.current) return;
+    formatInProgressRef.current = true;
     const umlNodePaths = umlGraph?.nodes?.length ? umlGraph.nodes.map((node) => node.path) : [];
     const targetPaths =
       umlNodePaths.length > 0
@@ -279,20 +277,24 @@ export const useDrafts = ({
     }
     if (entries.length === 0) return;
 
-    const formatted = await applyLspFormats(entries);
-    const formattedCount = Object.keys(formatted).length;
+    try {
+      const { formatted, successCount } = await applyLspFormats(entries);
+      const formattedCount = Object.keys(formatted).length;
 
-    for (const entry of entries) {
-      const next = formatted[entry.path];
-      if (next !== undefined) {
-        updateDraftForPath(entry.path, next, entry.savedBaseline);
+      for (const entry of entries) {
+        const next = formatted[entry.path];
+        if (next !== undefined) {
+          updateDraftForPath(entry.path, next, entry.savedBaseline);
+        }
       }
-    }
 
-    if (formattedCount > 0) {
-      setStatus(formattedCount === 1 ? "Formatted 1 file." : `Formatted ${formattedCount} files.`);
-    } else {
-      setStatus("Already formatted.");
+      if (formattedCount > 0) {
+        setStatus(formattedCount === 1 ? "Formatted 1 file." : `Formatted ${formattedCount} files.`);
+      } else if (successCount > 0) {
+        setStatus("Already formatted.");
+      }
+    } finally {
+      formatInProgressRef.current = false;
     }
   }, [applyLspFormats, fileDrafts, lsReadyRef, setStatus, umlGraph, updateDraftForPath]);
 
