@@ -105,7 +105,8 @@ jobs:
             librsvg2-dev \
             patchelf \
             libssl-dev \
-            libgtk-3-dev
+            libgtk-3-dev \
+            libfuse2t64
 
       - name: Install npm dependencies
         run: npm ci
@@ -207,6 +208,7 @@ jobs:
           RUST_BACKTRACE: "1"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         run: npx tauri build --ci --bundles appimage --config src-tauri/tauri.linux-release.conf.json
 
       - name: Prepare release assets
