@@ -207,7 +207,7 @@ jobs:
           RUST_BACKTRACE: "1"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: npx tauri build --ci --bundles appimage --config src-tauri/tauri.linux.conf.json
+        run: npx tauri build --ci --bundles appimage --config src-tauri/tauri.linux-release.conf.json
 
       - name: Prepare release assets
         run: |
