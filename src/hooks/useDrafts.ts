@@ -23,6 +23,7 @@ type UseDraftsArgs = {
   settingsEditor: AppSettings["editor"];
   monacoRef: RefObject<Monaco | null>;
   lsReadyRef: MutableRefObject<boolean>;
+  openFilePathRef: MutableRefObject<string | null>;
   isLsOpen: (path: string) => boolean;
   syncLsDocument: (path: string, text: string) => Promise<void>;
   notifyLsChangeImmediate: (path: string, text: string) => void;
@@ -49,6 +50,7 @@ export const useDrafts = ({
   settingsEditor,
   monacoRef,
   lsReadyRef,
+  openFilePathRef,
   isLsOpen,
   syncLsDocument,
   notifyLsChangeImmediate,
@@ -108,8 +110,9 @@ export const useDrafts = ({
           const uri = await resolveInternalFileUri(path);
           // Only use the Monaco model for the active file — inactive cached models
           // may be stale relative to fileDrafts and would corrupt the draft.
+          // Use the ref so a file switch mid-format doesn't select a stale model.
           const model =
-            path === openFilePath && monacoInstance
+            path === openFilePathRef.current && monacoInstance
               ? monacoInstance.editor.getModel(monacoInstance.Uri.parse(getInternalFileUri(path)))
               : null;
           // Snapshot version before the async roundtrip so we can detect user
@@ -144,7 +147,11 @@ export const useDrafts = ({
                   }));
                 model.pushEditOperations([], monacoEdits, () => null);
                 const next = model.getValue();
-                setContent(next);
+                // Re-check the ref: a file switch after the version snapshot
+                // but before here means this file is no longer active.
+                if (openFilePathRef.current === path) {
+                  setContent(next);
+                }
                 formatted[path] = next;
               } else {
                 const next = applyTextEdits(draftContent, edits);
@@ -158,7 +165,11 @@ export const useDrafts = ({
         }
       } finally {
         for (const path of tempOpened) {
-          notifyLsClose(path);
+          // Don't close a file the user opened during formatting — closing it
+          // would clear LS state/markers for the now-active document.
+          if (path !== openFilePathRef.current) {
+            notifyLsClose(path);
+          }
         }
       }
 
@@ -170,7 +181,6 @@ export const useDrafts = ({
       notifyLsChangeImmediate,
       notifyLsClose,
       syncLsDocument,
-      openFilePath,
       setContent,
       settingsEditor,
       getInternalFileUri,

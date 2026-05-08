@@ -279,6 +279,8 @@ export default function AppContainer({
     minTop: UML_DIAGRAM_MIN_HEIGHT_PX
   });
   const openFilePath = openFile?.path ?? null;
+  const openFilePathRef = useRef<string | null>(openFilePath);
+  openFilePathRef.current = openFilePath;
   const prevOpenFilePathRef = useRef(openFilePath);
   if (prevOpenFilePathRef.current !== openFilePath) {
     prevOpenFilePathRef.current = openFilePath;
@@ -373,6 +375,7 @@ export default function AppContainer({
     settingsEditor: settings.editor,
     monacoRef,
     lsReadyRef,
+    openFilePathRef,
     isLsOpen,
     syncLsDocument,
     notifyLsChangeImmediate,
