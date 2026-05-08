@@ -303,6 +303,7 @@ export default function AppContainer({
     notifyLsClose,
     notifyLsChange,
     notifyLsChangeImmediate,
+    syncLsDocument,
     resetLsState
   } = useLanguageServer({
     projectPath,
@@ -373,7 +374,7 @@ export default function AppContainer({
     monacoRef,
     lsReadyRef,
     isLsOpen,
-    notifyLsOpen,
+    syncLsDocument,
     notifyLsChangeImmediate,
     notifyLsClose,
     resolveInternalFileUri,

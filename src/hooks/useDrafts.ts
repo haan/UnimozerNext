@@ -24,7 +24,7 @@ type UseDraftsArgs = {
   monacoRef: RefObject<Monaco | null>;
   lsReadyRef: MutableRefObject<boolean>;
   isLsOpen: (path: string) => boolean;
-  notifyLsOpen: (path: string, text: string) => void;
+  syncLsDocument: (path: string, text: string) => Promise<void>;
   notifyLsChangeImmediate: (path: string, text: string) => void;
   notifyLsClose: (path: string) => void;
   resolveInternalFileUri: (path: string) => Promise<string>;
@@ -50,7 +50,7 @@ export const useDrafts = ({
   monacoRef,
   lsReadyRef,
   isLsOpen,
-  notifyLsOpen,
+  syncLsDocument,
   notifyLsChangeImmediate,
   notifyLsClose,
   resolveInternalFileUri,
@@ -91,11 +91,10 @@ export const useDrafts = ({
       const monacoInstance = monacoRef.current;
 
       for (const entry of entries) {
-        if (!isLsOpen(entry.path)) {
-          notifyLsOpen(entry.path, entry.content);
+        const wasOpen = isLsOpen(entry.path);
+        await syncLsDocument(entry.path, entry.content);
+        if (!wasOpen) {
           tempOpened.push(entry.path);
-        } else {
-          notifyLsChangeImmediate(entry.path, entry.content);
         }
       }
 
@@ -158,7 +157,7 @@ export const useDrafts = ({
       monacoRef,
       notifyLsChangeImmediate,
       notifyLsClose,
-      notifyLsOpen,
+      syncLsDocument,
       openFilePath,
       setContent,
       settingsEditor,
@@ -261,7 +260,7 @@ export const useDrafts = ({
         : Object.keys(fileDrafts);
     if (targetPaths.length === 0) return;
 
-    const entries: { path: string; content: string }[] = [];
+    const entries: { path: string; content: string; savedBaseline?: string }[] = [];
     for (const path of targetPaths) {
       const draft = fileDrafts[path];
       if (draft) {
@@ -270,7 +269,10 @@ export const useDrafts = ({
       }
       try {
         const text = await invokeValidated("read_text_file", stringSchema, "read_text_file response", { path });
-        entries.push({ path, content: text });
+        // savedBaseline preserves the unformatted disk content so the draft is
+        // marked dirty after formatting (format without save must not silently
+        // discard the change indicator for files not yet in the draft map).
+        entries.push({ path, content: text, savedBaseline: text });
       } catch {
         // Skip files we cannot read.
       }
@@ -280,8 +282,11 @@ export const useDrafts = ({
     const formatted = await applyLspFormats(entries);
     const formattedCount = Object.keys(formatted).length;
 
-    for (const [path, next] of Object.entries(formatted)) {
-      updateDraftForPath(path, next);
+    for (const entry of entries) {
+      const next = formatted[entry.path];
+      if (next !== undefined) {
+        updateDraftForPath(entry.path, next, entry.savedBaseline);
+      }
     }
 
     if (formattedCount > 0) {
