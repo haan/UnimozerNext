@@ -107,7 +107,7 @@ export const useAppAppearanceEffects = ({
   }, [fontFamily]);
 
   useEffect(() => {
-    document.documentElement.dataset.umlContrast = highContrast ? "high" : "";
+    document.documentElement.dataset.highContrast = highContrast ? "high" : "";
   }, [highContrast]);
 
   useEffect(() => {

@@ -150,7 +150,7 @@ body,
   }
 
   /* High contrast mode — light theme */
-  :root[data-uml-contrast="high"] {
+  :root[data-high-contrast="high"] {
     --uml-edge-stroke: hsl(var(--foreground) / 0.9);
     --uml-edge-marker-stroke: hsl(var(--foreground) / 0.9);
     --uml-class-bg: #f5e070;
@@ -167,7 +167,7 @@ body,
   }
 
   /* High contrast mode — dark theme */
-  :root[data-theme="dark"][data-uml-contrast="high"] {
+  :root[data-theme="dark"][data-high-contrast="high"] {
     --uml-class-bg: #1a4a28;
     --uml-class-compiled-bg: #1a5535;
     --uml-class-compiled-border: hsl(132 40% 58%);
