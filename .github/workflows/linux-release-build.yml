@@ -33,7 +33,7 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     env:
       TEMURIN_LINUX_X64_TAR_GZ_URL: ${{ vars.TEMURIN_LINUX_X64_TAR_GZ_URL }}
       TEMURIN_LINUX_X64_SHA256: ${{ vars.TEMURIN_LINUX_X64_SHA256 }}
@@ -99,14 +99,14 @@ jobs:
       - name: Install Linux system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get remove -y libappindicator3-1 libappindicator3-dev 2>/dev/null || true
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
             librsvg2-dev \
             patchelf \
             libssl-dev \
             libgtk-3-dev \
-            libfuse2t64
+            libfuse2
 
       - name: Install npm dependencies
         run: npm ci
