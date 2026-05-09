@@ -246,6 +246,17 @@ pub(crate) fn resolve_resource(app: &tauri::AppHandle, relative: &str) -> Option
         }
     }
 
+    // AppImage runtime: Java assets are placed under usr/share via bundle.linux.appimage.files
+    #[cfg(target_os = "linux")]
+    if let Ok(appdir) = std::env::var("APPDIR") {
+        let candidate = PathBuf::from(&appdir)
+            .join("usr/share/unimozer-next/resources")
+            .join(relative);
+        if candidate.exists() {
+            return Some(fs::canonicalize(&candidate).unwrap_or(candidate));
+        }
+    }
+
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             let candidate = exe_dir.join("_up_").join("resources").join(relative);
@@ -324,6 +335,14 @@ pub(crate) fn resource_candidates(app: &tauri::AppHandle, relative: &str) -> Vec
     let mut candidates = Vec::new();
     if let Ok(dir) = app.path().resource_dir() {
         candidates.push(dir.join(relative));
+    }
+    #[cfg(target_os = "linux")]
+    if let Ok(appdir) = std::env::var("APPDIR") {
+        candidates.push(
+            PathBuf::from(&appdir)
+                .join("usr/share/unimozer-next/resources")
+                .join(relative),
+        );
     }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {

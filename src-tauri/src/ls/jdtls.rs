@@ -75,6 +75,16 @@ pub fn resolve_resource(app: &AppHandle, relative: &str) -> Option<PathBuf> {
             return Some(candidate);
         }
     }
+    // AppImage runtime: Java assets are placed under usr/share via bundle.linux.appimage.files
+    #[cfg(target_os = "linux")]
+    if let Ok(appdir) = std::env::var("APPDIR") {
+        let candidate = PathBuf::from(&appdir)
+            .join("usr/share/unimozer-next/resources")
+            .join(relative);
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(exe_dir) = exe.parent() {
             let candidate = exe_dir.join("_up_").join("resources").join(relative);

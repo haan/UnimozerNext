@@ -10,13 +10,15 @@
         "mimeType": "application/x-unimozer-project"
       }
     ],
-    "resources": {
-      "../resources/jdk/linux-x64": "jdk/linux-x64",
-      "../resources/java-parser/parser-bridge.jar": "java-parser/parser-bridge.jar",
-      "../resources/jshell-bridge/jshell-bridge.jar": "jshell-bridge/jshell-bridge.jar",
-      "../resources/jdtls/plugins": "jdtls/plugins",
-      "../resources/jdtls/config_linux": "jdtls/config_linux",
-      "../resources/jdtls/features": "jdtls/features"
+    "linux": {
+      "appimage": {
+        "files": {
+          "/usr/share/unimozer-next/resources/jdk/linux-x64": "../resources/jdk/linux-x64",
+          "/usr/share/unimozer-next/resources/java-parser/parser-bridge.jar": "../resources/java-parser/parser-bridge.jar",
+          "/usr/share/unimozer-next/resources/jshell-bridge/jshell-bridge.jar": "../resources/jshell-bridge/jshell-bridge.jar",
+          "/usr/share/unimozer-next/resources/jdtls": "../resources/jdtls"
+        }
+      }
     }
   }
 }
