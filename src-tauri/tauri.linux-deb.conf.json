@@ -18,6 +18,15 @@
       "../resources/jdtls/plugins": "jdtls/plugins",
       "../resources/jdtls/config_linux": "jdtls/config_linux",
       "../resources/jdtls/features": "jdtls/features"
+    },
+    "linux": {
+      "deb": {
+        "postInstallScript": "linux/deb/postinst",
+        "postRemoveScript": "linux/deb/postrm",
+        "files": {
+          "/usr/share/mime/packages/com.unimozer.next.xml": "linux/mime/com.unimozer.next.xml"
+        }
+      }
     }
   }
 }
