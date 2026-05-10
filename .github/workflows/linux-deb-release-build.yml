@@ -1,6 +1,11 @@
-name: Linux Release Build
+name: Linux Debian Release Build
 
 on:
+  push:
+    branches:
+      - prerelease
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       ref:
@@ -24,7 +29,7 @@ permissions:
   contents: write
 
 jobs:
-  build-linux:
+  build-linux-deb:
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -197,117 +202,21 @@ jobs:
       - name: Clean cached bundle intermediates
         run: rm -rf "src-tauri/target/release/bundle"
 
-      - name: Build Tauri AppImage bundle
-        id: tauri_appimage_build
-        continue-on-error: true
+      - name: Build Tauri Debian bundle
+        id: tauri_deb_build
         env:
           RUST_LOG: tauri_bundler=trace
           RUST_BACKTRACE: "1"
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          APPIMAGE_EXTRACT_AND_RUN: "1"
           ARCH: x86_64
-          NO_STRIP: "true"
-        run: npx tauri build --ci --bundles appimage --config src-tauri/tauri.linux-release.conf.json
-
-      - name: Diagnose AppImage linuxdeploy failure
-        if: ${{ steps.tauri_appimage_build.outcome == 'failure' }}
-        env:
-          APPIMAGE_EXTRACT_AND_RUN: "1"
-          ARCH: x86_64
-          NO_STRIP: "true"
-        run: |
-          set -uo pipefail
-
-          diagnostics_dir="linux-appimage-diagnostics"
-          mkdir -p "$diagnostics_dir"
-
-          {
-            echo "## AppImage diagnostic context"
-            echo "date: $(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-            echo "pwd: $PWD"
-            echo "uname: $(uname -a)"
-            echo "ARCH: ${ARCH:-}"
-            echo "APPIMAGE_EXTRACT_AND_RUN: ${APPIMAGE_EXTRACT_AND_RUN:-}"
-            echo "NO_STRIP: ${NO_STRIP:-}"
-            echo
-            echo "## Tool versions"
-            command -v npx || true
-            command -v cargo || true
-            command -v patchelf || true
-            command -v strip || true
-            npx tauri --version || true
-            patchelf --version || true
-            strip --version | head -n 1 || true
-          } 2>&1 | tee "$diagnostics_dir/context.txt"
-
-          {
-            echo "## AppImage bundle directory"
-            find "src-tauri/target/release/bundle/appimage" -maxdepth 4 -printf "%M %10s %p\n" 2>&1 | sort || true
-            echo
-            echo "## Tauri cache"
-            find "$HOME/.cache/tauri" -maxdepth 3 -printf "%M %10s %p\n" 2>&1 | sort || true
-          } > "$diagnostics_dir/files.txt"
-
-          appdir="$(find "src-tauri/target/release/bundle/appimage" -maxdepth 1 -type d -name "*.AppDir" | head -n 1 || true)"
-          linuxdeploy="$(find "$HOME/.cache/tauri" "src-tauri/target" -type f -name "linuxdeploy-x86_64.AppImage" 2>/dev/null | head -n 1 || true)"
-
-          {
-            echo "appdir=$appdir"
-            echo "linuxdeploy=$linuxdeploy"
-          } | tee "$diagnostics_dir/selected-paths.txt"
-
-          if [[ -n "$appdir" ]]; then
-            find "$appdir" -maxdepth 5 -printf "%M %10s %p\n" 2>&1 | sort > "$diagnostics_dir/appdir-tree.txt" || true
-            find "$appdir" -type f -exec file {} \; 2>&1 > "$diagnostics_dir/appdir-file-types.txt" || true
-            find "$appdir" -type f -perm /111 -exec sh -c 'for p do echo "### $p"; ldd "$p" || true; done' sh {} + \
-              > "$diagnostics_dir/appdir-executable-ldd.txt" 2>&1 || true
-          fi
-
-          if [[ -z "$appdir" || -z "$linuxdeploy" ]]; then
-            echo "Missing AppDir or linuxdeploy cache path; skipping manual linuxdeploy rerun." \
-              | tee "$diagnostics_dir/linuxdeploy-rerun.log"
-            exit 0
-          fi
-
-          chmod +x "$linuxdeploy" || true
-          find "$(dirname "$linuxdeploy")" -maxdepth 1 -type f -name "linuxdeploy-plugin-*" -exec chmod +x {} \; 2>/dev/null || true
-          export PATH="$(dirname "$linuxdeploy"):$PATH"
-
-          appdir_abs="$(realpath "$appdir")"
-          set +e
-          "$linuxdeploy" --appimage-extract-and-run --verbosity 3 --appdir "$appdir_abs" --plugin gtk --output appimage \
-            > "$diagnostics_dir/linuxdeploy-rerun.log" 2>&1
-          linuxdeploy_status=$?
-          set -e
-
-          echo "$linuxdeploy_status" > "$diagnostics_dir/linuxdeploy-rerun-exit-code.txt"
-          echo "Manual linuxdeploy rerun exited with $linuxdeploy_status"
-
-      - name: Upload AppImage diagnostics
-        if: ${{ steps.tauri_appimage_build.outcome == 'failure' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-appimage-diagnostics
-          path: linux-appimage-diagnostics/
-          if-no-files-found: warn
-
-      - name: Fail after AppImage diagnostics
-        if: ${{ steps.tauri_appimage_build.outcome == 'failure' }}
-        run: exit 1
+        run: npx tauri build --ci --bundles deb --config src-tauri/tauri.linux-deb.conf.json
 
       - name: Prepare release assets
         run: |
           set -euo pipefail
 
-          appimage_file="$(find "src-tauri/target/release/bundle/appimage" -type f -name '*.AppImage' ! -name '*.sig' | head -n 1)"
-          if [[ -z "$appimage_file" ]]; then
-            echo "AppImage bundle not found." >&2
-            exit 1
-          fi
-          appimage_sig="$appimage_file.sig"
-          if [[ ! -f "$appimage_sig" ]]; then
-            echo "Updater signature not found for $appimage_file" >&2
+          deb_file="$(find "src-tauri/target/release/bundle/deb" -type f -name '*.deb' | head -n 1)"
+          if [[ -z "$deb_file" ]]; then
+            echo "Debian bundle not found." >&2
             exit 1
           fi
 
@@ -319,9 +228,8 @@ jobs:
           release_asset_dir="release-assets"
           mkdir -p "$release_asset_dir"
 
-          appimage_release_name="UnimozerNext_${version}_x86_64.AppImage"
-          cp "$appimage_file" "$release_asset_dir/$appimage_release_name"
-          cp "$appimage_sig" "$release_asset_dir/$appimage_release_name.sig"
+          deb_release_name="UnimozerNext_${version}_amd64.deb"
+          cp "$deb_file" "$release_asset_dir/$deb_release_name"
 
       - name: Resolve release metadata
         id: release_meta
@@ -359,56 +267,12 @@ jobs:
           echo "tag_name=$tag_name" >> "$GITHUB_OUTPUT"
           echo "is_prerelease=$is_prerelease" >> "$GITHUB_OUTPUT"
 
-      - name: Generate updater manifest
-        if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
-        run: |
-          set -euo pipefail
-
-          release_tag="${{ steps.release_meta.outputs.tag_name }}"
-          release_base="https://github.com/${{ github.repository }}/releases/download/$release_tag"
-          updater_target="linux-x86_64"
-
-          appimage_release_path="$(find "release-assets" -maxdepth 1 -type f -name "UnimozerNext_*_x86_64.AppImage" ! -name "*.sig" | head -n 1)"
-          if [[ -z "$appimage_release_path" ]]; then
-            echo "Prepared AppImage not found." >&2
-            exit 1
-          fi
-          appimage_sig="$appimage_release_path.sig"
-          if [[ ! -f "$appimage_sig" ]]; then
-            echo "Prepared updater signature not found for $appimage_release_path" >&2
-            exit 1
-          fi
-          appimage_release_name="$(basename "$appimage_release_path")"
-          version="$(echo "$appimage_release_name" | sed -E 's/^UnimozerNext_(.+)_x86_64\.AppImage$/\1/')"
-          if [[ -z "$version" ]]; then
-            echo "Could not resolve app version from release asset filename: $appimage_release_name" >&2
-            exit 1
-          fi
-
-          signature="$(tr -d '\n\r' < "$appimage_sig")"
-          appimage_name_encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))' "$appimage_release_name")"
-
-          mkdir -p updater-manifests
-          cat > "updater-manifests/latest-${updater_target}.json" <<JSON
-          {
-            "version": "$version",
-            "platforms": {
-              "$updater_target": {
-                "signature": "$signature",
-                "url": "$release_base/$appimage_name_encoded"
-              }
-            }
-          }
-          JSON
-
-      - name: Upload Linux bundle artifacts
+      - name: Upload Linux Debian bundle artifact
         uses: actions/upload-artifact@v4
         with:
-          name: linux-x64-bundles
+          name: linux-amd64-deb
           path: |
-            release-assets/UnimozerNext_*_x86_64.AppImage
-            release-assets/UnimozerNext_*_x86_64.AppImage.sig
-            updater-manifests/latest-linux-x86_64.json
+            release-assets/UnimozerNext_*_amd64.deb
           if-no-files-found: error
 
       - name: Publish GitHub release
@@ -419,9 +283,7 @@ jobs:
           prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
           make_latest: ${{ steps.release_meta.outputs.is_prerelease != 'true' }}
           files: |
-            release-assets/UnimozerNext_*_x86_64.AppImage
-            release-assets/UnimozerNext_*_x86_64.AppImage.sig
-            updater-manifests/latest-linux-x86_64.json
+            release-assets/UnimozerNext_*_amd64.deb
 
       - name: Prune stale prerelease Linux assets
         if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
@@ -437,12 +299,10 @@ jobs:
             }
             const version = versionMatch[1];
             const keep = new Set([
-              `UnimozerNext_${version}_x86_64.AppImage`,
-              `UnimozerNext_${version}_x86_64.AppImage.sig`,
-              `latest-linux-x86_64.json`
+              `UnimozerNext_${version}_amd64.deb`
             ]);
 
-            const stalePattern = /^UnimozerNext_.*_x86_64\.(AppImage|AppImage\.sig)$/;
+            const stalePattern = /^(UnimozerNext_.*_(amd64\.deb|x86_64\.AppImage|x86_64\.AppImage\.sig)|latest-linux-x86_64\.json)$/;
 
             const { owner, repo } = context.repo;
             const release = await github.rest.repos.getReleaseByTag({
