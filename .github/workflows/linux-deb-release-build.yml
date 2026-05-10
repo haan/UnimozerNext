@@ -27,6 +27,8 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 jobs:
   build-linux-deb:
@@ -34,6 +36,9 @@ jobs:
       group: ${{ github.workflow }}-${{ github.ref }}
       cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.pages_deployment.outputs.page_url }}
     env:
       TEMURIN_LINUX_X64_TAR_GZ_URL: ${{ vars.TEMURIN_LINUX_X64_TAR_GZ_URL }}
       TEMURIN_LINUX_X64_SHA256: ${{ vars.TEMURIN_LINUX_X64_SHA256 }}
@@ -300,42 +305,7 @@ jobs:
           files: |
             release-assets/UnimozerNext_*_amd64.deb
 
-      - name: Detect GitHub Pages branch
-        id: apt_pages
-        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
-        run: |
-          set -u
-          set +e
-          git ls-remote --exit-code origin gh-pages >/dev/null 2>&1
-          status=$?
-          set -e
-          if [[ "$status" -eq 0 ]]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          elif [[ "$status" -eq 2 ]]; then
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Failed to check whether gh-pages exists; git ls-remote exited with $status" >&2
-            exit "$status"
-          fi
-
-      - name: Checkout GitHub Pages branch
-        if: ${{ steps.apt_pages.outputs.exists == 'true' }}
-        uses: actions/checkout@v4
-        with:
-          ref: gh-pages
-          path: apt-pages
-
-      - name: Initialize GitHub Pages branch
-        if: ${{ steps.apt_pages.outputs.exists == 'false' }}
-        run: |
-          set -euo pipefail
-          mkdir -p apt-pages
-          cd apt-pages
-          git init
-          git checkout --orphan gh-pages
-          git remote add origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
-
-      - name: Publish APT repository
+      - name: Build APT repository
         if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
         env:
           APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
@@ -356,66 +326,24 @@ jobs:
             exit 1
           fi
 
-          cd apt-pages
-          if [[ "$(git branch --show-current)" != "gh-pages" ]]; then
-            git checkout -B gh-pages
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          pool_dir="apt/pool/main/u/unimozer-next"
-          binary_dir="apt/dists/stable/main/binary-amd64"
-          release_dir="apt/dists/stable"
+          rm -rf apt-site
+          pool_dir="apt-site/apt/pool/main/u/unimozer-next"
+          binary_dir="apt-site/apt/dists/stable/main/binary-amd64"
+          release_dir="apt-site/apt/dists/stable"
           mkdir -p "$pool_dir" "$binary_dir" "$release_dir"
 
-          cp "../$DEB_PATH" "$pool_dir/$DEB_NAME"
-
-          python3 - "$pool_dir" <<'PY'
-          from functools import cmp_to_key
-          import os
-          import subprocess
-          import sys
-
-          pool_dir = sys.argv[1]
-          packages = []
-          for name in os.listdir(pool_dir):
-              if not name.endswith("_amd64.deb"):
-                  continue
-              path = os.path.join(pool_dir, name)
-              try:
-                  version = subprocess.check_output(
-                      ["dpkg-deb", "-f", path, "Version"],
-                      text=True,
-                      stderr=subprocess.DEVNULL,
-                  ).strip()
-              except subprocess.CalledProcessError:
-                  continue
-              packages.append((version, name, path))
-
-          def compare_packages(left, right):
-              left_version, left_name, _ = left
-              right_version, right_name, _ = right
-              if subprocess.run(
-                  ["dpkg", "--compare-versions", left_version, "lt", right_version],
-                  check=False,
-              ).returncode == 0:
-                  return -1
-              if subprocess.run(
-                  ["dpkg", "--compare-versions", left_version, "gt", right_version],
-                  check=False,
-              ).returncode == 0:
-                  return 1
-              return (left_name > right_name) - (left_name < right_name)
-
-          packages.sort(key=cmp_to_key(compare_packages), reverse=True)
-
-          for _, name, path in packages[10:]:
-              print(f"Pruning old APT package: {name}")
-              os.remove(path)
-          PY
+          cp "$DEB_PATH" "$pool_dir/$DEB_NAME"
+          cat > apt-site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <meta charset="utf-8">
+          <title>UnimozerNext APT Repository</title>
+          <h1>UnimozerNext APT Repository</h1>
+          <p>APT repository metadata is available under <code>/apt</code>.</p>
+          EOF
 
           (
-            cd apt
+            cd apt-site/apt
             apt-ftparchive packages "pool" > "dists/stable/main/binary-amd64/Packages"
             gzip -9 -c "dists/stable/main/binary-amd64/Packages" > "dists/stable/main/binary-amd64/Packages.gz"
             rm -f "dists/stable/Release" "dists/stable/InRelease" "dists/stable/Release.gpg"
@@ -440,7 +368,7 @@ jobs:
           chmod 700 "$gpg_home"
           export GNUPGHOME="$gpg_home"
           printf '%s\n' "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
-          gpg --batch --yes --armor --export > apt/unimozer-next.gpg
+          gpg --batch --yes --armor --export > apt-site/apt/unimozer-next.gpg
 
           if [[ -n "${APT_GPG_PASSPHRASE:-}" ]]; then
             gpg --batch --yes --pinentry-mode loopback --passphrase "$APT_GPG_PASSPHRASE" \
@@ -456,14 +384,22 @@ jobs:
           unset GNUPGHOME
 
           echo "APT repository package: $PACKAGE_NAME $PACKAGE_VERSION"
-          git add apt
-          if git diff --cached --quiet; then
-            echo "APT repository is already up to date."
-            exit 0
-          fi
+          find apt-site -maxdepth 5 -type f -printf "%p %s bytes\n" | sort
 
-          git commit -m "Update APT repository for $PACKAGE_VERSION"
-          git push origin gh-pages
+      - name: Configure GitHub Pages
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
+        uses: actions/configure-pages@v5
+
+      - name: Upload APT repository Pages artifact
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apt-site
+
+      - name: Deploy APT repository to GitHub Pages
+        id: pages_deployment
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
+        uses: actions/deploy-pages@v4
 
       - name: Prune stale prerelease Linux assets
         if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
