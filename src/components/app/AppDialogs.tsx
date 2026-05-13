@@ -321,17 +321,10 @@ export const AppDialogs = ({
         <AlertDialogHeader className="items-center text-center">
           <AlertDialogTitle>Unsaved changes</AlertDialogTitle>
           <AlertDialogDescription className="text-center">
-            You have unsaved changes. Save before continuing, or continue to discard them.
+            You have unsaved changes. Save before continuing, or choose Don't Save to discard them.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="-mx-6 -mb-6 mt-4 grid grid-cols-3 gap-3 border-t border-border bg-muted/40 px-6 py-4">
-          <AlertDialogCancel
-            variant="outline"
-            className="w-full"
-            disabled={busy || projectActionConfirmBusy}
-          >
-            Cancel
-          </AlertDialogCancel>
           <Button
             type="button"
             size="sm"
@@ -347,8 +340,15 @@ export const AppDialogs = ({
             disabled={busy || projectActionConfirmBusy || !canConfirmProjectAction}
             onClick={onConfirmProjectAction}
           >
-            Continue
+            Don't Save
           </AlertDialogAction>
+          <AlertDialogCancel
+            variant="outline"
+            className="w-full"
+            disabled={busy || projectActionConfirmBusy}
+          >
+            Cancel
+          </AlertDialogCancel>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
