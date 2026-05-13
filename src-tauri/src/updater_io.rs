@@ -1,5 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
@@ -17,6 +18,9 @@ const MSI_UPDATER_DISABLED_MESSAGE: &str =
 #[cfg(target_os = "windows")]
 const UNKNOWN_INSTALLER_UPDATER_DISABLED_MESSAGE: &str =
     "Self-update is disabled because the installer type could not be detected.";
+#[cfg(target_os = "linux")]
+const LINUX_UPDATER_DISABLED_MESSAGE: &str =
+    "Self-update is not supported for Linux installations.";
 
 #[derive(Deserialize, Clone, Copy)]
 #[serde(rename_all = "lowercase")]
@@ -168,7 +172,7 @@ pub async fn updater_install(
     // Ensure no background Java/LSP processes keep files in the install
     // directory locked while the updater installer runs.
     shutdown_background_processes(&app);
-    std::thread::sleep(std::time::Duration::from_millis(300));
+    tokio::time::sleep(Duration::from_millis(300)).await;
 
     update
         .download_and_install(|_, _| {}, || {})
@@ -205,6 +209,15 @@ fn normalize_arch(arch: &str) -> &str {
 fn compute_installability() -> CommandResult<UpdateInstallability> {
     let install_root = resolve_install_root()?;
     let install_path = install_root.to_string_lossy().to_string();
+
+    #[cfg(target_os = "linux")]
+    {
+        return Ok(UpdateInstallability {
+            installable: false,
+            reason: Some(LINUX_UPDATER_DISABLED_MESSAGE.to_string()),
+            install_path,
+        });
+    }
 
     #[cfg(target_os = "windows")]
     {

@@ -4720,6 +4720,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-updater",
  "tauri-plugin-window-state",
+ "tokio",
  "url",
  "walkdir",
  "windows-sys 0.61.2",

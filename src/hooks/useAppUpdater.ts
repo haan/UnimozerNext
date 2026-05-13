@@ -6,7 +6,7 @@ import type {
   UpdateInstallability,
   UpdateSummary
 } from "../services/updater";
-import { detectWindowsInstallerKind, updaterCheck, updaterInstall } from "../services/updater";
+import { updaterCheck, updaterInstall, updaterInstallability } from "../services/updater";
 import { trimStatusText } from "../services/status";
 
 type UseAppUpdaterArgs = {
@@ -56,7 +56,7 @@ type UpdateUiState = {
 };
 
 const parseVersion = (value: string): ParsedVersion | null => {
-  const normalized = value.trim().split("+")[0] ?? "";
+  const normalized = value.trim().split("+")[0];
   if (!normalized) {
     return null;
   }
@@ -197,21 +197,12 @@ export const useAppUpdater = ({
   useEffect(() => {
     let cancelled = false;
     const detectSupport = async () => {
-      const isWindows =
-        typeof navigator !== "undefined" && /windows/i.test(navigator.userAgent);
-      if (!isWindows) {
-        if (!cancelled) {
-          setUpdaterSupport("enabled");
-        }
-        return;
-      }
-
       try {
-        const installerKind = await detectWindowsInstallerKind();
+        const installability = await updaterInstallability();
         if (cancelled) {
           return;
         }
-        setUpdaterSupport(installerKind === "nsis" ? "enabled" : "disabled");
+        setUpdaterSupport(installability.installable ? "enabled" : "disabled");
       } catch {
         if (cancelled) {
           return;
@@ -374,7 +365,7 @@ export const useAppUpdater = ({
   }, [channel]);
 
   const installUpdate = useCallback(async () => {
-    if (updaterSupport !== "enabled" || installing) {
+    if (updaterSupport !== "enabled" || installing || !updateSummary) {
       return;
     }
     setStatus(INSTALLING_UPDATE_MESSAGE);
@@ -401,7 +392,7 @@ export const useAppUpdater = ({
     } finally {
       setInstalling(false);
     }
-  }, [channel, installing, setStatus, updateSourceChannel, updaterSupport]);
+  }, [channel, installing, setStatus, updateSourceChannel, updateSummary, updaterSupport]);
 
   const updateMenuState = useMemo<UpdateMenuState>(() => {
     if (installing) {
