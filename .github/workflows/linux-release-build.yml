@@ -1,6 +1,9 @@
 name: Linux Release Build
 
 on:
+  push:
+    branches:
+      - issue-26-appimage-workflow
   workflow_dispatch:
     inputs:
       ref:
