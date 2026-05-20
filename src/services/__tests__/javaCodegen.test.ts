@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   escapeJavaString,
   escapeJavaChar,
-  normalizeConstructorArg,
+  normalizeJavaArgument,
   resolveConstructorParamClass,
   buildClassSource,
 } from "../javaCodegen";
@@ -49,30 +49,39 @@ describe("escapeJavaChar", () => {
   });
 });
 
-describe("normalizeConstructorArg", () => {
+describe("normalizeJavaArgument", () => {
   it("wraps bare string in double quotes", () => {
-    expect(normalizeConstructorArg("hello", "String")).toBe('"hello"');
+    expect(normalizeJavaArgument("hello", "String")).toBe('"hello"');
   });
   it("leaves already-quoted string unchanged", () => {
-    expect(normalizeConstructorArg('"already quoted"', "String")).toBe('"already quoted"');
+    expect(normalizeJavaArgument('"already quoted"', "String")).toBe('"already quoted"');
   });
   it("escapes internal quotes in string", () => {
-    expect(normalizeConstructorArg('say "hi"', "String")).toBe('"say \\"hi\\""');
+    expect(normalizeJavaArgument('say "hi"', "String")).toBe('"say \\"hi\\""');
   });
   it("wraps bare char in single quotes", () => {
-    expect(normalizeConstructorArg("A", "char")).toBe("'A'");
+    expect(normalizeJavaArgument("A", "char")).toBe("'A'");
   });
   it("leaves already-quoted char unchanged", () => {
-    expect(normalizeConstructorArg("'A'", "char")).toBe("'A'");
+    expect(normalizeJavaArgument("'A'", "char")).toBe("'A'");
   });
   it("passes through primitive int value unchanged", () => {
-    expect(normalizeConstructorArg("42", "int")).toBe("42");
+    expect(normalizeJavaArgument("42", "int")).toBe("42");
+  });
+  it("adds a long suffix to bare integer literals for long parameters", () => {
+    expect(normalizeJavaArgument("1982021224613", "long")).toBe("1982021224613L");
+  });
+  it("preserves long literals that already include a suffix", () => {
+    expect(normalizeJavaArgument("1982021224613L", "long")).toBe("1982021224613L");
+  });
+  it("leaves long expressions unchanged", () => {
+    expect(normalizeJavaArgument("Long.MAX_VALUE", "long")).toBe("Long.MAX_VALUE");
   });
   it("passes through boolean value unchanged", () => {
-    expect(normalizeConstructorArg("true", "boolean")).toBe("true");
+    expect(normalizeJavaArgument("true", "boolean")).toBe("true");
   });
   it("returns empty string for empty input", () => {
-    expect(normalizeConstructorArg("  ", "String")).toBe("");
+    expect(normalizeJavaArgument("  ", "String")).toBe("");
   });
 });
 

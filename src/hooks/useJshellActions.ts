@@ -3,7 +3,7 @@ import type { MutableRefObject } from "react";
 
 import type { UmlConstructor, UmlGraph, UmlMethod, UmlNode } from "../models/uml";
 import type { ObjectInstance, ObjectInheritedMethodGroup, ObjectMethod } from "../models/objectBench";
-import { normalizeConstructorArg, resolveConstructorParamClass } from "../services/javaCodegen";
+import { normalizeJavaArgument, resolveConstructorParamClass } from "../services/javaCodegen";
 import { listen } from "@tauri-apps/api/event";
 import { jshellEval, jshellForceStop, jshellInspect, jshellStart, jshellStop } from "../services/jshell";
 import { jshellOutputEventSchema, parseSchemaOrNull } from "../services/tauriValidation";
@@ -215,7 +215,7 @@ export const useJshellActions = ({
 
       setBusy(true);
       const args = constructor.params.map((param, index) =>
-        normalizeConstructorArg(form.paramValues[index] ?? "", param.type)
+        normalizeJavaArgument(form.paramValues[index] ?? "", param.type)
       );
       const usesDefaultPackage = !target.id.includes(".");
       const ctorParams = constructor.params.map((param) =>
@@ -396,7 +396,7 @@ export const useJshellActions = ({
         method.name ?? method.signature.split("(")[0].split(":")[0].trim();
       const params = method.params ?? [];
       const args = params.map((param, index) =>
-        normalizeConstructorArg(paramValues[index] ?? "", param.type)
+        normalizeJavaArgument(paramValues[index] ?? "", param.type)
       );
       const ownerNode = resolveUmlNodeForObject(target);
       const className = ownerNode?.id || target.type;
