@@ -6,7 +6,10 @@ export const escapeJavaString = (value: string) =>
 export const escapeJavaChar = (value: string) =>
   value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 
-export const normalizeConstructorArg = (raw: string, type: string) => {
+const UNSUFFIXED_INTEGER_LITERAL_PATTERN =
+  /^[+-]?(?:0[bB][01](?:_?[01])*|0[xX][0-9a-fA-F](?:_?[0-9a-fA-F])*|0(?:_?[0-7])*|[1-9](?:_?\d)*)$/;
+
+export const normalizeJavaArgument = (raw: string, type: string) => {
   const trimmed = raw.trim();
   if (!trimmed) return trimmed;
   const normalizedType = type.replace(/\s+/g, "");
@@ -21,6 +24,9 @@ export const normalizeConstructorArg = (raw: string, type: string) => {
       return trimmed;
     }
     return `'${escapeJavaChar(trimmed)}'`;
+  }
+  if (normalizedType === "long" && UNSUFFIXED_INTEGER_LITERAL_PATTERN.test(trimmed)) {
+    return `${trimmed}L`;
   }
   return trimmed;
 };
