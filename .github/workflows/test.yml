@@ -37,6 +37,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Version consistency
+        run: npm run check:versions
+
       - name: Lint (ESLint)
         run: npm run lint
 

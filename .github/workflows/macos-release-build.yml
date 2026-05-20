@@ -124,6 +124,9 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Version consistency
+        run: npm run check:versions
+
       - name: Build Java parser bridge
         shell: bash
         run: |
