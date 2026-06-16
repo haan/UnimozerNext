@@ -118,6 +118,20 @@ class ParserBridgeParseTest {
     }
 
     @Test
+    void parseGraph_arrayFields_includeArrayTypeInSignature(@TempDir Path dir) throws IOException {
+        Files.writeString(dir.resolve("ArrayFields.java"),
+            "public class ArrayFields { private int[] x; private String[][] names; private double values[], total; }");
+
+        ParserBridge.Graph g = ParserBridge.parseGraph(req(dir));
+
+        assertEquals(1, g.nodes.size());
+        assertTrue(g.nodes.get(0).fields.stream().anyMatch(f -> "x: int[]".equals(f.signature)));
+        assertTrue(g.nodes.get(0).fields.stream().anyMatch(f -> "names: String[][]".equals(f.signature)));
+        assertTrue(g.nodes.get(0).fields.stream().anyMatch(f -> "values: double[]".equals(f.signature)));
+        assertTrue(g.nodes.get(0).fields.stream().anyMatch(f -> "total: double".equals(f.signature)));
+    }
+
+    @Test
     void parseGraph_classWithMethod_includesMethodInNode(@TempDir Path dir) throws IOException {
         Files.writeString(dir.resolve("Greeter.java"),
             "public class Greeter { public String greet(String name) { return \"Hello \" + name; } }");

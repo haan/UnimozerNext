@@ -28,6 +28,22 @@ class InspectorTest {
         }
     }
 
+    static class ArrayParent {
+        protected int[] inheritedNumbers = {7, 8, 9};
+    }
+
+    static class ArrayCases extends ArrayParent {
+        private int[] numbers = {1, 2, 3};
+        private double[] decimals = {1.5, 2.5};
+        private boolean[] flags = {true, false, true};
+        private char[] letters = {'a', 'b'};
+        private String[] names = {"Ada", null, "Grace"};
+        private int[][] matrix = {{1, 2}, {3, 4, 5}};
+        private String[][] ragged = {{"a"}, {}, {"b", null}};
+        private int[] empty = {};
+        private int[] large = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    }
+
     @Test
     void inspect_null_returnsNullTypeName() {
         String json = Inspector.inspect(null);
@@ -94,6 +110,33 @@ class InspectorTest {
         assertTrue(json.contains("\"name\":\"color\""), "Own field 'color' should appear");
         assertTrue(json.contains("\"name\":\"x\"") || json.contains("isInherited"),
             "Inherited fields from parent should appear");
+    }
+
+    @Test
+    void inspect_arrayFields_showReadablePreviews() {
+        String json = Inspector.inspect(new ArrayCases());
+
+        assertTrue(json.contains("\"name\":\"numbers\""));
+        assertTrue(json.contains("\"type\":\"int[]\""));
+        assertTrue(json.contains("\"value\":\"[1, 2, 3]\""));
+        assertTrue(json.contains("\"value\":\"[1.5, 2.5]\""));
+        assertTrue(json.contains("\"value\":\"[true, false, true]\""));
+        assertTrue(json.contains("\"value\":\"[a, b]\""));
+        assertTrue(json.contains("\"value\":\"[Ada, null, Grace]\""));
+        assertTrue(json.contains("\"value\":\"[[1, 2], [3, 4, 5]]\""));
+        assertTrue(json.contains("\"value\":\"[[a], [], [b, null]]\""));
+        assertTrue(json.contains("\"value\":\"[]\""));
+    }
+
+    @Test
+    void inspect_largeAndInheritedArrayFields_showBoundedPreviews() {
+        String json = Inspector.inspect(new ArrayCases());
+
+        assertTrue(json.contains("\"name\":\"large\""));
+        assertTrue(json.contains("\"value\":\"[0, 1, 2, 3, 4, 5, 6, 7, ...]\""));
+        assertTrue(json.contains("\"name\":\"inheritedNumbers\""));
+        assertTrue(json.contains("\"value\":\"[7, 8, 9]\""));
+        assertTrue(json.contains("\"isInherited\":true"));
     }
 
     @Test

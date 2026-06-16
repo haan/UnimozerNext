@@ -1,6 +1,7 @@
 package com.unimozer.jshell;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
@@ -12,6 +13,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public final class Inspector {
+    private static final int ARRAY_PREVIEW_MAX_ITEMS = 8;
+    private static final int ARRAY_PREVIEW_MAX_DEPTH = 4;
+
     private Inspector() {}
 
     public static String inspect(Object obj) {
@@ -42,7 +46,7 @@ public final class Inspector {
                 try {
                     field.setAccessible(true);
                     Object value = info.isStatic ? field.get(null) : field.get(obj);
-                    info.value = String.valueOf(value);
+                    info.value = formatValue(value);
                 } catch (Exception error) {
                     info.value = "<error>";
                 }
@@ -231,6 +235,37 @@ public final class Inspector {
                     }
             }
         }
+        return sb.toString();
+    }
+
+    private static String formatValue(Object value) {
+        if (value == null) return "null";
+        Class<?> type = value.getClass();
+        if (!type.isArray()) return String.valueOf(value);
+        return formatArray(value, 0);
+    }
+
+    private static String formatArray(Object array, int depth) {
+        if (array == null) return "null";
+        if (depth >= ARRAY_PREVIEW_MAX_DEPTH) return "[...]";
+        int length = Array.getLength(array);
+        StringBuilder sb = new StringBuilder();
+        sb.append('[');
+        int visible = Math.min(length, ARRAY_PREVIEW_MAX_ITEMS);
+        for (int i = 0; i < visible; i++) {
+            if (i > 0) sb.append(", ");
+            Object item = Array.get(array, i);
+            if (item != null && item.getClass().isArray()) {
+                sb.append(formatArray(item, depth + 1));
+            } else {
+                sb.append(String.valueOf(item));
+            }
+        }
+        if (length > visible) {
+            if (visible > 0) sb.append(", ");
+            sb.append("...");
+        }
+        sb.append(']');
         return sb.toString();
     }
 

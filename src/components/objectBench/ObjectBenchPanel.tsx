@@ -116,7 +116,7 @@ export const ObjectBenchPanel = ({
                   <ContextMenu key={object.name}>
                     <ContextMenuTrigger asChild>
                       <div
-                        className="min-w-[220px] rounded-md border border-border bg-background/80 shadow-sm"
+                        className="w-[260px] max-w-[calc(100vw-2rem)] rounded-md border border-border bg-background/80 shadow-sm"
                         style={{
                           backgroundColor: "hsl(var(--objectbench-card-bg))",
                           borderColor: "hsl(var(--objectbench-card-border))"
@@ -128,7 +128,7 @@ export const ObjectBenchPanel = ({
                         >
                           {object.name}: {object.type}
                         </div>
-                        <div className="space-y-1 px-3 py-2 text-[0.8em] text-muted-foreground">
+                        <div className="min-w-0 space-y-1 px-3 py-2 text-[0.8em] text-muted-foreground">
                           {object.fields
                             .filter((field) =>
                               shouldShowField(
@@ -141,18 +141,14 @@ export const ObjectBenchPanel = ({
                               )
                             )
                             .map((field) => (
-                              <div key={`${object.name}-${field.name}`} className="flex gap-2">
-                                <span className="font-medium text-foreground">
+                              <div key={`${object.name}-${field.name}`} className="flex min-w-0 gap-2">
+                                <span className="shrink-0 font-medium text-foreground">
                                   {field.name}
                                 </span>
-                                <span>=</span>
+                                <span className="shrink-0">=</span>
                                 <span
-                                  className="truncate"
-                                  title={
-                                    field.value && field.value.length > OBJECT_FIELD_VALUE_MAX_LENGTH
-                                      ? field.value
-                                      : undefined
-                                  }
+                                  className="min-w-0 flex-1 truncate"
+                                  title={field.value || undefined}
                                 >
                                   {formatFieldValue(field.value)}
                                 </span>
