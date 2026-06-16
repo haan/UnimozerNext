@@ -17,3 +17,6 @@
 
 - `infinite-loop-stop-project`  
   Stop-button behavior checks for `Run main` and object-bench method calls.
+
+- `array-display-project`  
+  UML and object-bench checks for primitive, object, nested, inherited, empty, null-containing, and large arrays.

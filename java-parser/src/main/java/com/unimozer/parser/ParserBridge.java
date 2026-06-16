@@ -1140,10 +1140,10 @@ public class ParserBridge {
   static List<FieldInfo> collectFieldInfo(TypeDeclaration<?> typeDecl) {
     List<FieldInfo> fields = new ArrayList<>();
     for (FieldDeclaration field : typeDecl.getFields()) {
-      String typeName = field.getElementType().asString();
       boolean isStatic = field.isStatic();
       String visibility = visibilitySymbol(field);
       for (VariableDeclarator variable : field.getVariables()) {
+        String typeName = variable.getType().asString();
         FieldInfo info = new FieldInfo();
         info.signature = variable.getNameAsString() + ": " + typeName;
         info.isStatic = isStatic;
