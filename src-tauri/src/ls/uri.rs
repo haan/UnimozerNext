@@ -127,25 +127,27 @@ pub fn uri_to_path(uri: &str) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "windows")]
     use super::{path_to_uri, uri_to_path};
+    #[cfg(target_os = "windows")]
     use std::path::Path;
 
     #[cfg(target_os = "windows")]
     #[test]
     fn windows_drive_path_to_uri() {
-        let uri = path_to_uri(Path::new(r"C:\NetBeansProjects\mikado\src\Main.java"));
-        assert_eq!(uri, "file:///C:/NetBeansProjects/mikado/src/Main.java");
+        let uri = path_to_uri(Path::new(r"C:\Projects\SampleProject\src\Main.java"));
+        assert_eq!(uri, "file:///C:/Projects/SampleProject/src/Main.java");
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn windows_unc_path_to_uri() {
         let uri = path_to_uri(Path::new(
-            r"\\ltesch.local\users$\home\teachers\INFOTEACH\HAAN_LAURENT\NetBeansProjects\mikado",
+            r"\\example.local\share\projects\SampleProject",
         ));
         assert_eq!(
             uri,
-            "file://ltesch.local/users$/home/teachers/INFOTEACH/HAAN_LAURENT/NetBeansProjects/mikado"
+            "file://example.local/share/projects/SampleProject"
         );
     }
 
@@ -153,30 +155,30 @@ mod tests {
     #[test]
     fn windows_extended_drive_path_to_uri() {
         let uri = path_to_uri(Path::new(
-            r"\\?\C:\NetBeansProjects\mikado\src\Main.java",
+            r"\\?\C:\Projects\SampleProject\src\Main.java",
         ));
-        assert_eq!(uri, "file:///C:/NetBeansProjects/mikado/src/Main.java");
+        assert_eq!(uri, "file:///C:/Projects/SampleProject/src/Main.java");
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn windows_extended_unc_path_to_uri() {
         let uri = path_to_uri(Path::new(
-            r"\\?\UNC\ltesch.local\users$\home\teachers\INFOTEACH\HAAN_LAURENT\NetBeansProjects\mikado",
+            r"\\?\UNC\example.local\share\projects\SampleProject",
         ));
         assert_eq!(
             uri,
-            "file://ltesch.local/users$/home/teachers/INFOTEACH/HAAN_LAURENT/NetBeansProjects/mikado"
+            "file://example.local/share/projects/SampleProject"
         );
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn windows_uri_to_path_drive() {
-        let path = uri_to_path("file:///Z:/NetBeansProjects/mikado/src/Main.java");
+        let path = uri_to_path("file:///Z:/Projects/SampleProject/src/Main.java");
         assert_eq!(
             path.to_string_lossy(),
-            r"Z:\NetBeansProjects\mikado\src\Main.java"
+            r"Z:\Projects\SampleProject\src\Main.java"
         );
     }
 
@@ -184,21 +186,21 @@ mod tests {
     #[test]
     fn windows_uri_to_path_unc() {
         let path = uri_to_path(
-            "file://ltesch.local/users$/home/teachers/INFOTEACH/HAAN_LAURENT/NetBeansProjects/mikado",
+            "file://example.local/share/projects/SampleProject",
         );
         assert_eq!(
             path.to_string_lossy(),
-            r"\\ltesch.local\users$\home\teachers\INFOTEACH\HAAN_LAURENT\NetBeansProjects\mikado"
+            r"\\example.local\share\projects\SampleProject"
         );
     }
 
     #[cfg(target_os = "windows")]
     #[test]
     fn windows_uri_to_path_localhost_drive() {
-        let path = uri_to_path("file://localhost/Z:/NetBeansProjects/mikado/src/Main.java");
+        let path = uri_to_path("file://localhost/Z:/Projects/SampleProject/src/Main.java");
         assert_eq!(
             path.to_string_lossy(),
-            r"Z:\NetBeansProjects\mikado\src\Main.java"
+            r"Z:\Projects\SampleProject\src\Main.java"
         );
     }
 

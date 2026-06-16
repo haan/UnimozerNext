@@ -102,7 +102,7 @@ mod tests {
 
     #[test]
     fn parse_launch_arg_accepts_plain_umz_path() {
-        let parsed = parse_launch_umz_arg(r#"C:\Users\Student\A.umz"#);
+        let parsed = parse_launch_umz_arg(r#"C:\Projects\SampleProject\A.umz"#);
         assert!(parsed.is_some());
         let value = parsed.expect("expected umz path");
         assert!(value.to_ascii_lowercase().ends_with(".umz"));
@@ -110,7 +110,7 @@ mod tests {
 
     #[test]
     fn parse_launch_arg_accepts_quoted_umz_path() {
-        let parsed = parse_launch_umz_arg(r#""C:\Users\Student\A.umz""#);
+        let parsed = parse_launch_umz_arg(r#""C:\Projects\SampleProject\A.umz""#);
         assert!(parsed.is_some());
         let value = parsed.expect("expected quoted umz path");
         assert!(value.to_ascii_lowercase().ends_with(".umz"));
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn parse_launch_arg_accepts_file_uri_umz_path() {
-        let parsed = parse_launch_umz_arg("file:///C:/Users/Student/A%20B.umz");
+        let parsed = parse_launch_umz_arg("file:///C:/Projects/SampleProject/A%20B.umz");
         assert!(parsed.is_some());
         let value = parsed.expect("expected file uri umz path");
         assert!(value.contains("A B.umz"));
@@ -128,7 +128,7 @@ mod tests {
     #[test]
     fn parse_launch_arg_rejects_flags_and_non_umz() {
         assert!(parse_launch_umz_arg("--inspect").is_none());
-        assert!(parse_launch_umz_arg("C:\\Users\\Student\\A.java").is_none());
+        assert!(parse_launch_umz_arg("C:\\Projects\\SampleProject\\A.java").is_none());
         assert!(parse_launch_umz_arg("").is_none());
     }
 
@@ -136,9 +136,9 @@ mod tests {
     fn collect_umz_paths_filters_invalid_entries() {
         let paths = collect_umz_paths_from_args(vec![
             "--flag".to_string(),
-            "C:\\Users\\Student\\A.umz".to_string(),
-            "C:\\Users\\Student\\B.java".to_string(),
-            "file:///C:/Users/Student/C%20D.umz".to_string(),
+            "C:\\Projects\\SampleProject\\A.umz".to_string(),
+            "C:\\Projects\\SampleProject\\B.java".to_string(),
+            "file:///C:/Projects/SampleProject/C%20D.umz".to_string(),
         ]);
         assert_eq!(paths.len(), 2);
         assert!(paths

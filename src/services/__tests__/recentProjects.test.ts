@@ -21,7 +21,7 @@ function packed(path: string): RecentProjectEntry {
 
 describe("normalizeRecentPath — folder", () => {
   it("strips trailing slash from folder path", () => {
-    expect(normalizeRecentPath("/home/user/project/", "folder")).toBe("/home/user/project");
+    expect(normalizeRecentPath("/workspace/project/", "folder")).toBe("/workspace/project");
   });
 
   it("strips trailing backslash from Windows folder path", () => {
@@ -45,7 +45,7 @@ describe("normalizeRecentPath — folder", () => {
   });
 
   it("trims leading/trailing whitespace", () => {
-    expect(normalizeRecentPath("  /home/user/project  ", "folder")).toBe("/home/user/project");
+    expect(normalizeRecentPath("  /workspace/project  ", "folder")).toBe("/workspace/project");
   });
 
   it("returns empty string for blank input", () => {
@@ -53,17 +53,17 @@ describe("normalizeRecentPath — folder", () => {
   });
 
   it("path without trailing slash is unchanged", () => {
-    expect(normalizeRecentPath("/home/user/project", "folder")).toBe("/home/user/project");
+    expect(normalizeRecentPath("/workspace/project", "folder")).toBe("/workspace/project");
   });
 });
 
 describe("normalizeRecentPath — packed", () => {
   it("does not strip trailing slash from packed path", () => {
-    expect(normalizeRecentPath("/home/user/project.zip/", "packed")).toBe("/home/user/project.zip/");
+    expect(normalizeRecentPath("/workspace/project.zip/", "packed")).toBe("/workspace/project.zip/");
   });
 
   it("trims whitespace from packed path", () => {
-    expect(normalizeRecentPath("  /home/user/project.zip  ", "packed")).toBe("/home/user/project.zip");
+    expect(normalizeRecentPath("  /workspace/project.zip  ", "packed")).toBe("/workspace/project.zip");
   });
 });
 
@@ -73,7 +73,7 @@ describe("normalizeRecentPath — packed", () => {
 
 describe("recentEntryKey", () => {
   it("includes kind prefix in key", () => {
-    expect(recentEntryKey(folder("/home/user/project"))).toMatch(/^folder:/);
+    expect(recentEntryKey(folder("/workspace/project"))).toMatch(/^folder:/);
   });
 
   it("lowercases Windows paths for case-insensitive comparison", () => {
@@ -83,8 +83,8 @@ describe("recentEntryKey", () => {
   });
 
   it("does not lowercase Unix paths", () => {
-    const a = recentEntryKey(folder("/home/User/Project"));
-    const b = recentEntryKey(folder("/home/user/project"));
+    const a = recentEntryKey(folder("/workspace/SampleProject"));
+    const b = recentEntryKey(folder("/workspace/sampleproject"));
     expect(a).not.toBe(b);
   });
 

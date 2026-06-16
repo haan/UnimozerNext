@@ -3,46 +3,46 @@ import { basename, joinPath, toDisplayPath, toRelativePath } from "../paths";
 
 describe("basename", () => {
   it("returns last segment for unix path", () => {
-    expect(basename("/home/user/project/Main.java")).toBe("Main.java");
+    expect(basename("/workspace/project/Main.java")).toBe("Main.java");
   });
   it("returns last segment for windows path", () => {
-    expect(basename("C:\\Users\\user\\Main.java")).toBe("Main.java");
+    expect(basename("C:\\Projects\\SampleProject\\Main.java")).toBe("Main.java");
   });
   it("strips trailing slash before splitting", () => {
-    expect(basename("/home/user/project/")).toBe("project");
+    expect(basename("/workspace/project/")).toBe("project");
   });
   it("returns path unchanged when no separator", () => {
     expect(basename("Main.java")).toBe("Main.java");
   });
   it("handles mixed separators", () => {
-    expect(basename("C:/Users/user/Main.java")).toBe("Main.java");
+    expect(basename("C:/Projects/SampleProject/Main.java")).toBe("Main.java");
   });
 });
 
 describe("joinPath", () => {
   it("joins with forward slash for unix root", () => {
-    expect(joinPath("/home/user/project", "Main.java")).toBe("/home/user/project/Main.java");
+    expect(joinPath("/workspace/project", "Main.java")).toBe("/workspace/project/Main.java");
   });
   it("joins with backslash for windows root", () => {
-    expect(joinPath("C:\\Users\\user\\project", "Main.java")).toBe("C:\\Users\\user\\project\\Main.java");
+    expect(joinPath("C:\\Projects\\SampleProject", "Main.java")).toBe("C:\\Projects\\SampleProject\\Main.java");
   });
   it("strips trailing separator from root before joining", () => {
-    expect(joinPath("/home/user/project/", "Main.java")).toBe("/home/user/project/Main.java");
+    expect(joinPath("/workspace/project/", "Main.java")).toBe("/workspace/project/Main.java");
   });
 });
 
 describe("toDisplayPath", () => {
   it("strips windows extended-length prefix", () => {
-    expect(toDisplayPath("\\\\?\\C:\\Users\\foo")).toBe("C:\\Users\\foo");
+    expect(toDisplayPath("\\\\?\\C:\\Projects\\SampleProject")).toBe("C:\\Projects\\SampleProject");
   });
   it("strips windows UNC extended-length prefix", () => {
     expect(toDisplayPath("\\\\?\\UNC\\server\\share")).toBe("\\\\server\\share");
   });
   it("returns unchanged for normal unix path", () => {
-    expect(toDisplayPath("/home/user/project")).toBe("/home/user/project");
+    expect(toDisplayPath("/workspace/project")).toBe("/workspace/project");
   });
   it("returns unchanged for normal windows path", () => {
-    expect(toDisplayPath("C:\\Users\\user\\project")).toBe("C:\\Users\\user\\project");
+    expect(toDisplayPath("C:\\Projects\\SampleProject")).toBe("C:\\Projects\\SampleProject");
   });
   it("returns unchanged for empty string", () => {
     expect(toDisplayPath("")).toBe("");

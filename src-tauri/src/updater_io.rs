@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "linux"))]
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -219,56 +220,59 @@ fn compute_installability() -> CommandResult<UpdateInstallability> {
         });
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(not(target_os = "linux"))]
     {
-        match detect_windows_installer_kind_value().as_str() {
-            "nsis" => {}
-            "msi" => {
-                return Ok(UpdateInstallability {
-                    installable: false,
-                    reason: Some(MSI_UPDATER_DISABLED_MESSAGE.to_string()),
-                    install_path,
-                })
-            }
-            _ => {
-                return Ok(UpdateInstallability {
-                    installable: false,
-                    reason: Some(UNKNOWN_INSTALLER_UPDATER_DISABLED_MESSAGE.to_string()),
-                    install_path,
-                })
+        #[cfg(target_os = "windows")]
+        {
+            match detect_windows_installer_kind_value().as_str() {
+                "nsis" => {}
+                "msi" => {
+                    return Ok(UpdateInstallability {
+                        installable: false,
+                        reason: Some(MSI_UPDATER_DISABLED_MESSAGE.to_string()),
+                        install_path,
+                    })
+                }
+                _ => {
+                    return Ok(UpdateInstallability {
+                        installable: false,
+                        reason: Some(UNKNOWN_INSTALLER_UPDATER_DISABLED_MESSAGE.to_string()),
+                        install_path,
+                    })
+                }
             }
         }
-    }
 
-    let probe_name = format!(
-        ".unimozer-update-probe-{}-{}",
-        std::process::id(),
-        chrono_like_timestamp()
-    );
-    let probe_path = install_root.join(probe_name);
+        let probe_name = format!(
+            ".unimozer-update-probe-{}-{}",
+            std::process::id(),
+            chrono_like_timestamp()
+        );
+        let probe_path = install_root.join(probe_name);
 
-    let write_result = fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&probe_path);
-    match write_result {
-        Ok(file) => {
-            drop(file);
-            let _ = fs::remove_file(&probe_path);
-            Ok(UpdateInstallability {
-                installable: true,
-                reason: None,
+        let write_result = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe_path);
+        match write_result {
+            Ok(file) => {
+                drop(file);
+                let _ = fs::remove_file(&probe_path);
+                Ok(UpdateInstallability {
+                    installable: true,
+                    reason: None,
+                    install_path,
+                })
+            }
+            Err(error) => Ok(UpdateInstallability {
+                installable: false,
+                reason: Some(format!(
+                    "Installation directory is not writable for this user: {}",
+                    error
+                )),
                 install_path,
-            })
+            }),
         }
-        Err(error) => Ok(UpdateInstallability {
-            installable: false,
-            reason: Some(format!(
-                "Installation directory is not writable for this user: {}",
-                error
-            )),
-            install_path,
-        }),
     }
 }
 
@@ -298,6 +302,7 @@ fn resolve_macos_bundle_root(exe_path: &Path) -> Option<PathBuf> {
     Some(contents_dir.parent()?.to_path_buf())
 }
 
+#[cfg(not(target_os = "linux"))]
 fn chrono_like_timestamp() -> u128 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

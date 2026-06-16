@@ -208,7 +208,7 @@ describe("normalizeCompletionResponse", () => {
 
 describe("toFileUri", () => {
   it("converts Unix absolute path to file URI", () => {
-    expect(toFileUri("/home/user/project/Main.java")).toBe("file:///home/user/project/Main.java");
+    expect(toFileUri("/workspace/project/Main.java")).toBe("file:///workspace/project/Main.java");
   });
 
   it("converts Windows drive path to file URI", () => {
@@ -232,7 +232,7 @@ describe("toFileUri", () => {
   });
 
   it("percent-encodes spaces in path", () => {
-    expect(toFileUri("/home/user/my project/Main.java")).toBe("file:///home/user/my%20project/Main.java");
+    expect(toFileUri("/workspace/my project/Main.java")).toBe("file:///workspace/my%20project/Main.java");
   });
 
   it("percent-encodes # in path", () => {
