@@ -12,6 +12,7 @@ export default [
       "src-tauri/target/**",
       "java-parser/build/**",
       "jshell-bridge/build/**",
+      "tmp/**",
       "resources/jdk/**",
       "resources/java-parser/**"
     ]
