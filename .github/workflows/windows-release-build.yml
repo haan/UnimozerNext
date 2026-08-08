@@ -1,37 +1,40 @@
 name: Windows Release Build
 
 on:
-  push:
-    branches:
-      - prerelease
-    tags:
-      - "v*"
-  workflow_dispatch:
+  workflow_call:
     inputs:
       ref:
-        description: Git ref to build (branch, tag, or commit SHA)
-        required: false
-        default: main
+        required: true
+        type: string
+      source_event_name:
+        required: true
+        type: string
+      source_ref:
+        required: true
+        type: string
+      source_ref_name:
+        required: true
+        type: string
       publish_release:
-        description: Override and publish GitHub release for this run
         required: false
         default: "false"
+        type: string
       release_channel:
-        description: Publish channel (stable or prerelease)
         required: false
         default: stable
+        type: string
       release_tag:
-        description: Tag name to publish (e.g. v0.10.5). Leave empty to skip release publishing.
         required: false
         default: ""
+        type: string
 
 permissions:
   id-token: write
   contents: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  group: windows-release-${{ inputs.source_ref }}
+  cancel-in-progress: ${{ !startsWith(inputs.source_ref, 'refs/tags/') }}
 
 jobs:
   build-windows:
@@ -46,7 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -77,22 +80,6 @@ jobs:
             .cache/temurin
             .cache/jdtls
           key: windows-resources-${{ env.TEMURIN_WIN_X64_SHA256 }}-${{ env.JDTLS_DIST_SHA256 }}
-
-      - name: Validate required variables
-        shell: pwsh
-        run: |
-          $required = @(
-            "TEMURIN_WIN_X64_ZIP_URL",
-            "TEMURIN_WIN_X64_SHA256",
-            "JDTLS_DIST_URL",
-            "JDTLS_DIST_SHA256"
-          )
-          foreach ($name in $required) {
-            $value = (Get-Item "env:$name").Value
-            if ([string]::IsNullOrWhiteSpace($value)) {
-              throw "Missing required Actions variable: $name"
-            }
-          }
 
       - name: Install npm dependencies
         run: npm ci
@@ -190,10 +177,10 @@ jobs:
         id: authenticode_meta
         shell: pwsh
         run: |
-          $eventName = "${{ github.event_name }}"
-          $runRef = "${{ github.ref }}"
-          $publishInput = "${{ github.event.inputs.publish_release }}"
-          $releaseChannel = "${{ github.event.inputs.release_channel }}"
+          $eventName = "${{ inputs.source_event_name }}"
+          $runRef = "${{ inputs.source_ref }}"
+          $publishInput = "${{ inputs.publish_release }}"
+          $releaseChannel = "${{ inputs.release_channel }}"
 
           $isTagPush =
             ($eventName -eq "push") -and
@@ -432,19 +419,21 @@ jobs:
         id: release_meta
         shell: pwsh
         run: |
-          $eventName = "${{ github.event_name }}"
-          $publishInput = "${{ github.event.inputs.publish_release }}"
-          $channel = "${{ github.event.inputs.release_channel }}"
-          $tagInput = "${{ github.event.inputs.release_tag }}"
+          $eventName = "${{ inputs.source_event_name }}"
+          $sourceRef = "${{ inputs.source_ref }}"
+          $sourceRefName = "${{ inputs.source_ref_name }}"
+          $publishInput = "${{ inputs.publish_release }}"
+          $channel = "${{ inputs.release_channel }}"
+          $tagInput = "${{ inputs.release_tag }}"
           $publishRelease = $false
           $tag = ""
           $isPrerelease = "false"
 
           if ($eventName -eq "push") {
-            if ("${{ github.ref }}" -like "refs/tags/*" -and "${{ vars.PUBLISH_GH_RELEASE }}" -eq "true") {
+            if ($sourceRef -like "refs/tags/*" -and "${{ vars.PUBLISH_GH_RELEASE }}" -eq "true") {
               $publishRelease = $true
-              $tag = "${{ github.ref_name }}"
-            } elseif ("${{ github.ref }}" -eq "refs/heads/prerelease") {
+              $tag = $sourceRefName
+            } elseif ($sourceRef -eq "refs/heads/prerelease") {
               $publishRelease = $true
               $tag = "updater-prerelease"
               $isPrerelease = "true"

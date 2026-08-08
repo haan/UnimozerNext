@@ -1,0 +1,175 @@
+name: Release Builds
+
+on:
+  push:
+    branches:
+      - prerelease
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build (branch, tag, or commit SHA)
+        required: false
+        default: main
+      publish_release:
+        description: Override and publish GitHub release for this run
+        required: false
+        default: "false"
+      release_channel:
+        description: Publish channel (stable or prerelease)
+        required: false
+        default: stable
+      release_tag:
+        description: Tag name to publish (e.g. v0.10.5). Leave empty to skip release publishing.
+        required: false
+        default: ""
+      platform:
+        description: Platform build to run
+        required: false
+        type: choice
+        options:
+          - all
+          - preflight-only
+          - linux
+          - windows
+          - macos
+        default: all
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: release-builds-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  release-preflight:
+    name: Release resource preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      JDTLS_DIST_URL: ${{ vars.JDTLS_DIST_URL }}
+      JDTLS_DIST_SHA256: ${{ vars.JDTLS_DIST_SHA256 }}
+      TEMURIN_LINUX_X64_TAR_GZ_URL: ${{ vars.TEMURIN_LINUX_X64_TAR_GZ_URL }}
+      TEMURIN_LINUX_X64_SHA256: ${{ vars.TEMURIN_LINUX_X64_SHA256 }}
+      TEMURIN_MAC_X64_TAR_GZ_URL: ${{ vars.TEMURIN_MAC_X64_TAR_GZ_URL }}
+      TEMURIN_MAC_X64_SHA256: ${{ vars.TEMURIN_MAC_X64_SHA256 }}
+      TEMURIN_MAC_ARM64_TAR_GZ_URL: ${{ vars.TEMURIN_MAC_ARM64_TAR_GZ_URL }}
+      TEMURIN_MAC_ARM64_SHA256: ${{ vars.TEMURIN_MAC_ARM64_SHA256 }}
+      TEMURIN_WIN_X64_ZIP_URL: ${{ vars.TEMURIN_WIN_X64_ZIP_URL }}
+      TEMURIN_WIN_X64_SHA256: ${{ vars.TEMURIN_WIN_X64_SHA256 }}
+      PUBLISH_GH_RELEASE: ${{ vars.PUBLISH_GH_RELEASE }}
+    steps:
+      - name: Validate release resource configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          url_names=(
+            JDTLS_DIST_URL
+            TEMURIN_LINUX_X64_TAR_GZ_URL
+            TEMURIN_MAC_X64_TAR_GZ_URL
+            TEMURIN_MAC_ARM64_TAR_GZ_URL
+            TEMURIN_WIN_X64_ZIP_URL
+          )
+          sha_names=(
+            JDTLS_DIST_SHA256
+            TEMURIN_LINUX_X64_SHA256
+            TEMURIN_MAC_X64_SHA256
+            TEMURIN_MAC_ARM64_SHA256
+            TEMURIN_WIN_X64_SHA256
+          )
+
+          for name in "${url_names[@]}" "${sha_names[@]}"; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing required Actions variable: $name"
+              exit 1
+            fi
+          done
+
+          for name in "${sha_names[@]}"; do
+            if [[ ! "${!name}" =~ ^[0-9a-fA-F]{64}$ ]]; then
+              echo "::error::Actions variable $name must be a 64-character SHA-256 value"
+              exit 1
+            fi
+          done
+
+          if [[ "$PUBLISH_GH_RELEASE" != "true" && "$PUBLISH_GH_RELEASE" != "false" ]]; then
+            echo "::error::Actions variable PUBLISH_GH_RELEASE must be true or false"
+            exit 1
+          fi
+
+          for name in "${url_names[@]}"; do
+            url="${!name}"
+            if [[ "$url" != https://* ]]; then
+              echo "::error::Actions variable $name must use HTTPS"
+              exit 1
+            fi
+
+            echo "Checking $name"
+            if ! status="$(curl \
+              --silent \
+              --show-error \
+              --location \
+              --head \
+              --fail \
+              --retry 3 \
+              --retry-all-errors \
+              --connect-timeout 10 \
+              --max-time 45 \
+              --output /dev/null \
+              --write-out '%{http_code}' \
+              "$url")"; then
+              echo "::error::Actions variable $name does not resolve successfully"
+              exit 1
+            fi
+            echo "$name: HTTP $status"
+          done
+
+  linux:
+    name: Linux Debian
+    needs: release-preflight
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'linux' }}
+    uses: ./.github/workflows/linux-deb-release-build.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      source_event_name: ${{ github.event_name }}
+      source_ref: ${{ github.ref }}
+      source_ref_name: ${{ github.ref_name }}
+      publish_release: ${{ inputs.publish_release || 'false' }}
+      release_channel: ${{ inputs.release_channel || 'stable' }}
+      release_tag: ${{ inputs.release_tag || '' }}
+    secrets: inherit
+
+  windows:
+    name: Windows
+    needs: release-preflight
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'windows' }}
+    uses: ./.github/workflows/windows-release-build.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      source_event_name: ${{ github.event_name }}
+      source_ref: ${{ github.ref }}
+      source_ref_name: ${{ github.ref_name }}
+      publish_release: ${{ inputs.publish_release || 'false' }}
+      release_channel: ${{ inputs.release_channel || 'stable' }}
+      release_tag: ${{ inputs.release_tag || '' }}
+    secrets: inherit
+
+  macos:
+    name: macOS
+    needs: release-preflight
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.platform == 'all' || inputs.platform == 'macos' }}
+    uses: ./.github/workflows/macos-release-build.yml
+    with:
+      ref: ${{ inputs.ref || github.ref }}
+      source_event_name: ${{ github.event_name }}
+      source_ref: ${{ github.ref }}
+      source_ref_name: ${{ github.ref_name }}
+      publish_release: ${{ inputs.publish_release || 'false' }}
+      release_channel: ${{ inputs.release_channel || 'stable' }}
+      release_tag: ${{ inputs.release_tag || '' }}
+    secrets: inherit

@@ -1,29 +1,32 @@
 name: macOS Release Build
 
 on:
-  push:
-    branches:
-      - prerelease
-    tags:
-      - "v*"
-  workflow_dispatch:
+  workflow_call:
     inputs:
       ref:
-        description: Git ref to build (branch, tag, or commit SHA)
-        required: false
-        default: main
+        required: true
+        type: string
+      source_event_name:
+        required: true
+        type: string
+      source_ref:
+        required: true
+        type: string
+      source_ref_name:
+        required: true
+        type: string
       publish_release:
-        description: Override and publish GitHub release for this run
         required: false
         default: "false"
+        type: string
       release_channel:
-        description: Publish channel (stable or prerelease)
         required: false
         default: stable
+        type: string
       release_tag:
-        description: Tag name to publish (e.g. v0.10.5). Leave empty to skip release publishing.
         required: false
         default: ""
+        type: string
 
 permissions:
   contents: write
@@ -31,8 +34,8 @@ permissions:
 jobs:
   build-macos:
     concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}-${{ matrix.arch }}
-      cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+      group: macos-release-${{ inputs.source_ref }}-${{ matrix.arch }}
+      cancel-in-progress: ${{ !startsWith(inputs.source_ref, 'refs/tags/') }}
     strategy:
       fail-fast: false
       matrix:
@@ -64,7 +67,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.ref || github.ref }}
+          ref: ${{ inputs.ref }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -101,25 +104,6 @@ jobs:
             .cache/temurin
             .cache/jdtls
           key: macos-resources-${{ matrix.arch }}-${{ matrix.arch == 'x64' && env.TEMURIN_MAC_X64_SHA256 || env.TEMURIN_MAC_ARM64_SHA256 }}-${{ env.JDTLS_DIST_SHA256 }}
-
-      - name: Validate required variables
-        shell: bash
-        run: |
-          set -euo pipefail
-          required=(
-            "TEMURIN_MAC_X64_TAR_GZ_URL"
-            "TEMURIN_MAC_X64_SHA256"
-            "TEMURIN_MAC_ARM64_TAR_GZ_URL"
-            "TEMURIN_MAC_ARM64_SHA256"
-            "JDTLS_DIST_URL"
-            "JDTLS_DIST_SHA256"
-          )
-          for name in "${required[@]}"; do
-            if [[ -z "${!name:-}" ]]; then
-              echo "Missing required Actions variable: $name" >&2
-              exit 1
-            fi
-          done
 
       - name: Install npm dependencies
         run: npm ci
@@ -369,19 +353,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          event_name="${{ github.event_name }}"
-          publish_input="${{ github.event.inputs.publish_release }}"
-          channel="${{ github.event.inputs.release_channel }}"
-          release_tag="${{ github.event.inputs.release_tag }}"
+          event_name="${{ inputs.source_event_name }}"
+          source_ref="${{ inputs.source_ref }}"
+          source_ref_name="${{ inputs.source_ref_name }}"
+          publish_input="${{ inputs.publish_release }}"
+          channel="${{ inputs.release_channel }}"
+          release_tag="${{ inputs.release_tag }}"
           publish_release="false"
           tag_name=""
           is_prerelease="false"
 
           if [[ "$event_name" == "push" ]]; then
-            if [[ "${{ github.ref }}" == refs/tags/* && "${{ vars.PUBLISH_GH_RELEASE }}" == "true" ]]; then
+            if [[ "$source_ref" == refs/tags/* && "${{ vars.PUBLISH_GH_RELEASE }}" == "true" ]]; then
               publish_release="true"
-              tag_name="${{ github.ref_name }}"
-            elif [[ "${{ github.ref }}" == "refs/heads/prerelease" ]]; then
+              tag_name="$source_ref_name"
+            elif [[ "$source_ref" == "refs/heads/prerelease" ]]; then
               publish_release="true"
               tag_name="updater-prerelease"
               is_prerelease="true"
