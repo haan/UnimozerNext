@@ -5,12 +5,12 @@ Validate constructor calls, method calls, `main` execution, stdout/stderr handli
 
 ## Steps
 1. Open folder project: `examples/jshell-smoke-project`.
-2. Compile project (`Project -> Compile Project`).
-3. Run main class `Tester` (`Run -> Run Main` and select `Tester`).
+2. Compile project (`Diagram -> Compile Project`).
+3. Right-click the `Tester` class in the diagram and choose `Run main`.
 4. Confirm final summary shows:
    - `Passed: 14`
    - `Failed: 0`
-5. Confirm `Run finished.` is printed at the end.
+5. Confirm `Running main process...finished.` is printed at the end.
 
 ## Expected notable output
 - `=== Unimozer Smoke Tester ===`

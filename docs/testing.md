@@ -1,4 +1,4 @@
-# Unit Test Setup
+# Testing
 
 This document describes the automated test infrastructure for Unimozer Next.
 
@@ -14,15 +14,16 @@ Tests are organised by layer:
 | JShell bridge | JUnit 5 (Gradle) | `npm run test:java:jshell` |
 | End-to-end (browser) | Playwright | `npm run test:e2e` |
 
-The full gate (lint + typecheck + Rust + Vitest) runs as one command:
+The default gate (version consistency + lint + typecheck + Rust + Vitest) runs as one command:
 
 ```bash
 npm run test
 ```
 
-Everything including Java and Playwright:
+Everything including Java and Playwright (requires the [development prerequisites](../DEVELOPMENT.md#prerequisites), including JDK 25):
 
 ```bash
+npx playwright install chromium
 npm run test:all
 ```
 
@@ -52,7 +53,7 @@ Any test that needs specific `invoke` behaviour overrides the mock locally:
 
 ```ts
 import { invoke } from "@tauri-apps/api/core";
-vi.mocked(invoke).mockResolvedValueOnce({ ... });
+vi.mocked(invoke).mockResolvedValueOnce("folder"); // e.g. classify_project_path
 ```
 
 ---
@@ -72,13 +73,6 @@ npm run test:unit:ui
 # Coverage report (written to /coverage/)
 npm run test:unit:coverage
 ```
-
-Note: the first invocation of `vitest run` in a fresh shell sometimes prints a
-"Vitest failed to find the runner" warning. This is a transient Vitest startup
-issue — running the same command a second time (or using `npm run test:unit`)
-always succeeds.
-
----
 
 ## What is tested
 
@@ -102,13 +96,19 @@ always succeeds.
 ### Hooks (`src/hooks/__tests__/`)
 
 Hook tests use `renderHook` + `act` from `@testing-library/react`. They mock
-`tauriValidation` entirely so no real IPC is needed.
+Tauri APIs or the validation wrapper, depending on the behavior under test, so no real IPC is needed.
 
 | File | Functions covered |
 |------|-------------------|
 | `useClassEditActions.test.ts` | `handleCreateClass`, `handleCreateField`, `handleCreateConstructor`, `handleCreateMethod` |
 | `useClassRemovalActions.test.ts` | `confirmRemoveClass` |
 | `useClassRenameActions.test.ts` | `deriveRenamedClassId`, `handleRenameClass` |
+| `useAppUpdater.test.ts` | Installability, channel selection, update state, and install handling |
+| `useLaunchBootstrap.test.tsx` | Startup completion and launch/open behavior |
+| `useProjectDrop.test.ts` | Native event handling, overlay state, guards, errors, and listener cleanup |
+| `useProjectActionFlow.test.ts` | Save/Discard/Cancel and pending project targets |
+| `useProjectActionOrchestration.test.ts` | Project action routing and blocking |
+| `useProjectIO.test.ts` | Shared menu/drop packed-project opening and error dialogs |
 
 ### Components (`src/components/*/__tests__/`)
 
@@ -121,15 +121,13 @@ Hook tests use `renderHook` + `act` from `@testing-library/react`. They mock
 
 ---
 
-## What is not unit tested (and why)
+## Browser smoke tests and native coverage
 
-| Category | Reason |
-|----------|--------|
-| Tauri IPC wrappers (`jshell.ts`, `settings.ts`, `updater.ts`, etc.) | No pure logic; testing requires a running Tauri binary — covered by e2e tests |
-| Monaco editor integration (`monacoJavaTokenizer.ts`) | Requires a live editor context |
-| Large React hooks not in `__tests__/` | Tightly coupled to Monaco, app state, and IPC; integration-test territory |
-| SVG/canvas export (`svgExport.ts`) | Browser Canvas API; better tested via e2e |
-| Constants files | No executable logic |
+`npm run test:e2e` runs Chromium against the Vite dev server using `playwright.config.ts`. Playwright starts the server automatically and reuses an existing server locally. The fixtures in `e2e/fixtures/tauriMock.ts` mock Tauri IPC and webview metadata. The current specs cover app launch, the welcome screen, and settings.
+
+These are browser smoke tests, not tests against a running Tauri binary. They do not verify native file pickers, operating-system drag events, packaged runtime resources, or updater installation. Keep the mock aligned with the current Tauri webview API when changing startup or event handling.
+
+Use a desktop build for native checks. For project drops, verify the overlay and opening over the editor, diagram, and console; Save/Discard/Cancel; multiple or unsupported items; invalid folders and corrupt archives; paths with spaces/non-ASCII characters; recent projects; and internal editor/diagram dragging. Verify that startup, busy states, and open dialogs block new drops. The [example projects](../examples/README.md) provide additional Java, diagram, console, and reload checks.
 
 ---
 
@@ -174,18 +172,18 @@ describe("myPureFunction", () => {
 ```ts
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { invoke } from "@tauri-apps/api/core";
+import { invokeValidated } from "../../services/tauriValidation";
 import { useMyHook } from "../useMyHook";
 
-vi.mock("../tauriValidation", () => ({
+vi.mock("../../services/tauriValidation", () => ({
   invokeValidated: vi.fn(),
 }));
 
 describe("useMyHook", () => {
-  it("calls invoke on action", async () => {
+  it("calls the validation wrapper on action", async () => {
     const { result } = renderHook(() => useMyHook());
-    await act(async () => { result.current.doSomething(); });
-    expect(invoke).toHaveBeenCalled();
+    await act(async () => { await result.current.doSomething(); });
+    expect(invokeValidated).toHaveBeenCalled();
   });
 });
 ```
@@ -201,7 +199,7 @@ Linux system dependencies required by Tauri before running the Rust tests.
 Steps in order:
 1. Install Node from `.node-version` and Rust stable
 2. `npm ci`
-3. `npm run lint` + `npm run typecheck`
+3. `npm run check:versions` + `npm run lint` + `npm run typecheck`
 4. Install Linux system deps (GTK, WebKit, etc.) then `npm run cargo:test`
 5. `npm run test:unit`
 6. Playwright install + `npm run test:e2e`
@@ -212,5 +210,7 @@ native wrapper launchers. It then runs `npm run test:java`, `npm run build:parse
 and `npm run build:jshell` to verify both tests and JAR packaging through the
 portable npm commands. Both bridges use Gradle 9.8.0 and target Java 25.
 
-The same lint + typecheck + Rust + Vitest gate is also wired into both release
-workflows (Windows and macOS builds) before the build steps run.
+The separate `Release Builds` workflow checks version consistency and builds the
+Java bridges and application bundles, but does not run the full test gate or
+wait for `Test Suite`. Confirm the intended release commit has passed that
+workflow before publishing.

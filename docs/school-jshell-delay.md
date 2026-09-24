@@ -23,7 +23,7 @@ made to fix them.
 | Property | Value |
 |---|---|
 | Domain | Windows Active Directory domain (school network) |
-| User home | Network drive (`Z:\` → UNC path on domain file server) |
+| User home | Mapped network drive backed by a domain file server |
 | Antivirus | ESET Endpoint Security (confirmed by `ESET_OPTIONS` env var) |
 | Installed JDKs | Eclipse Adoptium JDK 21 + JDK 8 (system-level, separate from bundled JDK) |
 | Comparison account | Local administrator account (no domain, ESET policies unenforced) |
@@ -35,8 +35,8 @@ Both accounts were tested on the same physical machine (confirmed by identical
 
 ## Diagnostic data collected
 
-A built-in JShell warmup diagnostic was run under both accounts. All numbers are
-from `tmp/admin/diagnostic-run.txt` and `tmp/user/diagnostic-run.txt`.
+A built-in JShell warmup diagnostic was run under both accounts. The numbers below
+were extracted from the diagnostic summaries; machine-specific paths are omitted.
 
 ### Admin account (baseline)
 
@@ -310,22 +310,10 @@ v0.14.4 on school machine (expected, fixes applied):
 
 ## Diagnostic files
 
-The raw evidence was collected into `tmp/` on the development machine.
-That directory is excluded by `.gitignore` and is not committed to the
-repository. The numbers quoted in this document were extracted from those
-files at the time of analysis. If you need the original traces, they are
-stored locally under:
-
-| Path | Contents |
-|---|---|
-| `tmp/admin/compile-run.txt` | Full debug log, admin account, 0.13.5 |
-| `tmp/user/compile-run.txt` | Full debug log, domain user, 0.13.5 |
-| `tmp/admin/diagnostic-run.txt` | JShell warmup diagnostic summary, admin |
-| `tmp/user/diagnostic-run.txt` | JShell warmup diagnostic summary, domain user |
-| `tmp/admin/jshell-diagnostic-*.jsonl` | Per-step JSONL trace, admin |
-| `tmp/user/jshell-diagnostic-*.jsonl` | Per-step JSONL trace, domain user |
-| `tmp/jshell-investigation/env-user.txt` | Environment variables for domain user |
-| `tmp/jshell-investigation/whoami-user.txt` | Group membership and privileges for domain user |
+The raw evidence is not committed to the repository. It included compile/run
+logs, JShell warmup summaries, per-step timing traces, and environment/account
+diagnostics for the two test conditions. The measurements above were extracted
+at the time of analysis. Personal details and local storage paths are omitted.
 
 ---
 

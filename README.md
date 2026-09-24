@@ -14,8 +14,9 @@ The original Unimozer focused on UML-first Java learning with BlueJ-like interac
 ## Current Feature Set
 
 - Project workflows for packed `.umz` archives and folder projects, including create/open/save/reload operations.
+- Drop one project folder or `.umz` file onto the window to open it, with a drop overlay, unsaved-changes confirmation, and error dialogs. Folder projects require a `src/` directory.
 - Java source-tree discovery/indexing for project operations and UML parsing, plus file editing with Monaco.
-- UML generation from Java source via `java-parser/parser-bridge.jar`.
+- UML generation from Java source via `resources/java-parser/parser-bridge.jar`.
 - Two-way model workflow: generate UML from source and update source with wizards (add class/field/constructor/method).
 - Diagram interaction: drag class nodes, zoom in/out/reset, package/dependency display toggles.
 - Diagram PNG copy/export in both uncompiled and compiled visual styles.
@@ -47,7 +48,7 @@ unimozer-next/
   jshell-bridge/        JShell JSON bridge
   resources/            Bundled runtime resources (folder skeleton tracked)
   docs/                 Developer notes (testing, updater, known issues)
-  examples/             Six example projects (UML, structogram, JShell, etc.)
+  examples/             Example projects (UML, structogram, JShell, etc.)
   DEVELOPMENT.md        Full developer setup and build guide
 ```
 
@@ -56,7 +57,7 @@ unimozer-next/
 > **First time?** See [DEVELOPMENT.md](DEVELOPMENT.md) for the full setup guide, including how to populate the required JDK, JDT LS, and bridge JAR resources.
 
 ```bash
-npm install
+npm ci
 npm run build:parser
 npm run build:jshell
 npm run tauri dev
@@ -67,7 +68,7 @@ npm run tauri dev
 - `npm run dev` - Vite frontend dev server
 - `npm run tauri dev` - full desktop app in dev mode
 - `npm run build` - frontend production build
-- `npm run tauri:build` - desktop installer build
+- `npm run tauri:build` - desktop packaging command; pass the platform configuration listed in [DEVELOPMENT.md](DEVELOPMENT.md#build-and-packaging)
 - `npm run typecheck` - TypeScript check (`tsc --noEmit`)
 - `npm run cargo:check` - Rust check for `src-tauri`
 - `npm run lint` - ESLint

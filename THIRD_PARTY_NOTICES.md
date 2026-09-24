@@ -2,22 +2,21 @@
 
 This product bundles third-party software components.
 
-The notices below cover the runtime components currently packaged in the Windows installer via `src-tauri/tauri.windows.conf.json`.
+The notices below describe the bundled JDK and JDT Language Server. These runtime components are packaged for Windows, macOS, and Linux using the platform-specific Tauri configurations under `src-tauri/`.
 
-## 1) Eclipse Temurin JDK (Windows x64)
+## 1) Eclipse Temurin JDK
 
 - Component: Eclipse Temurin JDK
 - Vendor: Eclipse Adoptium
-- Bundled location: `resources/jdk/win-x64`
-- Version (bundled): `25.0.1+8-LTS` (`JAVA_RUNTIME_VERSION`), `25.0.1` (`JAVA_VERSION`)
-- Implementor version: `Temurin-25.0.1+8`
+- Source resource locations: `resources/jdk/win-x64`, `resources/jdk/linux-x64`, `resources/jdk/mac-x64`, or `resources/jdk/mac-arm64`, according to the target platform
+- Major version: Java 25. Exact patch/build and implementor versions are recorded in the selected JDK's `release` file (`JAVA_RUNTIME_VERSION`, `JAVA_VERSION`, and `IMPLEMENTOR_VERSION`). Release archive URLs and checksums are pinned in GitHub Actions variables; see [DEVELOPMENT.md](DEVELOPMENT.md#required-actions-variables).
 
 ### License
 
 - SPDX: `GPL-2.0 WITH Classpath-exception-2.0`
 - See bundled notices:
-  - `resources/jdk/win-x64/NOTICE`
-  - `resources/jdk/win-x64/legal/` (module-level third-party and license attributions)
+  - `NOTICE` in the selected JDK directory
+  - `legal/` in that directory (module-level third-party and license attributions)
 
 ### Source Code
 
@@ -35,7 +34,7 @@ Additional project information:
 
 - Component: Eclipse JDT Language Server distribution
 - Bundled location: `resources/jdtls`
-- Included core bundle example: `resources/jdtls/plugins/org.eclipse.jdt.ls.core_1.56.0.202601291528.jar`
+- Core bundle: `resources/jdtls/plugins/org.eclipse.jdt.ls.core_<version>.jar`; the filename and bundle metadata identify the packaged version.
 
 ### License
 

@@ -3,7 +3,7 @@
 This module builds a small "bridge" JAR used by Unimozer Next. It:
 
 - Parses Java source files under a project source root (defaults to `src/`) and emits a UML graph JSON.
-- Performs small source-to-source edits used by the wizards (add field / constructor / method).
+- Performs small source-to-source edits (add field / constructor / method and rename class).
 
 The bridge reads a JSON request from `stdin` and writes a JSON response to `stdout` (no CLI args).
 
@@ -35,14 +35,16 @@ Unimozer Next bundles `resources/java-parser/` via the platform-specific Tauri c
 
 Request:
 
+The absolute paths below are placeholders; replace `/path/to/project` with the project directory.
+
 ```json
 {
-  "root": "E:\\UnimozerNext\\Projects\\Test1",
+  "root": "/path/to/project",
   "srcRoot": "src",
   "overrides": [
     {
-      "path": "E:\\UnimozerNext\\Projects\\Test1\\src\\example\\Foo.java",
-      "content": "package example;\\n\\npublic class Foo {}\\n"
+      "path": "/path/to/project/src/example/Foo.java",
+      "content": "package example;\n\npublic class Foo {}\n"
     }
   ]
 }
@@ -92,13 +94,14 @@ Types are resolved to project types using:
 
 External library types typically do not produce edges.
 
-## Source edits (`addField`, `addConstructor`, `addMethod`)
+## Source edits (`addField`, `addConstructor`, `addMethod`, `renameClass`)
 
 The bridge supports edits by setting `action` in the request JSON:
 
 - `addField`
 - `addConstructor`
 - `addMethod`
+- `renameClass`
 
 Each edit returns a JSON response like:
 
