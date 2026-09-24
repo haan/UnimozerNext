@@ -37,6 +37,10 @@ export const useDialogState = () => {
   const [missingRecentProjectPath, setMissingRecentProjectPath] = useState<string | null>(null);
   const [folderProjectErrorOpen, setFolderProjectErrorOpen] = useState(false);
   const [folderProjectErrorMessage, setFolderProjectErrorMessage] = useState<string | null>(null);
+  const [projectDropErrorOpen, setProjectDropErrorOpen] = useState(false);
+  const [projectDropErrorMessage, setProjectDropErrorMessage] = useState<string | null>(null);
+  const [packedProjectErrorOpen, setPackedProjectErrorOpen] = useState(false);
+  const [packedProjectErrorMessage, setPackedProjectErrorMessage] = useState<string | null>(null);
 
   const openAddClassDialog = useCallback(() => {
     setAddClassOpen(true);
@@ -190,6 +194,28 @@ export const useDialogState = () => {
     }
   }, []);
 
+  const openProjectDropErrorDialog = useCallback((message: string) => {
+    setProjectDropErrorMessage(message);
+    setProjectDropErrorOpen(true);
+  }, []);
+
+  const openPackedProjectErrorDialog = useCallback((message: string) => {
+    setPackedProjectErrorMessage(message);
+    setPackedProjectErrorOpen(true);
+  }, []);
+
+  const handlePackedProjectErrorOpenChange = useCallback((open: boolean) => {
+    setPackedProjectErrorOpen(open);
+    if (!open) setPackedProjectErrorMessage(null);
+  }, []);
+
+  const handleProjectDropErrorOpenChange = useCallback((open: boolean) => {
+    setProjectDropErrorOpen(open);
+    if (!open) {
+      setProjectDropErrorMessage(null);
+    }
+  }, []);
+
   return {
     addClassOpen,
     setAddClassOpen,
@@ -215,6 +241,14 @@ export const useDialogState = () => {
     missingRecentProjectPath,
     folderProjectErrorOpen,
     folderProjectErrorMessage,
+    projectDropErrorOpen,
+    projectDropErrorMessage,
+    packedProjectErrorOpen,
+    packedProjectErrorMessage,
+    openPackedProjectErrorDialog,
+    handlePackedProjectErrorOpenChange,
+    openProjectDropErrorDialog,
+    handleProjectDropErrorOpenChange,
     fieldTarget,
     constructorTarget,
     methodTarget,
@@ -245,4 +279,3 @@ export const useDialogState = () => {
     handleFolderProjectErrorOpenChange
   };
 };
-

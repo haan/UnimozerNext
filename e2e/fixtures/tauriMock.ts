@@ -88,6 +88,7 @@ export const test = base.extend({
         // Metadata needed by @tauri-apps/api/window's getCurrentWindow().
         metadata: {
           currentWindow: { label: "main" },
+          currentWebview: { label: "main", windowLabel: "main" },
           windows: [{ label: "main" }],
         },
 

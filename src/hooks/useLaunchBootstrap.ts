@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { parseSchemaOrNull, stringArraySchema } from "../services/tauriValidation";
 
 type UseLaunchBootstrapArgs = {
@@ -26,7 +26,9 @@ export const useLaunchBootstrap = ({
   handleNewProject,
   formatStatus,
   trimStatus
-}: UseLaunchBootstrapArgs): void => {
+}: UseLaunchBootstrapArgs): boolean => {
+  const [startupComplete, setStartupComplete] = useState(Boolean(projectPath));
+  const startupRunRef = useRef(0);
   const launchBootstrapStartedRef = useRef(false);
   const appendStartupDebugOutputRef = useRef(appendStartupDebugOutput);
   const appendLaunchDebugOutputRef = useRef(appendLaunchDebugOutput);
@@ -111,6 +113,7 @@ export const useLaunchBootstrap = ({
   useEffect(() => {
     if (projectPath || launchBootstrapStartedRef.current) return;
     launchBootstrapStartedRef.current = true;
+    const startupRun = ++startupRunRef.current;
     let active = true;
     let completed = false;
     const loadLaunchProject = async () => {
@@ -136,7 +139,13 @@ export const useLaunchBootstrap = ({
       }
       completed = true;
     };
-    void loadLaunchProject();
+    void loadLaunchProject().catch((error: unknown) => {
+      logLaunch(`[launch] startup failed: ${formatStatusRef.current(error)}`);
+    }).finally(() => {
+      // A Strict Mode re-registration supersedes the cancelled startup attempt.
+      // A projectPath change during opening must still allow this run to finish.
+      if (startupRunRef.current === startupRun) setStartupComplete(true);
+    });
     return () => {
       active = false;
       if (!completed) {
@@ -166,4 +175,5 @@ export const useLaunchBootstrap = ({
       }
     };
   }, [consumeQueuedLaunchPaths, logLaunch]);
+  return startupComplete;
 };

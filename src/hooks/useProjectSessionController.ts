@@ -48,6 +48,7 @@ type UseProjectSessionControllerArgs = {
   removeRecentProject: (entry: RecentProjectEntry) => void;
   onMissingRecentProject: (path: string) => void;
   onFolderProjectOpenError: (message: string) => void;
+  onPackedProjectOpenError: (message: string) => void;
 };
 
 export const useProjectSessionController = ({
@@ -85,7 +86,8 @@ export const useProjectSessionController = ({
   recordRecentProject,
   removeRecentProject,
   onMissingRecentProject,
-  onFolderProjectOpenError
+  onFolderProjectOpenError,
+  onPackedProjectOpenError
 }: UseProjectSessionControllerArgs) => {
   const beforeProjectSwitch = useCallback(async () => {
     await awaitPackedArchiveSync();
@@ -97,6 +99,7 @@ export const useProjectSessionController = ({
   const {
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenFolderProjectPath,
     handleOpenPackedProjectPath,
     handleOpenRecentProject,
     handleNewProject,
@@ -136,7 +139,8 @@ export const useProjectSessionController = ({
     recordRecentProject,
     removeRecentProject,
     onMissingRecentProject,
-    onFolderProjectOpenError
+    onFolderProjectOpenError,
+    onPackedProjectOpenError
   });
 
   const handleSave = useCallback(async () => {
@@ -173,6 +177,7 @@ export const useProjectSessionController = ({
     beforeProjectSwitch,
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenFolderProjectPath,
     handleOpenPackedProjectPath,
     handleOpenRecentProject,
     handleNewProject,

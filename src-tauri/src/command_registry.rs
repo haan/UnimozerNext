@@ -4,6 +4,7 @@ pub(crate) fn with_invoke_handlers(
     builder.invoke_handler(tauri::generate_handler![
         crate::fs_io::list_project_tree,
         crate::fs_io::validate_folder_project_root,
+        crate::fs_io::classify_project_path,
         crate::fs_io::read_text_file,
         crate::fs_io::write_text_file,
         crate::fs_io::write_binary_file,

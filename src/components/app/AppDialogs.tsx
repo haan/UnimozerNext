@@ -88,6 +88,12 @@ type AppDialogsProps = {
   folderProjectErrorOpen: boolean;
   folderProjectErrorMessage: string | null;
   onFolderProjectErrorOpenChange: (open: boolean) => void;
+  projectDropErrorOpen: boolean;
+  projectDropErrorMessage: string | null;
+  onProjectDropErrorOpenChange: (open: boolean) => void;
+  packedProjectErrorOpen: boolean;
+  packedProjectErrorMessage: string | null;
+  onPackedProjectErrorOpenChange: (open: boolean) => void;
   reloadFromDiskDialogOpen: boolean;
   onReloadFromDiskDialogOpenChange: (open: boolean) => void;
   onConfirmReloadFromDisk: () => void;
@@ -167,6 +173,12 @@ export const AppDialogs = ({
   folderProjectErrorOpen,
   folderProjectErrorMessage,
   onFolderProjectErrorOpenChange,
+  projectDropErrorOpen,
+  projectDropErrorMessage,
+  onProjectDropErrorOpenChange,
+  packedProjectErrorOpen,
+  packedProjectErrorMessage,
+  onPackedProjectErrorOpenChange,
   reloadFromDiskDialogOpen,
   onReloadFromDiskDialogOpenChange,
   onConfirmReloadFromDisk,
@@ -416,6 +428,43 @@ export const AppDialogs = ({
               "Selected folder is not a NetBeans project root. Required folder: src/."}
             </AlertDialogDescription>
         </AlertDialogHeader>
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogAction className="w-full">OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog
+      open={projectDropErrorOpen}
+      onOpenChange={onProjectDropErrorOpenChange}
+    >
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Cannot open dropped project</AlertDialogTitle>
+          <AlertDialogDescription className="text-center break-words">
+            {projectDropErrorMessage}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogAction className="w-full">OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog
+      open={packedProjectErrorOpen}
+      onOpenChange={onPackedProjectErrorOpenChange}
+    >
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Cannot open project</AlertDialogTitle>
+          <AlertDialogDescription className="text-center">
+            The selected file could not be opened as a .umz project.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {packedProjectErrorMessage ? (
+          <div className="mt-3 max-h-40 overflow-y-auto rounded-md border border-border bg-muted/40 px-3 py-2 font-mono text-xs text-foreground break-all whitespace-pre-wrap">
+            {packedProjectErrorMessage}
+          </div>
+        ) : null}
         <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
           <AlertDialogAction className="w-full">OK</AlertDialogAction>
         </AlertDialogFooter>

@@ -4,6 +4,7 @@ description = "Allow the frontend to use app commands."
 commands.allow = [
   "list_project_tree",
   "validate_folder_project_root",
+  "classify_project_path",
   "parse_uml_graph",
   "read_text_file",
   "write_text_file",

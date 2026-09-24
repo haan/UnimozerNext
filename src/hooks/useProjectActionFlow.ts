@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { MutableRefObject } from "react";
+
+export type ProjectOpenTarget = { path: string; kind: "folder" | "packed" };
 
 export type ProjectAction =
   | "open"
   | "openFolder"
   | "openRecent"
   | "new"
-  | "exit";
+  | "exit"
+  | { type: "openPath"; target: ProjectOpenTarget };
 
 type UseProjectActionFlowArgs = {
   busy: boolean;
   projectPath: string | null;
   hasPendingProjectChanges: boolean;
-  onOpenProject: () => void;
-  onOpenFolderProject: () => void;
-  onOpenRecentProject: () => void;
-  onNewProject: () => void;
+  projectDropPendingRef: MutableRefObject<boolean>;
+  onOpenProjectPath: (target: ProjectOpenTarget) => Promise<void>;
+  onOpenProject: () => void | Promise<void>;
+  onOpenFolderProject: () => void | Promise<void>;
+  onOpenRecentProject: () => void | Promise<void>;
+  onNewProject: () => void | Promise<void>;
   onExit: () => void;
   onSave: () => Promise<boolean>;
   onZoomIn: () => void;
@@ -26,8 +32,9 @@ type UseProjectActionFlowResult = {
   confirmProjectActionOpen: boolean;
   pendingProjectAction: ProjectAction | null;
   projectActionConfirmBusy: boolean;
-  requestProjectAction: (action: ProjectAction) => void;
-  saveAndConfirmProjectAction: () => void;
+  requestProjectAction: (action: ProjectAction) => Promise<void>;
+  isProjectActionPending: () => boolean;
+  saveAndConfirmProjectAction: () => Promise<void>;
   confirmProjectAction: () => void;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
 };
@@ -36,6 +43,8 @@ export const useProjectActionFlow = ({
   busy,
   projectPath,
   hasPendingProjectChanges,
+  projectDropPendingRef,
+  onOpenProjectPath,
   onOpenProject,
   onOpenFolderProject,
   onOpenRecentProject,
@@ -50,6 +59,14 @@ export const useProjectActionFlow = ({
   const [pendingProjectAction, setPendingProjectAction] = useState<ProjectAction | null>(null);
   const [projectActionConfirmBusy, setProjectActionConfirmBusy] = useState(false);
   const projectActionConfirmBusyRef = useRef(false);
+  // Keep ownership synchronously, including while a picker or project open is awaiting IPC.
+  const activeRequestRef = useRef<{
+    action: ProjectAction;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+    running: boolean;
+  } | null>(null);
+  const isProjectActionPending = useCallback(() => activeRequestRef.current !== null, []);
 
   const setProjectActionConfirmBusyState = useCallback((busyState: boolean) => {
     projectActionConfirmBusyRef.current = busyState;
@@ -57,17 +74,19 @@ export const useProjectActionFlow = ({
   }, []);
 
   const runProjectAction = useCallback(
-    (action: ProjectAction) => {
-      if (action === "open") {
-        onOpenProject();
+    async (action: ProjectAction) => {
+      if (typeof action === "object") {
+        await onOpenProjectPath(action.target);
+      } else if (action === "open") {
+        await onOpenProject();
       } else if (action === "openFolder") {
-        onOpenFolderProject();
+        await onOpenFolderProject();
       } else if (action === "openRecent") {
-        onOpenRecentProject();
+        await onOpenRecentProject();
       } else if (action === "exit") {
         onExit();
       } else {
-        onNewProject();
+        await onNewProject();
       }
     },
     [
@@ -75,65 +94,92 @@ export const useProjectActionFlow = ({
       onNewProject,
       onOpenFolderProject,
       onOpenProject,
+      onOpenProjectPath,
       onOpenRecentProject
     ]
   );
 
+  const executeActiveRequest = useCallback(async () => {
+    const request = activeRequestRef.current;
+    if (!request || request.running) return;
+    request.running = true;
+    setConfirmProjectActionOpen(false);
+    setPendingProjectAction(null);
+    try {
+      await runProjectAction(request.action);
+      request.resolve();
+    } catch (error) {
+      request.reject(error);
+    } finally {
+      if (activeRequestRef.current === request) activeRequestRef.current = null;
+      setProjectActionConfirmBusyState(false);
+    }
+  }, [runProjectAction, setProjectActionConfirmBusyState]);
+
   const requestProjectAction = useCallback(
-    (action: ProjectAction) => {
-      if (!hasPendingProjectChanges) {
-        runProjectAction(action);
-        return;
+    (action: ProjectAction): Promise<void> => {
+      if (activeRequestRef.current || (projectDropPendingRef.current && typeof action === "string")) {
+        return Promise.resolve();
       }
-      setPendingProjectAction(action);
-      setConfirmProjectActionOpen(true);
+      return new Promise<void>((resolve, reject) => {
+        activeRequestRef.current = { action, resolve, reject, running: false };
+        if (!hasPendingProjectChanges) {
+          void executeActiveRequest();
+          return;
+        }
+        setPendingProjectAction(action);
+        setConfirmProjectActionOpen(true);
+      });
     },
-    [hasPendingProjectChanges, runProjectAction]
+    [executeActiveRequest, hasPendingProjectChanges, projectDropPendingRef]
   );
 
   const confirmProjectAction = useCallback(() => {
-    if (projectActionConfirmBusyRef.current) {
+    if (projectActionConfirmBusyRef.current || !activeRequestRef.current) {
       return;
     }
-    const action = pendingProjectAction;
     setProjectActionConfirmBusyState(true);
-    setConfirmProjectActionOpen(false);
-    setPendingProjectAction(null);
-    if (action) {
-      runProjectAction(action);
-    }
-    setProjectActionConfirmBusyState(false);
-  }, [pendingProjectAction, runProjectAction, setProjectActionConfirmBusyState]);
+    void executeActiveRequest();
+  }, [executeActiveRequest, setProjectActionConfirmBusyState]);
 
   const saveAndConfirmProjectAction = useCallback(async () => {
     if (projectActionConfirmBusyRef.current) {
       return;
     }
-    const action = pendingProjectAction;
-    if (!action) {
+    const request = activeRequestRef.current;
+    if (!request || request.running) {
       return;
     }
 
     setProjectActionConfirmBusyState(true);
-    const saved = await onSave();
-    if (!saved) {
+    try {
+      const saved = await onSave();
+      if (saved && activeRequestRef.current === request) {
+        await executeActiveRequest();
+      }
+    } finally {
       setProjectActionConfirmBusyState(false);
-      return;
     }
-
-    setConfirmProjectActionOpen(false);
-    setPendingProjectAction(null);
-    runProjectAction(action);
-    setProjectActionConfirmBusyState(false);
-  }, [onSave, pendingProjectAction, runProjectAction, setProjectActionConfirmBusyState]);
+  }, [executeActiveRequest, onSave, setProjectActionConfirmBusyState]);
 
   const onConfirmProjectActionOpenChange = useCallback((open: boolean) => {
+    if (projectActionConfirmBusyRef.current) return;
     setConfirmProjectActionOpen(open);
     if (!open) {
+      const request = activeRequestRef.current;
+      if (request && !request.running) {
+        activeRequestRef.current = null;
+        request.resolve();
+      }
       setPendingProjectAction(null);
       setProjectActionConfirmBusyState(false);
     }
   }, [setProjectActionConfirmBusyState]);
+
+  useEffect(() => () => {
+    activeRequestRef.current?.resolve();
+    activeRequestRef.current = null;
+  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -155,7 +201,7 @@ export const useProjectActionFlow = ({
       }
       if (key === "s") {
         event.preventDefault();
-        if (busy || !projectPath) return;
+        if (busy || !projectPath || activeRequestRef.current || projectDropPendingRef.current) return;
         void onSave();
         return;
       }
@@ -178,16 +224,16 @@ export const useProjectActionFlow = ({
     return () => {
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [busy, onSave, onZoomIn, onZoomOut, onZoomReset, projectPath, requestProjectAction]);
+  }, [busy, onSave, onZoomIn, onZoomOut, onZoomReset, projectDropPendingRef, projectPath, requestProjectAction]);
 
   return {
     confirmProjectActionOpen,
     pendingProjectAction,
     projectActionConfirmBusy,
     requestProjectAction,
+    isProjectActionPending,
     saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange
   };
 };
-

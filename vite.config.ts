@@ -6,10 +6,10 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: [
-      { find: "@", replacement: path.resolve(__dirname, "src") },
+      { find: "@", replacement: path.resolve(import.meta.dirname, "src") },
       {
         find: /^monaco-themes\/themes/,
-        replacement: path.resolve(__dirname, "node_modules/monaco-themes/themes")
+        replacement: path.resolve(import.meta.dirname, "node_modules/monaco-themes/themes")
       }
     ]
   },
