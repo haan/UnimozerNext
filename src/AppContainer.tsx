@@ -6,6 +6,7 @@ import { AppMenu } from "./components/app/AppMenu";
 import { AppWorkspacePanels } from "./components/app/AppWorkspacePanels";
 import type { DiagramViewMode } from "./components/diagram/DiagramPanel";
 import { AppDialogs } from "./components/app/AppDialogs";
+import { ProjectDropOverlay } from "./components/app/ProjectDropOverlay";
 import { Toaster } from "./components/ui/sonner";
 import type { DiagramState } from "./models/diagram";
 import type { FileNode } from "./models/files";
@@ -992,7 +993,7 @@ export default function AppContainer({
     removeClassOpen || renameClassOpen || renameClassErrorOpen || missingRecentProjectOpen ||
     folderProjectErrorOpen || reloadFromDiskDialogOpen || updateAvailableOpen ||
     confirmProjectActionOpen || projectDropErrorOpen;
-  useProjectDrop({
+  const showProjectDropOverlay = useProjectDrop({
     blocked: projectDropBlocked,
     projectDropPendingRef,
     isProjectActionPending,
@@ -1388,6 +1389,7 @@ export default function AppContainer({
         busy={busy}
       />
       <Toaster theme={darkMode ? "dark" : "light"} />
+      <ProjectDropOverlay visible={showProjectDropOverlay} />
     </div>
   );
 }

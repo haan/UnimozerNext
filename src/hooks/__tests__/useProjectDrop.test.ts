@@ -33,6 +33,74 @@ beforeEach(() => {
 });
 
 describe("useProjectDrop", () => {
+  it("shows the overlay on enter and keeps it visible while hovering without opening anything", async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useProjectDrop(args));
+    expect(result.current).toBe(false);
+    await emit(["/project"], "enter");
+    expect(result.current).toBe(true);
+    await emit([], "over");
+    expect(result.current).toBe(true);
+    expect(invoke).not.toHaveBeenCalled();
+    expect(args.onOpenProjectPath).not.toHaveBeenCalled();
+  });
+
+  it.each(["leave", "drop"])("hides the overlay on %s", async (type) => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useProjectDrop(args));
+    await emit(["/project"], "enter");
+    await emit(["/project"], type);
+    expect(result.current).toBe(false);
+    expect(args.onOpenProjectPath).toHaveBeenCalledTimes(type === "drop" ? 1 : 0);
+  });
+
+  it("clears the overlay when the app becomes blocked and does not revive a stale drag", async () => {
+    const args = makeArgs();
+    const { result, rerender } = renderHook((props) => useProjectDrop(props), { initialProps: args });
+    await emit(["/project"], "enter");
+    expect(result.current).toBe(true);
+    rerender({ ...args, blocked: true });
+    expect(result.current).toBe(false);
+    await emit(["/project"], "enter");
+    expect(result.current).toBe(false);
+    rerender(args);
+    await emit([], "over");
+    expect(result.current).toBe(false);
+    await emit(["/project"], "enter");
+    expect(result.current).toBe(true);
+  });
+
+  it("hides the overlay when another action starts during a drag", async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useProjectDrop(args));
+    await emit(["/project"], "enter");
+    args.isProjectActionPending.mockReturnValue(true);
+    await emit([], "over");
+    expect(result.current).toBe(false);
+    await emit(["/project"], "enter");
+    expect(result.current).toBe(false);
+  });
+
+  it("does not show the overlay for empty drags or while processing a drop", async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useProjectDrop(args));
+    await emit([], "enter");
+    expect(result.current).toBe(false);
+    args.projectDropPendingRef.current = true;
+    await emit(["/project"], "enter");
+    expect(result.current).toBe(false);
+  });
+
+  it("hides the overlay before showing a multi-drop error dialog", async () => {
+    const args = makeArgs();
+    const { result } = renderHook(() => useProjectDrop(args));
+    await emit(["/one", "/two"], "enter");
+    expect(result.current).toBe(true);
+    await emit(["/one", "/two"]);
+    expect(result.current).toBe(false);
+    expect(args.onDropError).toHaveBeenCalledOnce();
+  });
+
   it.each(["folder", "packed"])("opens a classified %s using the original path", async (kind) => {
     vi.mocked(invoke).mockResolvedValue(kind);
     const args = makeArgs();

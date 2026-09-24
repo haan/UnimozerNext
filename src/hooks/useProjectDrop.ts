@@ -1,5 +1,5 @@
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 
 import { invokeValidated, projectPathKindSchema } from "../services/tauriValidation";
@@ -15,7 +15,10 @@ type UseProjectDropArgs = {
   formatStatus: (error: unknown) => string;
 };
 
-export const useProjectDrop = (args: UseProjectDropArgs): void => {
+export const useProjectDrop = (args: UseProjectDropArgs): boolean => {
+  const [draggingFiles, setDraggingFiles] = useState(false);
+  // Forget a drag as soon as a dialog or busy state blocks the target.
+  if (args.blocked && draggingFiles) setDraggingFiles(false);
   const latestRef = useRef(args);
   useEffect(() => {
     latestRef.current = args;
@@ -65,7 +68,19 @@ export const useProjectDrop = (args: UseProjectDropArgs): void => {
     const register = async () => {
       try {
         unlisten = await getCurrentWebviewWindow().onDragDropEvent((event) => {
-          if (event.payload.type === "drop") void handleDrop(event.payload.paths);
+          if (disposed) return;
+          const current = latestRef.current;
+          const blocked = current.blocked || current.isProjectActionPending() ||
+            current.projectDropPendingRef.current;
+          if (event.payload.type === "enter") {
+            setDraggingFiles(!blocked && event.payload.paths.length > 0);
+          } else if (event.payload.type === "over") {
+            if (blocked) setDraggingFiles(false);
+          } else {
+            // Both dropping and cancelling/leaving end the drag preview.
+            setDraggingFiles(false);
+            if (event.payload.type === "drop") void handleDrop(event.payload.paths);
+          }
         });
         if (disposed) unlisten();
       } catch (error) {
@@ -81,4 +96,5 @@ export const useProjectDrop = (args: UseProjectDropArgs): void => {
       unlisten?.();
     };
   }, []);
+  return draggingFiles && !args.blocked;
 };
