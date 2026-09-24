@@ -7,11 +7,13 @@ group = 'com.unimozer'
 version = '0.6.1'
 
 java {
-  sourceCompatibility = JavaVersion.VERSION_17
-  targetCompatibility = JavaVersion.VERSION_17
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(25)
+  }
 }
 
 tasks.withType(JavaCompile).configureEach {
+  options.release = 25
   options.compilerArgs << "-Xlint:unchecked"
 }
 
@@ -47,7 +49,6 @@ jar {
 }
 
 tasks.register('copyBridgeJar', Copy) {
-  dependsOn jar
-  from "$buildDir/libs/parser-bridge.jar"
+  from tasks.named('jar')
   into "${rootProject.projectDir}/../resources/java-parser"
 }

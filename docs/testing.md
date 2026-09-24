@@ -199,14 +199,18 @@ and on every pull request. The workflow runs on `ubuntu-latest` and installs
 Linux system dependencies required by Tauri before running the Rust tests.
 
 Steps in order:
-1. Install Node 22, Java 17 (Temurin), Rust stable
+1. Install Node from `.node-version` and Rust stable
 2. `npm ci`
 3. `npm run lint` + `npm run typecheck`
 4. Install Linux system deps (GTK, WebKit, etc.) then `npm run cargo:test`
-5. `cd java-parser && gradle test --no-daemon`
-6. `cd jshell-bridge && gradle test --no-daemon`
-7. `npm run test:unit`
-8. Playwright install + `npm run test:e2e`
+5. `npm run test:unit`
+6. Playwright install + `npm run test:e2e`
+
+A separate Java bridge matrix runs on Windows, macOS, and Linux. It installs
+Temurin Java 25, validates the committed Gradle Wrapper JARs, and exercises the
+native wrapper launchers. It then runs `npm run test:java`, `npm run build:parser`,
+and `npm run build:jshell` to verify both tests and JAR packaging through the
+portable npm commands. Both bridges use Gradle 9.8.0 and target Java 25.
 
 The same lint + typecheck + Rust + Vitest gate is also wired into both release
 workflows (Windows and macOS builds) before the build steps run.
