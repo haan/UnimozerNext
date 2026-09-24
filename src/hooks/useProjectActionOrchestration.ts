@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
+import type { MutableRefObject } from "react";
 
 import type { RecentProjectEntry } from "../models/settings";
-import { useProjectActionFlow, type ProjectAction } from "./useProjectActionFlow";
+import { useProjectActionFlow, type ProjectAction, type ProjectOpenTarget } from "./useProjectActionFlow";
 import { useWindowCloseGuard } from "./useWindowCloseGuard";
 
 type UseProjectActionOrchestrationArgs = {
@@ -9,9 +10,12 @@ type UseProjectActionOrchestrationArgs = {
   updateInstallBusy: boolean;
   projectPath: string | null;
   hasPendingProjectChanges: boolean;
+  projectDropPendingRef: MutableRefObject<boolean>;
   awaitBeforeExit: () => Promise<void>;
   handleOpenProject: () => Promise<void>;
   handleOpenFolderProject: () => Promise<void>;
+  handleOpenFolderProjectPath: (path: string) => Promise<void>;
+  handleOpenPackedProjectPath: (path: string) => Promise<void>;
   handleOpenRecentProject: (entry: RecentProjectEntry) => Promise<void>;
   handleNewProject: () => Promise<void>;
   handleSave: () => Promise<boolean>;
@@ -25,13 +29,15 @@ type UseProjectActionOrchestrationResult = {
   confirmProjectActionOpen: boolean;
   pendingProjectAction: ProjectAction | null;
   projectActionConfirmBusy: boolean;
-  saveAndConfirmProjectAction: () => void;
+  saveAndConfirmProjectAction: () => Promise<void>;
   confirmProjectAction: () => void;
   onConfirmProjectActionOpenChange: (open: boolean) => void;
   onRequestNewProject: () => void;
   onRequestOpenProject: () => void;
   onRequestOpenFolderProject: () => void;
   onRequestOpenRecentProject: (entry: RecentProjectEntry) => void;
+  onRequestOpenProjectPath: (target: ProjectOpenTarget) => Promise<void>;
+  isProjectActionPending: () => boolean;
   onRequestExit: () => void;
   onSave: () => void;
   onSaveAs: () => void;
@@ -42,9 +48,12 @@ export const useProjectActionOrchestration = ({
   updateInstallBusy,
   projectPath,
   hasPendingProjectChanges,
+  projectDropPendingRef,
   awaitBeforeExit,
   handleOpenProject,
   handleOpenFolderProject,
+  handleOpenFolderProjectPath,
+  handleOpenPackedProjectPath,
   handleOpenRecentProject,
   handleNewProject,
   handleSave,
@@ -68,6 +77,7 @@ export const useProjectActionOrchestration = ({
     pendingProjectAction,
     projectActionConfirmBusy,
     requestProjectAction,
+    isProjectActionPending,
     saveAndConfirmProjectAction,
     confirmProjectAction,
     onConfirmProjectActionOpenChange
@@ -75,22 +85,20 @@ export const useProjectActionOrchestration = ({
     busy: projectActionBusy,
     projectPath,
     hasPendingProjectChanges,
-    onOpenProject: () => {
-      void handleOpenProject();
-    },
-    onOpenFolderProject: () => {
-      void handleOpenFolderProject();
-    },
+    projectDropPendingRef,
+    onOpenProjectPath: (target) => target.kind === "folder"
+      ? handleOpenFolderProjectPath(target.path)
+      : handleOpenPackedProjectPath(target.path),
+    onOpenProject: handleOpenProject,
+    onOpenFolderProject: handleOpenFolderProject,
     onOpenRecentProject: () => {
       const entry = pendingRecentProjectRef.current;
       pendingRecentProjectRef.current = null;
       if (entry) {
-        void handleOpenRecentProject(entry);
+        return handleOpenRecentProject(entry);
       }
     },
-    onNewProject: () => {
-      void handleNewProject();
-    },
+    onNewProject: handleNewProject,
     onExit: guardedExit,
     onSave: handleSave,
     onZoomIn: handleZoomIn,
@@ -125,11 +133,19 @@ export const useProjectActionOrchestration = ({
 
   const onRequestOpenRecentProject = useCallback(
     (entry: RecentProjectEntry) => {
-      if (projectActionBusy) {
+      if (projectActionBusy || isProjectActionPending() || projectDropPendingRef.current) {
         return;
       }
       pendingRecentProjectRef.current = entry;
       requestProjectAction("openRecent");
+    },
+    [isProjectActionPending, projectActionBusy, projectDropPendingRef, requestProjectAction]
+  );
+
+  const onRequestOpenProjectPath = useCallback(
+    (target: ProjectOpenTarget) => {
+      if (projectActionBusy) return Promise.resolve();
+      return requestProjectAction({ type: "openPath", target });
     },
     [projectActionBusy, requestProjectAction]
   );
@@ -137,11 +153,11 @@ export const useProjectActionOrchestration = ({
   const handleConfirmProjectActionOpenChange = useCallback(
     (open: boolean) => {
       onConfirmProjectActionOpenChange(open);
-      if (!open) {
+      if (!open && !isProjectActionPending()) {
         pendingRecentProjectRef.current = null;
       }
     },
-    [onConfirmProjectActionOpenChange]
+    [isProjectActionPending, onConfirmProjectActionOpenChange]
   );
 
   const onRequestExit = useCallback(() => {
@@ -152,12 +168,14 @@ export const useProjectActionOrchestration = ({
   }, [projectActionBusy, requestProjectAction]);
 
   const onSave = useCallback(() => {
+    if (isProjectActionPending() || projectDropPendingRef.current) return;
     void handleSave();
-  }, [handleSave]);
+  }, [handleSave, isProjectActionPending, projectDropPendingRef]);
 
   const onSaveAs = useCallback(() => {
+    if (isProjectActionPending() || projectDropPendingRef.current) return;
     void handleSaveAs();
-  }, [handleSaveAs]);
+  }, [handleSaveAs, isProjectActionPending, projectDropPendingRef]);
 
   return {
     confirmProjectActionOpen,
@@ -170,6 +188,8 @@ export const useProjectActionOrchestration = ({
     onRequestOpenProject,
     onRequestOpenFolderProject,
     onRequestOpenRecentProject,
+    onRequestOpenProjectPath,
+    isProjectActionPending,
     onRequestExit,
     onSave,
     onSaveAs

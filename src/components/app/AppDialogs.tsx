@@ -88,6 +88,9 @@ type AppDialogsProps = {
   folderProjectErrorOpen: boolean;
   folderProjectErrorMessage: string | null;
   onFolderProjectErrorOpenChange: (open: boolean) => void;
+  projectDropErrorOpen: boolean;
+  projectDropErrorMessage: string | null;
+  onProjectDropErrorOpenChange: (open: boolean) => void;
   reloadFromDiskDialogOpen: boolean;
   onReloadFromDiskDialogOpenChange: (open: boolean) => void;
   onConfirmReloadFromDisk: () => void;
@@ -167,6 +170,9 @@ export const AppDialogs = ({
   folderProjectErrorOpen,
   folderProjectErrorMessage,
   onFolderProjectErrorOpenChange,
+  projectDropErrorOpen,
+  projectDropErrorMessage,
+  onProjectDropErrorOpenChange,
   reloadFromDiskDialogOpen,
   onReloadFromDiskDialogOpenChange,
   onConfirmReloadFromDisk,
@@ -415,6 +421,22 @@ export const AppDialogs = ({
               {folderProjectErrorMessage ??
               "Selected folder is not a NetBeans project root. Required folder: src/."}
             </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
+          <AlertDialogAction className="w-full">OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+    <AlertDialog
+      open={projectDropErrorOpen}
+      onOpenChange={onProjectDropErrorOpenChange}
+    >
+      <AlertDialogContent size="sm">
+        <AlertDialogHeader className="items-center text-center">
+          <AlertDialogTitle>Cannot open dropped project</AlertDialogTitle>
+          <AlertDialogDescription className="text-center break-words">
+            {projectDropErrorMessage}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="-mx-6 -mb-6 mt-4 border-t border-border bg-muted/40 px-6 py-4">
           <AlertDialogAction className="w-full">OK</AlertDialogAction>

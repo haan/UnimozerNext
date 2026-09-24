@@ -63,6 +63,24 @@ pub fn list_project_tree(root: String) -> CommandResult<FileNode> {
 }
 
 #[tauri::command]
+pub fn classify_project_path(path: String) -> CommandResult<&'static str> {
+    let path = PathBuf::from(path);
+    let metadata = fs::metadata(&path).map_err(to_command_error)?;
+    if metadata.is_dir() {
+        return Ok("folder");
+    }
+    if metadata.is_file()
+        && path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("umz"))
+    {
+        return Ok("packed");
+    }
+    Ok("unsupported")
+}
+
+#[tauri::command]
 pub fn validate_folder_project_root(root: String) -> CommandResult<()> {
     let root_path = PathBuf::from(&root);
     if !root_path.exists() {
@@ -421,6 +439,44 @@ fn directory_visit_key(path: &Path) -> io::Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn classify_project_paths_by_metadata_and_extension() {
+        let timestamp = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root =
+            std::env::temp_dir().join(format!("unimozer-drop-{}-{timestamp}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        for name in ["project folder", "folder.umz"] {
+            let path = root.join(name);
+            fs::create_dir(&path).unwrap();
+            assert_eq!(
+                classify_project_path(path.to_string_lossy().into_owned()).unwrap(),
+                "folder"
+            );
+        }
+        for (name, expected) in [
+            ("project.umz", "packed"),
+            ("Über project.UMZ", "packed"),
+            ("project.UmZ", "packed"),
+            ("Class.java", "unsupported"),
+            ("archive.zip", "unsupported"),
+            ("README", "unsupported"),
+        ] {
+            let path = root.join(name);
+            fs::write(&path, "").unwrap();
+            assert_eq!(
+                classify_project_path(path.to_string_lossy().into_owned()).unwrap(),
+                expected
+            );
+        }
+        assert!(
+            classify_project_path(root.join("missing.umz").to_string_lossy().into_owned()).is_err()
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn update_fnv64_empty_input_leaves_hash_unchanged() {

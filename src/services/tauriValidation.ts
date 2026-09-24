@@ -40,6 +40,7 @@ export const invokeValidated = async <T>(
 
 export const stringArraySchema = z.array(z.string());
 export const stringSchema = z.string();
+export const projectPathKindSchema = z.enum(["folder", "packed", "unsupported"]);
 export const voidResponseSchema = z
   .union([z.null(), z.undefined()])
   .transform(() => undefined);

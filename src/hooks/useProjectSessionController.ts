@@ -97,6 +97,7 @@ export const useProjectSessionController = ({
   const {
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenFolderProjectPath,
     handleOpenPackedProjectPath,
     handleOpenRecentProject,
     handleNewProject,
@@ -173,6 +174,7 @@ export const useProjectSessionController = ({
     beforeProjectSwitch,
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenFolderProjectPath,
     handleOpenPackedProjectPath,
     handleOpenRecentProject,
     handleNewProject,

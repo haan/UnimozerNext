@@ -27,6 +27,7 @@ import { useAppMenuState } from "./hooks/useAppMenuState";
 import { useProjectSessionState } from "./hooks/useProjectSessionState";
 import { useProjectSessionController } from "./hooks/useProjectSessionController";
 import { useProjectActionOrchestration } from "./hooks/useProjectActionOrchestration";
+import { useProjectDrop } from "./hooks/useProjectDrop";
 import { useDialogState } from "./hooks/useDialogState";
 import { useDiagramInteractions } from "./hooks/useDiagramInteractions";
 import { useClassEditActions } from "./hooks/useClassEditActions";
@@ -122,6 +123,7 @@ export default function AppContainer({
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
   const fontSizeRef = useRef(settings.general.fontSize);
+  const projectDropPendingRef = useRef(false);
   const {
     addClassOpen,
     setAddClassOpen,
@@ -172,6 +174,10 @@ export default function AppContainer({
     handleMissingRecentProjectOpenChange,
     folderProjectErrorOpen,
     folderProjectErrorMessage,
+    projectDropErrorOpen,
+    projectDropErrorMessage,
+    openProjectDropErrorDialog,
+    handleProjectDropErrorOpenChange,
     openFolderProjectErrorDialog,
     handleFolderProjectErrorOpenChange
   } = useDialogState();
@@ -596,6 +602,7 @@ export default function AppContainer({
   const {
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenFolderProjectPath,
     handleOpenPackedProjectPath,
     handleOpenRecentProject,
     handleNewProject,
@@ -642,7 +649,7 @@ export default function AppContainer({
     onFolderProjectOpenError: (message) => openFolderProjectErrorDialog(message)
   });
 
-  useLaunchBootstrap({
+  const startupComplete = useLaunchBootstrap({
     projectPath,
     startupDebugEnabled: debugLogging && debugLogCategories.startup,
     appendStartupDebugOutput:
@@ -954,6 +961,8 @@ export default function AppContainer({
     onRequestOpenProject,
     onRequestOpenFolderProject,
     onRequestOpenRecentProject,
+    onRequestOpenProjectPath,
+    isProjectActionPending,
     onRequestExit,
     onSave: onSaveProject,
     onSaveAs: onSaveProjectAs
@@ -962,9 +971,12 @@ export default function AppContainer({
     updateInstallBusy,
     projectPath,
     hasPendingProjectChanges,
+    projectDropPendingRef,
     awaitBeforeExit: awaitDiagramAndPackedSync,
     handleOpenProject,
     handleOpenFolderProject,
+    handleOpenFolderProjectPath,
+    handleOpenPackedProjectPath,
     handleOpenRecentProject,
     handleNewProject,
     handleSave: handleSaveAndRefreshDiskSnapshot,
@@ -972,6 +984,22 @@ export default function AppContainer({
     handleZoomIn,
     handleZoomOut,
     handleZoomReset
+  });
+
+  const projectDropBlocked = !startupComplete || busy || updateInstallBusy ||
+    settingsOpen || aboutOpen || addClassOpen || addFieldOpen || addConstructorOpen ||
+    addMethodOpen || createObjectOpen || callMethodOpen || methodReturnOpen ||
+    removeClassOpen || renameClassOpen || renameClassErrorOpen || missingRecentProjectOpen ||
+    folderProjectErrorOpen || reloadFromDiskDialogOpen || updateAvailableOpen ||
+    confirmProjectActionOpen || projectDropErrorOpen;
+  useProjectDrop({
+    blocked: projectDropBlocked,
+    projectDropPendingRef,
+    isProjectActionPending,
+    onOpenProjectPath: onRequestOpenProjectPath,
+    onDropError: openProjectDropErrorDialog,
+    setStatus,
+    formatStatus
   });
 
   const {
@@ -1337,6 +1365,9 @@ export default function AppContainer({
         onMissingRecentProjectOpenChange={handleMissingRecentProjectOpenChange}
         folderProjectErrorOpen={folderProjectErrorOpen}
         folderProjectErrorMessage={folderProjectErrorMessage}
+        projectDropErrorOpen={projectDropErrorOpen}
+        projectDropErrorMessage={projectDropErrorMessage}
+        onProjectDropErrorOpenChange={handleProjectDropErrorOpenChange}
         onFolderProjectErrorOpenChange={handleFolderProjectErrorOpenChange}
         reloadFromDiskDialogOpen={reloadFromDiskDialogOpen}
         onReloadFromDiskDialogOpenChange={onReloadFromDiskDialogOpenChange}

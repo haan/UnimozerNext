@@ -37,6 +37,8 @@ export const useDialogState = () => {
   const [missingRecentProjectPath, setMissingRecentProjectPath] = useState<string | null>(null);
   const [folderProjectErrorOpen, setFolderProjectErrorOpen] = useState(false);
   const [folderProjectErrorMessage, setFolderProjectErrorMessage] = useState<string | null>(null);
+  const [projectDropErrorOpen, setProjectDropErrorOpen] = useState(false);
+  const [projectDropErrorMessage, setProjectDropErrorMessage] = useState<string | null>(null);
 
   const openAddClassDialog = useCallback(() => {
     setAddClassOpen(true);
@@ -190,6 +192,18 @@ export const useDialogState = () => {
     }
   }, []);
 
+  const openProjectDropErrorDialog = useCallback((message: string) => {
+    setProjectDropErrorMessage(message);
+    setProjectDropErrorOpen(true);
+  }, []);
+
+  const handleProjectDropErrorOpenChange = useCallback((open: boolean) => {
+    setProjectDropErrorOpen(open);
+    if (!open) {
+      setProjectDropErrorMessage(null);
+    }
+  }, []);
+
   return {
     addClassOpen,
     setAddClassOpen,
@@ -215,6 +229,10 @@ export const useDialogState = () => {
     missingRecentProjectPath,
     folderProjectErrorOpen,
     folderProjectErrorMessage,
+    projectDropErrorOpen,
+    projectDropErrorMessage,
+    openProjectDropErrorDialog,
+    handleProjectDropErrorOpenChange,
     fieldTarget,
     constructorTarget,
     methodTarget,
@@ -245,4 +263,3 @@ export const useDialogState = () => {
     handleFolderProjectErrorOpenChange
   };
 };
-
