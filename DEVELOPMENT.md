@@ -4,10 +4,20 @@ This document covers everything needed to go from a fresh clone to a running dev
 
 ## Prerequisites
 
-- Node.js 22+ (22 is the tested version in CI)
+- Node.js matching `.node-version` (the version used in CI)
 - Rust toolchain (cargo)
-- JDK 17+ (to build Java bridge modules)
-- Gradle (required for `java-parser` and `jshell-bridge` module builds)
+- JDK 25 LTS (to build, test, and run Java bridge modules)
+
+Set `JAVA_HOME` to your JDK 25 installation. Both Java bridges use a Java 25
+toolchain and produce JARs that require Java 25 or newer. The application already
+bundles Java 25 for runtime use.
+
+No separate Gradle installation is required. Each bridge includes a Gradle 9.8.0
+Wrapper, pinned with a distribution SHA-256 checksum. The first build downloads
+Gradle; subsequent builds reuse its local cache. The `npm run build:parser`,
+`npm run build:jshell`, and `npm run test:java` commands use these wrappers on all
+platforms. For direct Gradle commands, use `./gradlew` inside the bridge directory
+on Linux/macOS or `.\gradlew.bat` in PowerShell on Windows.
 
 ## External Resources (Required Runtime Payloads)
 

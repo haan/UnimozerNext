@@ -21,13 +21,18 @@ value formatting for large/structured data.
 ## Build
 
 Requirements:
-- JDK 17+ (uses `jdk.jshell`)
-- Gradle
+- JDK 25 LTS, with `JAVA_HOME` pointing to the JDK installation (uses `jdk.jshell`)
+- The included Gradle Wrapper downloads the pinned Gradle 9.8.0; no global Gradle installation is needed.
 
 ```bash
 cd jshell-bridge
-gradle copyBridgeJar
+./gradlew copyBridgeJar
 ```
+
+On Windows PowerShell, use `.\gradlew.bat copyBridgeJar` instead. From the
+repository root, `npm run build:jshell` works on all platforms.
+
+The bridge is compiled and tested with Java 25 and requires Java 25 or newer to run.
 
 This builds a fat JAR (dependencies included) and copies it to:
 

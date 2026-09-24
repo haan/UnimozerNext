@@ -7,8 +7,13 @@ group = 'com.unimozer'
 version = '0.2.3'
 
 java {
-  sourceCompatibility = JavaVersion.VERSION_17
-  targetCompatibility = JavaVersion.VERSION_17
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(25)
+  }
+}
+
+tasks.withType(JavaCompile).configureEach {
+  options.release = 25
 }
 
 repositories {
@@ -43,7 +48,6 @@ jar {
 }
 
 tasks.register('copyBridgeJar', Copy) {
-  dependsOn jar
-  from "$buildDir/libs/jshell-bridge.jar"
+  from tasks.named('jar')
   into "${rootProject.projectDir}/../resources/jshell-bridge"
 }

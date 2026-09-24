@@ -10,13 +10,18 @@ The bridge reads a JSON request from `stdin` and writes a JSON response to `stdo
 ## Build
 
 Requirements:
-- JDK 17+ (the Gradle build targets Java 17)
-- Gradle
+- JDK 25 LTS, with `JAVA_HOME` pointing to the JDK installation
+- The included Gradle Wrapper downloads the pinned Gradle 9.8.0; no global Gradle installation is needed.
 
 ```bash
 cd java-parser
-gradle copyBridgeJar
+./gradlew copyBridgeJar
 ```
+
+On Windows PowerShell, use `.\gradlew.bat copyBridgeJar` instead. From the
+repository root, `npm run build:parser` works on all platforms.
+
+The bridge is compiled and tested with Java 25 and requires Java 25 or newer to run.
 
 This builds a fat JAR (dependencies included) and copies it to:
 

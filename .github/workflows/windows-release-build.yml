@@ -57,12 +57,14 @@ jobs:
           node-version-file: ".node-version"
           cache: npm
 
-      - name: Setup Java (for bridge builds)
+      - name: Setup Java 25 (for bridge builds)
         uses: actions/setup-java@v6.0.0
         with:
           distribution: temurin
-          java-version: "17"
-          cache: gradle
+          java-version: "25"
+
+      - name: Setup Gradle cache and validate wrappers
+        uses: gradle/actions/setup-gradle@v4
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -91,19 +93,21 @@ jobs:
         shell: pwsh
         run: |
           Push-Location java-parser
-          gradle copyBridgeJar --no-daemon --rerun-tasks
+          .\gradlew.bat copyBridgeJar --no-daemon --rerun-tasks
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
 
       - name: Build JShell bridge
         shell: pwsh
         run: |
           Push-Location jshell-bridge
-          gradle copyBridgeJar --no-daemon --rerun-tasks
+          .\gradlew.bat copyBridgeJar --no-daemon --rerun-tasks
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
 
       - name: Stop Gradle daemons
         shell: pwsh
-        run: gradle --stop
+        run: .\java-parser\gradlew.bat --stop
 
       - name: Prepare bundled JDK and JDTLS resources
         shell: pwsh
