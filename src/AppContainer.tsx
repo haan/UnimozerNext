@@ -177,6 +177,10 @@ export default function AppContainer({
     folderProjectErrorMessage,
     projectDropErrorOpen,
     projectDropErrorMessage,
+    packedProjectErrorOpen,
+    packedProjectErrorMessage,
+    openPackedProjectErrorDialog,
+    handlePackedProjectErrorOpenChange,
     openProjectDropErrorDialog,
     handleProjectDropErrorOpenChange,
     openFolderProjectErrorDialog,
@@ -647,7 +651,8 @@ export default function AppContainer({
     recordRecentProject,
     removeRecentProject,
     onMissingRecentProject: (path) => openMissingRecentProjectDialog(toDisplayPath(path)),
-    onFolderProjectOpenError: (message) => openFolderProjectErrorDialog(message)
+    onFolderProjectOpenError: openFolderProjectErrorDialog,
+    onPackedProjectOpenError: openPackedProjectErrorDialog
   });
 
   const startupComplete = useLaunchBootstrap({
@@ -992,7 +997,7 @@ export default function AppContainer({
     addMethodOpen || createObjectOpen || callMethodOpen || methodReturnOpen ||
     removeClassOpen || renameClassOpen || renameClassErrorOpen || missingRecentProjectOpen ||
     folderProjectErrorOpen || reloadFromDiskDialogOpen || updateAvailableOpen ||
-    confirmProjectActionOpen || projectDropErrorOpen;
+    confirmProjectActionOpen || projectDropErrorOpen || packedProjectErrorOpen;
   const showProjectDropOverlay = useProjectDrop({
     blocked: projectDropBlocked,
     projectDropPendingRef,
@@ -1368,6 +1373,9 @@ export default function AppContainer({
         folderProjectErrorMessage={folderProjectErrorMessage}
         projectDropErrorOpen={projectDropErrorOpen}
         projectDropErrorMessage={projectDropErrorMessage}
+        packedProjectErrorOpen={packedProjectErrorOpen}
+        packedProjectErrorMessage={packedProjectErrorMessage}
+        onPackedProjectErrorOpenChange={handlePackedProjectErrorOpenChange}
         onProjectDropErrorOpenChange={handleProjectDropErrorOpenChange}
         onFolderProjectErrorOpenChange={handleFolderProjectErrorOpenChange}
         reloadFromDiskDialogOpen={reloadFromDiskDialogOpen}

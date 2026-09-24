@@ -64,6 +64,7 @@ type UseProjectIOArgs = {
   removeRecentProject: (entry: RecentProjectEntry) => void;
   onMissingRecentProject: (path: string) => void;
   onFolderProjectOpenError?: (message: string) => void;
+  onPackedProjectOpenError?: (message: string) => void;
 };
 
 type UseProjectIOResult = {
@@ -130,7 +131,8 @@ export const useProjectIO = ({
   recordRecentProject,
   removeRecentProject,
   onMissingRecentProject,
-  onFolderProjectOpenError
+  onFolderProjectOpenError,
+  onPackedProjectOpenError
 }: UseProjectIOArgs): UseProjectIOResult => {
   const isFinitePosition = (value: unknown): value is { x: number; y: number } => {
     if (!value || typeof value !== "object") {
@@ -449,17 +451,19 @@ export const useProjectIO = ({
         const preferredArchivePath = await resolvePreferredUserPath(archivePath);
         const projectRoot = await openPackedProjectByPath(preferredArchivePath, options);
         if (!projectRoot) {
-          setStatus("Failed to open project: unknown error.");
-          return;
+          throw new Error("unknown error.");
         }
         setStatus(`Project loaded: ${toDisplayPath(preferredArchivePath)}`);
       } catch (error) {
-        setStatus(`Failed to open project: ${formatStatus(error)}`);
+        const detail = formatStatus(error);
+        setStatus(`Failed to open project: ${detail}`);
+        onPackedProjectOpenError?.(detail);
       }
     },
     [
       formatStatus,
       openPackedProjectByPath,
+      onPackedProjectOpenError,
       resolvePreferredUserPath,
       setStatus
     ]
