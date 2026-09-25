@@ -1,0 +1,63 @@
+name: Java Dependency Graph
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate dependency graph (${{ matrix.bridge }})
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        bridge: [java-parser, jshell-bridge]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Generate dependency graph without submitting
+        uses: gradle/actions/dependency-submission@v4
+        with:
+          build-root-directory: ${{ matrix.bridge }}
+          dependency-graph: generate-and-upload
+          validate-wrappers: true
+          artifact-retention-days: 7
+
+  submit:
+    name: Submit dependency graph (${{ matrix.bridge }})
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        bridge: [java-parser, jshell-bridge]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v6.0.0
+        with:
+          distribution: temurin
+          java-version: "25"
+      - name: Generate and submit dependency graph
+        uses: gradle/actions/dependency-submission@v4
+        with:
+          build-root-directory: ${{ matrix.bridge }}
+          dependency-graph: generate-submit-and-upload
+          validate-wrappers: true
+          artifact-retention-days: 7

@@ -210,6 +210,14 @@ native wrapper launchers. It then runs `npm run test:java`, `npm run build:parse
 and `npm run build:jshell` to verify both tests and JAR packaging through the
 portable npm commands. Both bridges use Gradle 9.8.0 and target Java 25.
 
+The separate `Java Dependency Graph` workflow resolves dependencies for each bridge
+using Java 25 and its committed Gradle Wrapper. Pull requests generate snapshots
+with read-only repository permissions and retain them as artifacts for seven days.
+Pushes to `main` (or a manual run on `main`) submit the snapshots to GitHub's
+dependency graph for Dependabot alerts, including indirect Java dependencies.
+Submission jobs have `contents: write`; pull-request jobs do not submit snapshots.
+This workflow resolves dependencies but does not replace the Java tests.
+
 The separate `Release Builds` workflow checks version consistency and builds the
 Java bridges and application bundles, but does not run the full test gate or
 wait for `Test Suite`. Confirm the intended release commit has passed that
