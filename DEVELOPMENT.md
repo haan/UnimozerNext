@@ -299,6 +299,20 @@ Stable Linux publishing also deploys a signed APT repository to GitHub Pages. Se
 
 ## Release Workflow
 
+### Release Process
+
+`main` accumulates reviewed features and fixes between releases and should remain usable. The application version can stay at the previous release's version during development; individual feature PRs do not need a version bump.
+
+1. Develop features and fixes on branches, then merge reviewed and tested PRs into `main`.
+2. Decide the next release's scope. Confirm the intended changes are merged and resolve any remaining release blockers. Complete substantial dependency upgrades in separate maintenance PRs before final release preparation.
+3. Create a short-lived release-preparation branch from `main`, for example `release/0.18.0`.
+4. Complete the checklist below, align the application version across npm, Cargo, and Tauri files (including lockfiles), and prepare release notes describing user-visible and compatibility changes.
+5. Test the candidate with automated tests and packaged desktop smoke tests; use the prerelease channel when useful. Pause unrelated merges during final validation. Fix problems and repeat affected checks.
+6. Merge the release-preparation PR. Verify that the final commit on `main` contains the intended release scope and has passed validation, then create and push the matching version tag. If the merge introduces changes beyond the tested candidate, validate those changes before tagging.
+7. Resume development on `main` for the next release and remove the merged preparation branch. The release tag identifies the exact released commit; do not move it to later work.
+
+See [docs/updater.md](docs/updater.md) for version-file locations, prerelease publishing, tagging, and updater validation. The checklist below tracks what to review during preparation.
+
 ### Before Releasing
 
 Use this checklist for each release and record the outcome in the release preparation PR. An item can be completed as **checked—no update needed**, **updated and tested**, or **deferred with a reason and follow-up issue**. Review every area; updating every dependency is not a release requirement.
