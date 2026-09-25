@@ -47,27 +47,29 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version-file: ".node-version"
           cache: npm
 
       - name: Setup Java 25 (for bridge builds)
-        uses: actions/setup-java@v6.0.0
+        uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
           java-version: "25"
 
       - name: Setup Gradle cache and validate wrappers
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6.3.0
+        with:
+          cache-provider: basic
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        run: rustup show
 
       - name: Restore Rust build cache
         uses: Swatinem/rust-cache@v2
@@ -76,7 +78,7 @@ jobs:
             src-tauri -> target
 
       - name: Restore resource archive cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .cache/temurin
@@ -228,7 +230,7 @@ jobs:
 
       - name: Azure login (OIDC)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -236,10 +238,10 @@ jobs:
 
       - name: Authenticode sign app binaries (EXE + DLL)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/trusted-signing-action@v0.5.11
+        uses: azure/artifact-signing-action@v2.0.0
         with:
           endpoint: https://weu.codesigning.azure.net/
-          trusted-signing-account-name: haala-artifact
+          signing-account-name: haala-artifact
           certificate-profile-name: unimozer-public-signing
           files-folder: src-tauri/target/release
           files-folder-recurse: false
@@ -259,10 +261,10 @@ jobs:
 
       - name: Authenticode sign Windows installers (MSI + NSIS)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/trusted-signing-action@v0.5.11
+        uses: azure/artifact-signing-action@v2.0.0
         with:
           endpoint: https://weu.codesigning.azure.net/
-          trusted-signing-account-name: haala-artifact
+          signing-account-name: haala-artifact
           certificate-profile-name: unimozer-public-signing
           files-folder: src-tauri/target/release/bundle
           files-folder-recurse: true
@@ -527,7 +529,7 @@ jobs:
           }
 
       - name: Upload installer artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installers
           path: |
@@ -541,7 +543,7 @@ jobs:
 
       - name: Publish GitHub release
         if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
@@ -556,7 +558,7 @@ jobs:
 
       - name: Prune stale prerelease Windows assets
         if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const fs = require("node:fs");

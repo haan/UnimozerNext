@@ -5,13 +5,18 @@ This document covers everything needed to go from a fresh clone to a running dev
 ## Prerequisites
 
 - Node.js matching `.node-version` (the version used in CI)
-- Rust toolchain (cargo)
+- Rust installed through rustup (the version is pinned in `rust-toolchain.toml`)
 - JDK 25 LTS (to build, test, and run Java bridge modules)
 - Native build tools and webview dependencies for your platform: follow the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) (Windows C++ Build Tools and WebView2, macOS Xcode Command Line Tools, or Linux system packages).
 
 Set `JAVA_HOME` to your JDK 25 installation. Both Java bridges use a Java 25
 toolchain and produce JARs that require Java 25 or newer. The application already
 bundles Java 25 for runtime use.
+
+CI uses `.node-version` for Node.js and `rust-toolchain.toml` for Rust. Use the
+same files for local development. Rustup selects and installs the pinned Rust
+toolchain when you run Cargo in this repository; it does not change your global
+default. Update these pins in maintenance PRs when adopting new toolchain versions.
 
 No separate Gradle installation is required. Each bridge includes a Gradle 9.8.0
 Wrapper, pinned with a distribution SHA-256 checksum. The first build downloads
@@ -297,6 +302,8 @@ The macOS release workflow requires these Actions secrets, including for manual 
 
 Stable Linux publishing also deploys a signed APT repository to GitHub Pages. Set `APT_GPG_PRIVATE_KEY` and, for an encrypted key, `APT_GPG_PASSPHRASE` in Actions secrets. Configure Pages to deploy with **GitHub Actions**, and allow the release ref in the `github-pages` environment. The workflow requires `pages: write` and `id-token: write` in addition to release upload permissions. Prereleases publish the `.deb` asset without updating APT.
 
+Only the stable APT publishing job requests the protected `github-pages` environment. Non-publishing builds on maintenance branches build and upload their Debian artifact without requesting deployment access.
+
 ## Release Workflow
 
 ### Release Process
@@ -307,7 +314,7 @@ Stable Linux publishing also deploys a signed APT repository to GitHub Pages. Se
 2. **Choose the release scope:** Confirm the intended features are merged, identify remaining blockers, and decide what will wait for a later release.
 3. **Review dependencies and tooling:** Complete [checklist A](#a-dependency-and-tooling-review). Make selected updates in maintenance PRs, test them, and merge them into `main`. Resolve release blockers before proceeding; a review does not require an upgrade in every area.
 4. **Prepare the candidate:** Create a short-lived branch from `main`, for example `release/0.18.0`, and open a release-preparation PR. Freeze dependency changes, update the application version, and prepare release notes using [checklist B](#b-release-preparation-and-validation).
-5. **Validate the candidate:** Complete the automated and desktop checks in checklist B; use the prerelease channel when useful. Pause unrelated merges into `main` until the release is tagged. Fix problems and repeat the affected checks. If a dependency change becomes necessary, revisit its checklist A item and validate the revised candidate.
+5. **Validate the candidate:** Complete the automated checks in checklist B and have the maintainer record the manual smoke-test result or mark it pending. Successful CI and candidate builds complete automated validation; stop there unless further testing is explicitly requested or a failure needs investigation. Pause unrelated code merges into `main` until the release is tagged. Fix problems and repeat only the affected checks. If a dependency change becomes necessary, revisit its checklist A item and validate the revised candidate.
 6. **Merge and tag:** Merge the release-preparation PR once its checks pass. Verify the final commit on `main` using checklist B, then create and push the matching version tag. If the merge introduces changes beyond the tested candidate, validate them before tagging.
 7. **Resume development:** Remove the merged preparation branch and continue work on `main` for the next release. The release tag identifies the exact released commit; do not move it to later work.
 
@@ -321,11 +328,13 @@ Record checklist outcomes and links to maintenance PRs in the release-preparatio
 
 Complete this section in step 3, before preparing the release candidate. Cargo manages Rust libraries, called *crates*; Rust is the language/compiler toolchain. Gradle builds the Java bridges and manages their libraries. Dependabot supports these reviews, while bundled runtime downloads and toolchain selections require separate attention.
 
+Review dependency status and known advisories using the listed tools and existing reports. A review does not require upgrading every dependency or performing a new security investigation. Record relevant findings, selected updates, and deliberate deferrals.
+
 - [ ] **JavaScript/TypeScript dependencies (npm):** Run `npm outdated` and `npm audit`; review Dependabot alerts and PRs for `package.json` and `package-lock.json`, including development tools.
 - [ ] **Java dependencies (Gradle):** Review available updates and security alerts for both `java-parser/build.gradle` and `jshell-bridge/build.gradle`. Confirm the `Java Dependency Graph` workflow has submitted current snapshots, including indirect dependencies.
 - [ ] **Gradle build tool:** Review the pinned wrappers in both bridge directories. Keep their versions and distribution checksums aligned when updating.
 - [ ] **Rust dependencies (Cargo crates):** Review updates for `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`, run `cargo audit` from `src-tauri/` (requires the separately installed `cargo-audit` tool), and revisit previously deferred advisories.
-- [ ] **Build toolchains:** Review Node.js/npm (`.node-version` and `package.json` engines), the Java build JDK and bridge runtime requirement, and the Rust compiler/Cargo toolchain used locally and in CI.
+- [ ] **Build toolchains:** Review Node.js/npm (`.node-version` and `package.json` engines), the Java build JDK and bridge runtime requirement, and the Rust compiler/Cargo pin in `rust-toolchain.toml`, shared by local builds and CI.
 - [ ] **Bundled runtime components:** Review Temurin JDK and Eclipse JDT Language Server releases. Check every platform's download URL and SHA-256 in Actions variables. Updating the build JDK does not update the JDK shipped with the app.
 - [ ] **CI and platform tooling:** Review GitHub Actions versions, runner images, native build dependencies, and webview compatibility. Major upgrades are excluded by the current Dependabot configuration and need a separate review.
 
@@ -333,9 +342,14 @@ Complete this section in step 3, before preparing the release candidate. Cargo m
 
 Complete this section in steps 4–6, after the selected maintenance changes are merged.
 
+**Validation scope:** Use the existing test suite and GitHub Actions workflows. Run each relevant check once; investigate failures and repeat only affected checks. Successful CI and candidate builds complete automated validation. Do not duplicate passing CI checks locally without a specific reason.
+
+Manual desktop checks are performed by the maintainer and may be recorded as pending. Do not automatically download, unpack, install, or inspect generated packages, verify signatures separately, create additional validation scripts, or automate desktop testing. Do these only when explicitly requested or needed to investigate a specific failure. Do not turn optional checks into release blockers. Publishing a prerelease is a separate, explicitly requested action.
+
 - [ ] **Version and release notes:** Align the application version across npm, Cargo, and Tauri files, including lockfiles; run `npm run check:versions`. Describe user-visible changes, compatibility changes, and known limitations in the release notes.
-- [ ] **Automated validation:** Run `npm run test:all` against the candidate and confirm CI passes.
-- [ ] **Desktop validation:** Test project opening/saving/dropping, Java compilation/execution, object bench, diagnostics, and formatting in packaged builds. Validate target-platform installers and supported update paths; record platforms not tested.
-- [ ] **Final commit:** After merging the release-preparation PR, confirm `main` contains the intended release scope, its checks pass, and its version matches the proposed tag. Validate any changes introduced since candidate testing before tagging.
+- [ ] **Automated tests:** Confirm existing CI passes for the candidate. Run local checks only where CI does not cover the change or when diagnosing a failure.
+- [ ] **Candidate builds:** Confirm the existing release workflows build the intended platforms successfully with publishing disabled.
+- [ ] **Maintainer smoke test:** Manually check the changed feature and basic project opening, saving, compiling, and running. Record the result or mark it pending; this is not an instruction for an agent to automate desktop testing.
+- [ ] **Before tagging:** After merging the release-preparation PR, verify the intended commit and matching version on `main`. Reuse candidate validation results where applicable; repeat affected checks only if the merge introduces changes that require them. Documentation-only changes do not require rebuilding or retesting the application.
 
 See [docs/updater.md](docs/updater.md) for the full release and update rollout procedure, including prerelease channel testing, stable release tagging, and troubleshooting updater issues.
