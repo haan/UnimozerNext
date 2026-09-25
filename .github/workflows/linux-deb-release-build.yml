@@ -292,7 +292,7 @@ jobs:
 
       - name: Publish GitHub release
         if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
@@ -450,13 +450,13 @@ jobs:
           find apt-site -maxdepth 5 -type f -printf "%p %s bytes\n" | sort
 
       - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload APT repository Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: apt-site
 
       - name: Deploy APT repository to GitHub Pages
         id: pages_deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

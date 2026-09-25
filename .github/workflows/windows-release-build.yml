@@ -230,7 +230,7 @@ jobs:
 
       - name: Azure login (OIDC)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/login@v2
+        uses: azure/login@v3
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -238,10 +238,10 @@ jobs:
 
       - name: Authenticode sign app binaries (EXE + DLL)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/trusted-signing-action@v0.5.11
+        uses: azure/artifact-signing-action@v2.0.0
         with:
           endpoint: https://weu.codesigning.azure.net/
-          trusted-signing-account-name: haala-artifact
+          signing-account-name: haala-artifact
           certificate-profile-name: unimozer-public-signing
           files-folder: src-tauri/target/release
           files-folder-recurse: false
@@ -261,10 +261,10 @@ jobs:
 
       - name: Authenticode sign Windows installers (MSI + NSIS)
         if: ${{ steps.authenticode_meta.outputs.should_authenticode == 'true' }}
-        uses: azure/trusted-signing-action@v0.5.11
+        uses: azure/artifact-signing-action@v2.0.0
         with:
           endpoint: https://weu.codesigning.azure.net/
-          trusted-signing-account-name: haala-artifact
+          signing-account-name: haala-artifact
           certificate-profile-name: unimozer-public-signing
           files-folder: src-tauri/target/release/bundle
           files-folder-recurse: true
@@ -543,7 +543,7 @@ jobs:
 
       - name: Publish GitHub release
         if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
