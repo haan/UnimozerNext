@@ -303,19 +303,23 @@ Stable Linux publishing also deploys a signed APT repository to GitHub Pages. Se
 
 `main` accumulates reviewed features and fixes between releases and should remain usable. The application version can stay at the previous release's version during development; individual feature PRs do not need a version bump.
 
-1. Develop features and fixes on branches, then merge reviewed and tested PRs into `main`.
-2. Decide the next release's scope. Confirm the intended changes are merged and resolve any remaining release blockers. Complete substantial dependency upgrades in separate maintenance PRs before final release preparation.
-3. Create a short-lived release-preparation branch from `main`, for example `release/0.18.0`.
-4. Complete the checklist below, align the application version across npm, Cargo, and Tauri files (including lockfiles), and prepare release notes describing user-visible and compatibility changes.
-5. Test the candidate with automated tests and packaged desktop smoke tests; use the prerelease channel when useful. Pause unrelated merges during final validation. Fix problems and repeat affected checks.
-6. Merge the release-preparation PR. Verify that the final commit on `main` contains the intended release scope and has passed validation, then create and push the matching version tag. If the merge introduces changes beyond the tested candidate, validate those changes before tagging.
-7. Resume development on `main` for the next release and remove the merged preparation branch. The release tag identifies the exact released commit; do not move it to later work.
+1. **Develop:** Merge reviewed and tested feature/fix PRs into `main`.
+2. **Choose the release scope:** Confirm the intended features are merged, identify remaining blockers, and decide what will wait for a later release.
+3. **Review dependencies and tooling:** Complete [checklist A](#a-dependency-and-tooling-review). Make selected updates in maintenance PRs, test them, and merge them into `main`. Resolve release blockers before proceeding; a review does not require an upgrade in every area.
+4. **Prepare the candidate:** Create a short-lived branch from `main`, for example `release/0.18.0`, and open a release-preparation PR. Freeze dependency changes, update the application version, and prepare release notes using [checklist B](#b-release-preparation-and-validation).
+5. **Validate the candidate:** Complete the automated and desktop checks in checklist B; use the prerelease channel when useful. Pause unrelated merges into `main` until the release is tagged. Fix problems and repeat the affected checks. If a dependency change becomes necessary, revisit its checklist A item and validate the revised candidate.
+6. **Merge and tag:** Merge the release-preparation PR once its checks pass. Verify the final commit on `main` using checklist B, then create and push the matching version tag. If the merge introduces changes beyond the tested candidate, validate them before tagging.
+7. **Resume development:** Remove the merged preparation branch and continue work on `main` for the next release. The release tag identifies the exact released commit; do not move it to later work.
 
-See [docs/updater.md](docs/updater.md) for version-file locations, prerelease publishing, tagging, and updater validation. The checklist below tracks what to review during preparation.
+See [docs/updater.md](docs/updater.md) for version-file locations, prerelease publishing, tagging, and updater validation. The checklist is used throughout the process: A before the dependency freeze, B during preparation and final validation.
 
 ### Before Releasing
 
-Use this checklist for each release and record the outcome in the release preparation PR. An item can be completed as **checked—no update needed**, **updated and tested**, or **deferred with a reason and follow-up issue**. Review every area; updating every dependency is not a release requirement.
+Record checklist outcomes and links to maintenance PRs in the release-preparation PR. For review items, record **checked—no update needed**, **updated and tested**, or **deferred with a reason and follow-up issue**. For validation items, record the result and any limitations; unresolved release blockers prevent tagging.
+
+#### A. Dependency and Tooling Review
+
+Complete this section in step 3, before preparing the release candidate. Cargo manages Rust libraries, called *crates*; Rust is the language/compiler toolchain. Gradle builds the Java bridges and manages their libraries. Dependabot supports these reviews, while bundled runtime downloads and toolchain selections require separate attention.
 
 - [ ] **JavaScript/TypeScript dependencies (npm):** Run `npm outdated` and `npm audit`; review Dependabot alerts and PRs for `package.json` and `package-lock.json`, including development tools.
 - [ ] **Java dependencies (Gradle):** Review available updates and security alerts for both `java-parser/build.gradle` and `jshell-bridge/build.gradle`. Confirm the `Java Dependency Graph` workflow has submitted current snapshots, including indirect dependencies.
@@ -324,9 +328,14 @@ Use this checklist for each release and record the outcome in the release prepar
 - [ ] **Build toolchains:** Review Node.js/npm (`.node-version` and `package.json` engines), the Java build JDK and bridge runtime requirement, and the Rust compiler/Cargo toolchain used locally and in CI.
 - [ ] **Bundled runtime components:** Review Temurin JDK and Eclipse JDT Language Server releases. Check every platform's download URL and SHA-256 in Actions variables. Updating the build JDK does not update the JDK shipped with the app.
 - [ ] **CI and platform tooling:** Review GitHub Actions versions, runner images, native build dependencies, and webview compatibility. Major upgrades are excluded by the current Dependabot configuration and need a separate review.
-- [ ] **Validation:** Make selected updates on a maintenance branch, run `npm run test:all`, and confirm CI passes. Test desktop project opening/saving/dropping, Java compilation/execution, object bench, diagnostics, and formatting. Validate target-platform installers and supported update paths; record platforms not tested.
-- [ ] **Release preparation:** Freeze dependency changes, align the application version, run `npm run check:versions`, and follow the release procedure below. Repeat affected checks if dependencies change after validation.
 
-Cargo manages Rust libraries, called *crates*; Rust is the language/compiler toolchain. Gradle builds the Java bridges and manages their libraries. Dependabot supports these dependency reviews, while bundled runtime downloads and toolchain selections still require separate attention.
+#### B. Release Preparation and Validation
+
+Complete this section in steps 4–6, after the selected maintenance changes are merged.
+
+- [ ] **Version and release notes:** Align the application version across npm, Cargo, and Tauri files, including lockfiles; run `npm run check:versions`. Describe user-visible changes, compatibility changes, and known limitations in the release notes.
+- [ ] **Automated validation:** Run `npm run test:all` against the candidate and confirm CI passes.
+- [ ] **Desktop validation:** Test project opening/saving/dropping, Java compilation/execution, object bench, diagnostics, and formatting in packaged builds. Validate target-platform installers and supported update paths; record platforms not tested.
+- [ ] **Final commit:** After merging the release-preparation PR, confirm `main` contains the intended release scope, its checks pass, and its version matches the proposed tag. Validate any changes introduced since candidate testing before tagging.
 
 See [docs/updater.md](docs/updater.md) for the full release and update rollout procedure, including prerelease channel testing, stable release tagging, and troubleshooting updater issues.
