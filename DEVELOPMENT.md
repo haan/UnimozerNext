@@ -299,4 +299,20 @@ Stable Linux publishing also deploys a signed APT repository to GitHub Pages. Se
 
 ## Release Workflow
 
+### Before Releasing
+
+Use this checklist for each release and record the outcome in the release preparation PR. An item can be completed as **checked—no update needed**, **updated and tested**, or **deferred with a reason and follow-up issue**. Review every area; updating every dependency is not a release requirement.
+
+- [ ] **JavaScript/TypeScript dependencies (npm):** Run `npm outdated` and `npm audit`; review Dependabot alerts and PRs for `package.json` and `package-lock.json`, including development tools.
+- [ ] **Java dependencies (Gradle):** Review available updates and security alerts for both `java-parser/build.gradle` and `jshell-bridge/build.gradle`. Confirm the `Java Dependency Graph` workflow has submitted current snapshots, including indirect dependencies.
+- [ ] **Gradle build tool:** Review the pinned wrappers in both bridge directories. Keep their versions and distribution checksums aligned when updating.
+- [ ] **Rust dependencies (Cargo crates):** Review updates for `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`, run `cargo audit` from `src-tauri/` (requires the separately installed `cargo-audit` tool), and revisit previously deferred advisories.
+- [ ] **Build toolchains:** Review Node.js/npm (`.node-version` and `package.json` engines), the Java build JDK and bridge runtime requirement, and the Rust compiler/Cargo toolchain used locally and in CI.
+- [ ] **Bundled runtime components:** Review Temurin JDK and Eclipse JDT Language Server releases. Check every platform's download URL and SHA-256 in Actions variables. Updating the build JDK does not update the JDK shipped with the app.
+- [ ] **CI and platform tooling:** Review GitHub Actions versions, runner images, native build dependencies, and webview compatibility. Major upgrades are excluded by the current Dependabot configuration and need a separate review.
+- [ ] **Validation:** Make selected updates on a maintenance branch, run `npm run test:all`, and confirm CI passes. Test desktop project opening/saving/dropping, Java compilation/execution, object bench, diagnostics, and formatting. Validate target-platform installers and supported update paths; record platforms not tested.
+- [ ] **Release preparation:** Freeze dependency changes, align the application version, run `npm run check:versions`, and follow the release procedure below. Repeat affected checks if dependencies change after validation.
+
+Cargo manages Rust libraries, called *crates*; Rust is the language/compiler toolchain. Gradle builds the Java bridges and manages their libraries. Dependabot supports these dependency reviews, while bundled runtime downloads and toolchain selections still require separate attention.
+
 See [docs/updater.md](docs/updater.md) for the full release and update rollout procedure, including prerelease channel testing, stable release tagging, and troubleshooting updater issues.
