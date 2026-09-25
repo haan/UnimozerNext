@@ -302,6 +302,8 @@ The macOS release workflow requires these Actions secrets, including for manual 
 
 Stable Linux publishing also deploys a signed APT repository to GitHub Pages. Set `APT_GPG_PRIVATE_KEY` and, for an encrypted key, `APT_GPG_PASSPHRASE` in Actions secrets. Configure Pages to deploy with **GitHub Actions**, and allow the release ref in the `github-pages` environment. The workflow requires `pages: write` and `id-token: write` in addition to release upload permissions. Prereleases publish the `.deb` asset without updating APT.
 
+Only the stable APT publishing job requests the protected `github-pages` environment. Non-publishing builds on maintenance branches build and upload their Debian artifact without requesting deployment access.
+
 ## Release Workflow
 
 ### Release Process

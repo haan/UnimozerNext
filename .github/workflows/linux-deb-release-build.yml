@@ -39,9 +39,12 @@ jobs:
       group: linux-release-${{ inputs.source_ref }}
       cancel-in-progress: ${{ !startsWith(inputs.source_ref, 'refs/tags/') }}
     runs-on: ubuntu-22.04
-    environment:
-      name: github-pages
-      url: ${{ steps.pages_deployment.outputs.page_url }}
+    outputs:
+      publish_apt: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
+      deb_path: ${{ steps.release_assets.outputs.deb_path }}
+      deb_name: ${{ steps.release_assets.outputs.deb_name }}
+      package_name: ${{ steps.release_assets.outputs.package_name }}
+      version: ${{ steps.release_assets.outputs.version }}
     env:
       TEMURIN_LINUX_X64_TAR_GZ_URL: ${{ vars.TEMURIN_LINUX_X64_TAR_GZ_URL }}
       TEMURIN_LINUX_X64_SHA256: ${{ vars.TEMURIN_LINUX_X64_SHA256 }}
@@ -297,15 +300,83 @@ jobs:
           files: |
             release-assets/UnimozerNext_*_amd64.deb
 
+      - name: Prune stale prerelease Linux assets
+        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require("node:fs");
+            const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
+            const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
+            if (!versionMatch) {
+              core.setFailed("Could not read version from src-tauri/Cargo.toml");
+              return;
+            }
+            const version = versionMatch[1];
+            const keep = new Set([
+              `UnimozerNext_${version}_amd64.deb`
+            ]);
+
+            const stalePattern = /^(UnimozerNext_.*_(amd64\.deb|x86_64\.AppImage|x86_64\.AppImage\.sig)|latest-linux-x86_64\.json)$/;
+
+            const { owner, repo } = context.repo;
+            const release = await github.rest.repos.getReleaseByTag({
+              owner,
+              repo,
+              tag: "updater-prerelease"
+            });
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner,
+              repo,
+              release_id: release.data.id,
+              per_page: 100
+            });
+
+            for (const asset of assets) {
+              if (!stalePattern.test(asset.name)) continue;
+              if (keep.has(asset.name)) continue;
+              core.info(`Deleting stale Linux prerelease asset: ${asset.name}`);
+              await github.rest.repos.deleteReleaseAsset({
+                owner,
+                repo,
+                asset_id: asset.id
+              });
+            }
+
+  publish-apt:
+    needs: build-linux-deb
+    if: ${{ needs.build-linux-deb.outputs.publish_apt == 'true' }}
+    runs-on: ubuntu-22.04
+    environment:
+      name: github-pages
+      url: ${{ steps.pages_deployment.outputs.page_url }}
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - name: Download Debian package
+        uses: actions/download-artifact@v8
+        with:
+          name: linux-amd64-deb
+          path: release-assets
+
+      - name: Install APT repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y apt-utils gnupg
+
       - name: Build APT repository
-        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
         env:
           APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
           APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
-          DEB_PATH: ${{ steps.release_assets.outputs.deb_path }}
-          DEB_NAME: ${{ steps.release_assets.outputs.deb_name }}
-          PACKAGE_NAME: ${{ steps.release_assets.outputs.package_name }}
-          PACKAGE_VERSION: ${{ steps.release_assets.outputs.version }}
+          DEB_PATH: ${{ needs.build-linux-deb.outputs.deb_path }}
+          DEB_NAME: ${{ needs.build-linux-deb.outputs.deb_name }}
+          PACKAGE_NAME: ${{ needs.build-linux-deb.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.build-linux-deb.outputs.version }}
         run: |
           set -euo pipefail
 
@@ -379,59 +450,13 @@ jobs:
           find apt-site -maxdepth 5 -type f -printf "%p %s bytes\n" | sort
 
       - name: Configure GitHub Pages
-        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
         uses: actions/configure-pages@v5
 
       - name: Upload APT repository Pages artifact
-        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
         uses: actions/upload-pages-artifact@v3
         with:
           path: apt-site
 
       - name: Deploy APT repository to GitHub Pages
         id: pages_deployment
-        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
         uses: actions/deploy-pages@v4
-
-      - name: Prune stale prerelease Linux assets
-        if: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.tag_name == 'updater-prerelease' }}
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const fs = require("node:fs");
-            const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8");
-            const versionMatch = cargo.match(/^version\s*=\s*"([^"]+)"/m);
-            if (!versionMatch) {
-              core.setFailed("Could not read version from src-tauri/Cargo.toml");
-              return;
-            }
-            const version = versionMatch[1];
-            const keep = new Set([
-              `UnimozerNext_${version}_amd64.deb`
-            ]);
-
-            const stalePattern = /^(UnimozerNext_.*_(amd64\.deb|x86_64\.AppImage|x86_64\.AppImage\.sig)|latest-linux-x86_64\.json)$/;
-
-            const { owner, repo } = context.repo;
-            const release = await github.rest.repos.getReleaseByTag({
-              owner,
-              repo,
-              tag: "updater-prerelease"
-            });
-            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
-              owner,
-              repo,
-              release_id: release.data.id,
-              per_page: 100
-            });
-
-            for (const asset of assets) {
-              if (!stalePattern.test(asset.name)) continue;
-              if (keep.has(asset.name)) continue;
-              core.info(`Deleting stale Linux prerelease asset: ${asset.name}`);
-              await github.rest.repos.deleteReleaseAsset({
-                owner,
-                repo,
-                asset_id: asset.id
-              });
-            }
