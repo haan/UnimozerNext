@@ -443,7 +443,7 @@ jobs:
 
       - name: Publish GitHub release
         if: ${{ steps.release_meta.outputs.publish_release == 'true' }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.release_meta.outputs.tag_name }}
           prerelease: ${{ steps.release_meta.outputs.is_prerelease == 'true' }}
