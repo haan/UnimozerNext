@@ -5,13 +5,18 @@ This document covers everything needed to go from a fresh clone to a running dev
 ## Prerequisites
 
 - Node.js matching `.node-version` (the version used in CI)
-- Rust toolchain (cargo)
+- Rust installed through rustup (the version is pinned in `rust-toolchain.toml`)
 - JDK 25 LTS (to build, test, and run Java bridge modules)
 - Native build tools and webview dependencies for your platform: follow the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) (Windows C++ Build Tools and WebView2, macOS Xcode Command Line Tools, or Linux system packages).
 
 Set `JAVA_HOME` to your JDK 25 installation. Both Java bridges use a Java 25
 toolchain and produce JARs that require Java 25 or newer. The application already
 bundles Java 25 for runtime use.
+
+CI uses `.node-version` for Node.js and `rust-toolchain.toml` for Rust. Use the
+same files for local development. Rustup selects and installs the pinned Rust
+toolchain when you run Cargo in this repository; it does not change your global
+default. Update these pins in maintenance PRs when adopting new toolchain versions.
 
 No separate Gradle installation is required. Each bridge includes a Gradle 9.8.0
 Wrapper, pinned with a distribution SHA-256 checksum. The first build downloads
@@ -297,6 +302,8 @@ The macOS release workflow requires these Actions secrets, including for manual 
 
 Stable Linux publishing also deploys a signed APT repository to GitHub Pages. Set `APT_GPG_PRIVATE_KEY` and, for an encrypted key, `APT_GPG_PASSPHRASE` in Actions secrets. Configure Pages to deploy with **GitHub Actions**, and allow the release ref in the `github-pages` environment. The workflow requires `pages: write` and `id-token: write` in addition to release upload permissions. Prereleases publish the `.deb` asset without updating APT.
 
+Only the stable APT publishing job requests the protected `github-pages` environment. Non-publishing builds on maintenance branches build and upload their Debian artifact without requesting deployment access.
+
 ## Release Workflow
 
 ### Release Process
@@ -327,7 +334,7 @@ Review dependency status and known advisories using the listed tools and existin
 - [ ] **Java dependencies (Gradle):** Review available updates and security alerts for both `java-parser/build.gradle` and `jshell-bridge/build.gradle`. Confirm the `Java Dependency Graph` workflow has submitted current snapshots, including indirect dependencies.
 - [ ] **Gradle build tool:** Review the pinned wrappers in both bridge directories. Keep their versions and distribution checksums aligned when updating.
 - [ ] **Rust dependencies (Cargo crates):** Review updates for `src-tauri/Cargo.toml` and `src-tauri/Cargo.lock`, run `cargo audit` from `src-tauri/` (requires the separately installed `cargo-audit` tool), and revisit previously deferred advisories.
-- [ ] **Build toolchains:** Review Node.js/npm (`.node-version` and `package.json` engines), the Java build JDK and bridge runtime requirement, and the Rust compiler/Cargo toolchain used locally and in CI.
+- [ ] **Build toolchains:** Review Node.js/npm (`.node-version` and `package.json` engines), the Java build JDK and bridge runtime requirement, and the Rust compiler/Cargo pin in `rust-toolchain.toml`, shared by local builds and CI.
 - [ ] **Bundled runtime components:** Review Temurin JDK and Eclipse JDT Language Server releases. Check every platform's download URL and SHA-256 in Actions variables. Updating the build JDK does not update the JDK shipped with the app.
 - [ ] **CI and platform tooling:** Review GitHub Actions versions, runner images, native build dependencies, and webview compatibility. Major upgrades are excluded by the current Dependabot configuration and need a separate review.
 
