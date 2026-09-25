@@ -204,6 +204,22 @@ npm run test:all
 
 This section applies when setting up CI/CD on a fork or new instance.
 
+### Dependabot
+
+Enable **Dependabot alerts** and **Dependabot security updates** in repository
+security settings. These settings are separate from `.github/dependabot.yml`,
+which schedules monthly version-update PRs for npm, Cargo, GitHub Actions, and
+both Gradle bridges. The current configuration groups patch/minor updates and
+ignores major-version updates.
+
+The `Java Dependency Graph` workflow submits both bridges' resolved dependencies
+on pushes to `main`, including indirect dependencies needed for Java vulnerability
+alerts. It can also be run manually on `main`. Pull requests only validate graph
+generation. See [testing](docs/testing.md#ci-integration) for workflow details.
+
+Bundled JDK/JDT LS downloads and toolchain selections still require separate
+maintenance; they are not updated by this Dependabot configuration.
+
 ### Required Actions Variables
 
 Set these under **Repository Settings → Secrets and variables → Actions → Variables**:
