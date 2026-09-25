@@ -1,4 +1,4 @@
-import { conf as javaLanguageConf, language as javaMonarchLanguage } from "monaco-editor/esm/vs/basic-languages/java/java";
+import { conf as javaLanguageConf, language as javaMonarchLanguage } from "monaco-editor/languages/definitions/java/java";
 import type * as Monaco from "monaco-editor";
 
 let javaTokenizerRegistered = false;

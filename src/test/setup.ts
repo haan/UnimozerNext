@@ -1,5 +1,7 @@
-import "@testing-library/jest-dom";
-import { vi, beforeEach } from "vitest";
+import * as matchers from "@testing-library/jest-dom/matchers";
+import { expect, vi, beforeEach } from "vitest";
+
+expect.extend(matchers);
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn().mockResolvedValue(undefined),
