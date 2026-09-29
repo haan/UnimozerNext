@@ -45,7 +45,17 @@ The preflight checks every platform's archive URL and checksum format before any
 
 ## 2) Version rule before every updater test/release
 
-Updater only installs if remote version is higher than installed version.
+Updater only installs if remote version is higher than installed version. A newer publication date, different commit, replaced assets, or switching channels does not make the same version an update.
+
+### Candidate version policy
+
+- **Reserve plain `X.Y.Z` versions for stable releases.** Every version published to the prerelease channel must use `X.Y.Z-rc.N`, starting at `rc.1` and increasing for each revised candidate.
+- For example: `0.19.0-rc.1` -> `0.19.0-rc.2` -> `0.19.0`. Each version is higher than the previous one, and the final stable version is higher than all its candidates.
+- Never reuse a published candidate version for changed code. Retrying a failed job or completing another platform for the exact same source candidate may reuse its version.
+- Do not use build metadata such as `+build.2` to signal an update; it does not increase semantic-version precedence.
+- The GitHub prerelease flag and moving `updater-prerelease` tag select the distribution channel; they do not add a candidate suffix to the application's version.
+
+**If a plain version was already published as a prerelease:** an installed `0.18.0` will not update to a rebuilt stable `0.18.0`, and `0.18.0-rc.1` is older. Use a higher release line, for example `0.18.1-rc.1` -> `0.18.1`, to preserve automatic updates. Otherwise, testers must manually install the replacement. This applies to the plain `0.18.0` candidate published during release preparation.
 
 Before each test/release, keep the app version aligned in all of these locations:
 
@@ -55,7 +65,7 @@ Before each test/release, keep the app version aligned in all of these locations
 - `src-tauri/Cargo.lock` (the `unimozer-next` package entry)
 - `src-tauri/tauri.conf.json`
 
-Run `npm run check:versions` to verify alignment. The version tag must match this version. Java bridge module versions are independent.
+Run `npm run check:versions` to verify alignment. This check only verifies consistency; it does not enforce candidate suffixes or increasing versions. Stable version tags must match the app version; prereleases use the moving `updater-prerelease` tag. Java bridge module versions are independent.
 
 ## 3) Prerelease channel testing (recommended)
 
@@ -63,10 +73,17 @@ This publishes to the moving GitHub release tag: `updater-prerelease`.
 
 ### 3.1 Build and publish prerelease assets
 
+Before either a branch push or manual dispatch:
+
+1. Check the previously published app version in the prerelease updater manifests and the latest stable release.
+2. Set all version files listed in section 2 to the next `X.Y.Z-rc.N`. Verify that it is higher than the previous candidate and latest stable version. Do not publish a plain `X.Y.Z` to this channel.
+3. Run `npm run check:versions`, commit the version change, and validate that exact candidate using the release checklist in [DEVELOPMENT.md](../DEVELOPMENT.md#b-release-preparation-and-validation).
+4. Publish that validated source commit. For a revised candidate, increment `N` before publishing again.
+
 From your local machine (no GitHub Actions UI needed):
 
 ```bash
-# bump version first (see section 2), then:
+# commit and validate the next X.Y.Z-rc.N first, then:
 git push origin HEAD:prerelease
 ```
 
@@ -112,6 +129,8 @@ For MSI or unknown installer detection on Windows:
 Linux also hides the updater menu. Update Linux installations through APT or a newer `.deb` package.
 
 ## 4) Stable release flow
+
+When the candidate is ready, remove the `-rc.N` suffix in all version files, run `npm run check:versions`, and complete the final release checks before tagging. For example, promote `0.19.0-rc.2` to `0.19.0`. If that plain version was already distributed, follow the recovery guidance in section 2 rather than republishing changed code under the same version.
 
 ## Option A: tag push (automatic)
 
