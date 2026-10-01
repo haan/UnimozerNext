@@ -63,6 +63,11 @@
     "tailwind-merge": "^3.6.0",
     "zod": "^4.5.4"
   },
+  "overrides": {
+    "monaco-editor": {
+      "dompurify": "3.4.16"
+    }
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.62.1",
