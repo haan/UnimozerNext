@@ -65,6 +65,8 @@ Before each test/release, keep the app version aligned in all of these locations
 - `src-tauri/Cargo.lock` (the `unimozer-next` package entry)
 - `src-tauri/tauri.conf.json`
 
+Also set `bundle.windows.wix.version` in `src-tauri/tauri.windows.conf.json` to the numeric `X.Y.Z` portion (for example, `0.18.1` for app version `0.18.1-rc.1`). WiX rejects text prerelease identifiers. This is installer metadata only: the application, asset names, and updater manifests retain the full candidate version. MSI metadata does not distinguish candidates within the same release; MSI installations use manual installation rather than the in-app updater. `check:versions` verifies this numeric mapping too.
+
 Run `npm run check:versions` to verify alignment. This check only verifies consistency; it does not enforce candidate suffixes or increasing versions. Stable version tags must match the app version; prereleases use the moving `updater-prerelease` tag. Java bridge module versions are independent.
 
 ## 3) Prerelease channel testing (recommended)

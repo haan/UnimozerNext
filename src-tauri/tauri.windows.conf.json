@@ -1,6 +1,9 @@
 {
   "bundle": {
     "windows": {
+      "wix": {
+        "version": "0.18.1"
+      },
       "nsis": {
         "installerHooks": "./windows/hooks.nsh"
       }
