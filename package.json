@@ -1,7 +1,7 @@
 {
   "name": "unimozer-next",
   "private": true,
-  "version": "0.18.0",
+  "version": "0.18.1-rc.1",
   "type": "module",
   "engines": {
     "node": "^24.15.0 || >=26.0.0"
