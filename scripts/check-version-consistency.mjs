@@ -65,4 +65,15 @@ if (mismatches.length > 0) {
   process.exit(1);
 }
 
-console.log(`Version consistency check passed: ${expected}`);
+// WiX requires a numeric installer version even when the app uses an rc suffix.
+const windowsConfig = readJson("src-tauri/tauri.windows.conf.json");
+const msiVersion = windowsConfig.bundle?.windows?.wix?.version;
+const expectedMsiVersion = expected.split(/[+-]/)[0];
+if (msiVersion !== expectedMsiVersion) {
+  console.error(
+    `MSI version mismatch: expected ${expectedMsiVersion} in src-tauri/tauri.windows.conf.json, got ${msiVersion}`
+  );
+  process.exit(1);
+}
+
+console.log(`Version consistency check passed: ${expected} (MSI: ${msiVersion})`);
