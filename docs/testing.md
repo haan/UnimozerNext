@@ -85,6 +85,7 @@ npm run test:unit:coverage
 | `java.test.ts` | `isValidJavaIdentifier`, `JAVA_KEYWORDS` |
 | `javaCodegen.test.ts` | `escapeJavaString`, `escapeJavaChar`, `normalizeConstructorArg`, `resolveConstructorParamClass`, `buildClassSource` |
 | `lsp.test.ts` | `isTextEdit`, `isInsertReplaceEdit`, `isCompletionList`, `parseLsDiagnosticsEvent`, `normalizeCompletionResponse`, `toFileUri`, `sortTextEditsDescending`, `applyTextEdits` |
+| `fileUriCache.test.ts` | URI invalidation after renames, Windows aliases, POSIX case sensitivity, and stale asynchronous lookups |
 | `monacoThemes.test.ts` | `normalizeColor`, `matchesRuleToken`, `findRuleColor`, `upsertRuleColor`, `sanitizeThemeRules`, `resolveMonacoTheme` |
 | `paths.test.ts` | `basename`, `joinPath`, `toDisplayPath`, `toRelativePath` |
 | `recentProjects.test.ts` | `normalizeRecentPath`, `recentEntryKey`, `upsertRecentProject`, `removeRecentProject` |
@@ -123,7 +124,7 @@ Tauri APIs or the validation wrapper, depending on the behavior under test, so n
 
 ## Browser smoke tests and native coverage
 
-`npm run test:e2e` runs Chromium against the Vite dev server using `playwright.config.ts`. Playwright starts the server automatically and reuses an existing server locally. The fixtures in `e2e/fixtures/tauriMock.ts` mock Tauri IPC and webview metadata. The current specs cover app launch, the welcome screen, and settings.
+`npm run test:e2e` runs Chromium against the Vite dev server using `playwright.config.ts`. Playwright starts the server automatically and reuses an existing server locally. The fixtures in `e2e/fixtures/tauriMock.ts` mock Tauri IPC and webview metadata. The current specs cover app launch, the welcome screen, settings, and class renaming with the real Monaco editor (including capitalization-only renames, unsaved drafts, reselecting the UML class, and continued editing).
 
 These are browser smoke tests, not tests against a running Tauri binary. They do not verify native file pickers, operating-system drag events, packaged runtime resources, or updater installation. Keep the mock aligned with the current Tauri webview API when changing startup or event handling.
 

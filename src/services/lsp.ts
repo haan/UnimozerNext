@@ -253,6 +253,14 @@ export const toFileUri = (path: string) => {
 };
 
 const resolvedInternalUriByPath = new Map<string, string>();
+const internalUriLookups = new Map<string, symbol>();
+
+export const invalidateInternalFileUri = (path: string): void => {
+  const cacheKey = normalizeInternalUriCacheKey(path);
+  resolvedInternalUriByPath.delete(cacheKey);
+  // A lookup started before a rename must not restore the obsolete URI.
+  internalUriLookups.delete(cacheKey);
+};
 
 export const getCachedInternalFileUri = (path: string): string =>
   resolvedInternalUriByPath.get(normalizeInternalUriCacheKey(path)) ?? toFileUri(path);
@@ -264,20 +272,24 @@ export const resolveInternalFileUri = async (path: string): Promise<string> => {
     return cached;
   }
 
+  const lookup = Symbol();
+  internalUriLookups.set(cacheKey, lookup);
+  let resolved: string;
   try {
-    const resolved = await invokeValidated(
+    resolved = await invokeValidated(
       "resolve_file_uri",
       stringSchema,
       "resolve_file_uri response",
       { path }
     );
-    resolvedInternalUriByPath.set(cacheKey, resolved);
-    return resolved;
   } catch {
-    const fallback = toFileUri(path);
-    resolvedInternalUriByPath.set(cacheKey, fallback);
-    return fallback;
+    resolved = toFileUri(path);
   }
+  if (internalUriLookups.get(cacheKey) === lookup) {
+    resolvedInternalUriByPath.set(cacheKey, resolved);
+    internalUriLookups.delete(cacheKey);
+  }
+  return resolved;
 };
 
 export const sortTextEditsDescending = (a: LspTextEdit, b: LspTextEdit) => {
