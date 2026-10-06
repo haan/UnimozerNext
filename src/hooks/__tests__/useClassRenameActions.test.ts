@@ -11,6 +11,7 @@ vi.mock("../../services/tauriValidation", () => ({
 
 import { useClassRenameActions, deriveRenamedClassId } from "../useClassRenameActions";
 import { invokeValidated } from "../../services/tauriValidation";
+import { getCachedInternalFileUri, resolveInternalFileUri, toFileUri } from "../../services/lsp";
 
 const mockInvoke = vi.mocked(invokeValidated);
 
@@ -174,5 +175,32 @@ describe("handleRenameClass", () => {
       expect.objectContaining({ path: RENAME_RESPONSE.newPath })
     );
     expect(args.setContent).toHaveBeenCalledWith(RENAME_RESPONSE.content);
+  });
+
+  it("retires the old model and URI when an open Windows class changes case", async () => {
+    const oldPath = "C:\\rename-hook\\src\\test.java";
+    const newPath = "C:\\rename-hook\\src\\Test.java";
+    mockInvoke.mockResolvedValueOnce(toFileUri(oldPath));
+    await resolveInternalFileUri(oldPath);
+    const dispose = vi.fn();
+    const getModel = vi.fn(() => ({ dispose }));
+    mockInvoke
+      .mockResolvedValueOnce({ oldPath, newPath, content: "public class Test {}" })
+      .mockResolvedValueOnce(MOCK_TREE);
+    const args = makeArgs({
+      openFilePath: oldPath,
+      renameTarget: { ...MOCK_NODE, id: "test", name: "test", path: oldPath },
+      monacoRef: { current: { Uri: { parse: (uri: string) => uri }, editor: { getModel } } },
+      getInternalFileUri: getCachedInternalFileUri
+    });
+    const { result } = renderHook(() => useClassRenameActions(args));
+    await act(async () => { await result.current.handleRenameClass({ name: "Test" }); });
+    expect(getModel).toHaveBeenCalledWith(toFileUri(oldPath));
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(getCachedInternalFileUri(newPath)).toBe(toFileUri(newPath));
+    expect(args.setOpenFile).toHaveBeenCalledWith({ name: "Test.java", path: newPath });
+    expect(args.setContent).toHaveBeenCalledWith("public class Test {}");
+    expect(args.notifyLsClose).toHaveBeenCalledWith(oldPath);
+    expect(args.notifyLsOpen).toHaveBeenCalledWith(newPath, "public class Test {}");
   });
 });

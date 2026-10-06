@@ -9,6 +9,7 @@ import type { FileNode } from "../models/files";
 import type { OpenFile } from "../models/openFile";
 import type { UmlNode } from "../models/uml";
 import { isValidJavaIdentifier } from "../services/java";
+import { invalidateInternalFileUri } from "../services/lsp";
 import { basename, joinPath } from "../services/paths";
 import {
   fileNodeSchema,
@@ -139,6 +140,11 @@ export const useClassRenameActions = ({
             model.dispose();
           }
         }
+
+        // Case-only Windows renames share a cache key. Retire the old URI so
+        // Monaco's path prop changes and attaches a model after disposal.
+        invalidateInternalFileUri(response.oldPath);
+        invalidateInternalFileUri(response.newPath);
 
         const wasOpen = openFilePath === response.oldPath;
         if (wasOpen) {
