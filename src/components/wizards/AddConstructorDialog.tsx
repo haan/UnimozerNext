@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
-import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogTitle } from "../ui/dialog";
+import { FormDialogContent } from "./FormDialogContent";
 import { Button } from "../ui/button";
 import { isValidJavaIdentifier } from "../../services/java";
 import { ParameterList } from "./ParameterList";
@@ -75,7 +76,11 @@ export const AddConstructorDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[520px] max-w-[92vw] p-6" aria-describedby={undefined}>
+      <FormDialogContent
+        dirty={params.length > 0 || includeJavadoc}
+        busy={busy || submitting}
+        onDiscard={() => onOpenChange(false)}
+        className="w-[520px] max-w-[92vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">
           Add constructor{className ? ` to ${className}` : ""}
         </DialogTitle>
@@ -125,7 +130,7 @@ export const AddConstructorDialog = ({
             </Button>
           </div>
         </form>
-      </DialogContent>
+      </FormDialogContent>
     </Dialog>
   );
 };

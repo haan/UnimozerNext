@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogTitle } from "../ui/dialog";
+import { FormDialogContent } from "./FormDialogContent";
 import { Button } from "../ui/button";
 import { isValidJavaIdentifier } from "../../services/java";
 
@@ -64,7 +65,11 @@ export const AddClassDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
+      <FormDialogContent
+        dirty={JSON.stringify(form) !== JSON.stringify(defaultForm)}
+        busy={busy || submitting}
+        onDiscard={() => onOpenChange(false)}
+        className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Add a new class</DialogTitle>
         <form
           onSubmit={(event) => {
@@ -209,7 +214,7 @@ export const AddClassDialog = ({
             </Button>
           </div>
         </form>
-      </DialogContent>
+      </FormDialogContent>
     </Dialog>
   );
 };

@@ -105,7 +105,7 @@ export const ObjectBenchPanel = ({
         ) : (
           <div
             className="flex flex-wrap items-start gap-3 p-3"
-            style={{ fontFamily: "var(--uml-font)" }}
+            style={{ fontFamily: "var(--uml-font)", fontVariantLigatures: "none" }}
           >
               {objects.map((object) => {
                 const methods = getMethodsForObject?.(object) ?? [];

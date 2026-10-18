@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
-import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogTitle } from "../ui/dialog";
+import { FormDialogContent } from "./FormDialogContent";
 import { Button } from "../ui/button";
 
 export type CallMethodForm = {
@@ -157,7 +158,11 @@ export const CallMethodDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[520px] max-w-[90vw] p-6" aria-describedby={undefined}>
+      <FormDialogContent
+        dirty={paramValues.some((value) => value !== "")}
+        busy={busy || submitting}
+        onDiscard={() => onOpenChange(false)}
+        className="w-[520px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Call method</DialogTitle>
         <form
           onSubmit={(event) => {
@@ -244,7 +249,7 @@ export const CallMethodDialog = ({
             </Button>
           </div>
         </form>
-      </DialogContent>
+      </FormDialogContent>
     </Dialog>
   );
 };
