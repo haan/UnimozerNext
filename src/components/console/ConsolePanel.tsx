@@ -53,6 +53,7 @@ export const ConsolePanel = ({ output, fontSize, running, onStop }: ConsolePanel
         style={{
           color: "var(--console-fg)",
           fontFamily: "var(--editor-font)",
+          fontVariantLigatures: "none",
           fontSize,
           overflowWrap: "anywhere"
         }}

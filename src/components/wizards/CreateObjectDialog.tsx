@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
-import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogTitle } from "../ui/dialog";
+import { FormDialogContent } from "./FormDialogContent";
 import { Button } from "../ui/button";
 import { isValidJavaIdentifier } from "../../services/java";
 
@@ -51,7 +52,8 @@ export const CreateObjectDialog = ({
     return `${base}Next`;
   };
 
-  const [objectName, setObjectName] = useState(() => suggestObjectName(className, existingNames));
+  const [initialObjectName] = useState(() => suggestObjectName(className, existingNames));
+  const [objectName, setObjectName] = useState(initialObjectName);
   const [paramValues, setParamValues] = useState<string[]>(() => params.map(() => ""));
   const [submitting, setSubmitting] = useState(false);
 
@@ -95,7 +97,11 @@ export const CreateObjectDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[480px] max-w-[90vw] p-6" aria-describedby={undefined}>
+      <FormDialogContent
+        dirty={objectName !== initialObjectName || paramValues.some((value) => value !== "")}
+        busy={busy || submitting}
+        onDiscard={() => onOpenChange(false)}
+        className="w-[480px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Create new object</DialogTitle>
         <form
           onSubmit={(event) => {
@@ -162,7 +168,7 @@ export const CreateObjectDialog = ({
             </Button>
           </div>
         </form>
-      </DialogContent>
+      </FormDialogContent>
     </Dialog>
   );
 };

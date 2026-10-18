@@ -1,6 +1,7 @@
 import { useState } from "react";
 
-import { Dialog, DialogContent, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogTitle } from "../ui/dialog";
+import { FormDialogContent } from "./FormDialogContent";
 import { Button } from "../ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { isValidJavaIdentifier } from "../../services/java";
@@ -75,7 +76,11 @@ export const AddFieldDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
+      <FormDialogContent
+        dirty={JSON.stringify(form) !== JSON.stringify(defaultForm)}
+        busy={busy || submitting}
+        onDiscard={() => onOpenChange(false)}
+        className="w-[420px] max-w-[90vw] p-6" aria-describedby={undefined}>
         <DialogTitle className="mb-4 text-base">Add a new field</DialogTitle>
         <form
           onSubmit={(event) => {
@@ -236,7 +241,7 @@ export const AddFieldDialog = ({
             </Button>
           </div>
         </form>
-      </DialogContent>
+      </FormDialogContent>
     </Dialog>
   );
 };
