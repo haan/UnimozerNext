@@ -18,7 +18,7 @@ same files for local development. Rustup selects and installs the pinned Rust
 toolchain when you run Cargo in this repository; it does not change your global
 default. Update these pins in maintenance PRs when adopting new toolchain versions.
 
-No separate Gradle installation is required. Each bridge includes a Gradle 9.8.0
+No separate Gradle installation is required. Each bridge includes a Gradle 9.8.1
 Wrapper, pinned with a distribution SHA-256 checksum. The first build downloads
 Gradle; subsequent builds reuse its local cache. The `npm run build:parser`,
 `npm run build:jshell`, and `npm run test:java` commands use these wrappers on all
