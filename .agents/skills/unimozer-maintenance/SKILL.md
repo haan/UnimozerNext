@@ -72,11 +72,15 @@ Review action versions, runner selections, native build dependencies, and releva
 
 When tracked changes are ready, inspect the final diff, commit only task changes, push the maintenance branch, and open or update a draft PR against `main`. Invocation authorizes these steps without an additional routine confirmation. Monitor the existing CI on the final pushed commit; address update-related failures and report any unresolved checks. Keep the PR in draft and stop before merging.
 
-Include a compact review table covering all seven areas: current and selected/proposed versions, status (`unchanged`, `updated`, `deferred`, or `blocked`), reasons, and source links. Under an area with mixed results, distinguish applied updates from deferred or unavailable items. Include:
+Keep the PR description focused on the current result, using four sections:
 
-- A user-relevant summary of changes and compatibility considerations.
-- Validation results and CI links for the final commit, plus smoke-test scope/status and any coverage limitations.
-- Remaining advisories and major/migration follow-ups, linking existing issues. Record new follow-up work in the PR without automatically creating separate issues or treating a deferral as risk acceptance.
-- Any verified runtime variable proposals and the separate action required to apply them.
+1. **Summary:** user-relevant changes and compatibility considerations.
+2. **Review:** a compact table covering all seven areas, with current and selected/proposed versions, status (`unchanged`, `updated`, `deferred`, or `blocked`), reasons, and relevant source links. Distinguish applied updates from deferred or unavailable items within each area. Record verified runtime variable proposals and their current/proposed values here; identify any separate authorization/action still required.
+3. **Validation:** CI links and results for the current head commit, relevant local checks, and maintainer-reported smoke-test scope/status. Clearly distinguish current validation from earlier evidence that does not cover later changes. List genuinely outstanding checks and coverage limitations once.
+4. **Unresolved follow-ups:** remaining advisories, deferred upgrades/migrations, and decisions or actions still needed. Link existing issues for background; keep the current decision, reason, and next step in the PR. Record new follow-ups without automatically creating issues or treating deferral as risk acceptance.
+
+As work progresses, rewrite the relevant section rather than appending chronological updates. Replace superseded proposals with the current decision, move completed work out of unresolved follow-ups, and avoid repeating versions, evidence, or decisions across sections. Retain relevant security findings, authorization records, and validation limitations; link supporting detail instead of reproducing issue histories or raw logs.
+
+Before each handoff, consolidate the description: remove duplicate results, stale pending items, superseded instructions, and resolved findings still presented as unresolved. Check that the title and description match the final scope, current commit, and latest reported smoke tests. Keep only history needed to explain a remaining tradeoff or limitation.
 
 If no tracked changes are needed, return the same review report without an empty commit or PR. Include runtime-only proposals in that report. If checks or GitHub access are blocked, retain completed work and report exactly what remains; do not describe a PR as validated when required results are missing. Clean up only task-created temporary files after preserving the useful findings in the PR or final report.
