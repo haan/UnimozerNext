@@ -1,0 +1,6 @@
+interface:
+  display_name: "Unimozer Maintenance"
+  short_description: "Review dependencies and prepare compatible updates"
+  default_prompt: "Use $unimozer-maintenance to review all maintenance areas, apply compatible updates, and prepare a validated draft PR."
+policy:
+  allow_implicit_invocation: false

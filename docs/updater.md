@@ -2,6 +2,10 @@
 
 This guide covers the `Release Builds` workflow and the app's update channels. Windows NSIS and macOS installations support in-app updates when writable. Linux releases use Debian packages and a signed APT repository; Linux in-app updates are disabled.
 
+For a normal stable release, merge the changes and final version bump into `main`, wait for CI on that commit to pass, then push the matching version tag. The tag workflow builds, signs, and publishes the release. See [section 4](#4-stable-release-flow). Prerelease distribution and preliminary non-publishing builds are optional.
+
+Comprehensive dependency and tooling maintenance is a separate, explicitly invoked [maintenance skill](../.agents/skills/unimozer-maintenance/SKILL.md). Releasing does not invoke that skill or start fresh outdated-version checks or updates. Review known blockers using existing findings and decisions.
+
 ## 1) One-time setup
 
 ### 1.1 Generate updater signing key pair
@@ -50,12 +54,13 @@ Updater only installs if remote version is higher than installed version. A newe
 ### Candidate version policy
 
 - **Reserve plain `X.Y.Z` versions for stable releases.** Every version published to the prerelease channel must use `X.Y.Z-rc.N`, starting at `rc.1` and increasing for each revised candidate.
+- This rule applies to both pushes to `prerelease` and manual dispatches with `release_channel=prerelease`. A normal stable release goes directly to `X.Y.Z`; it does not need an intermediate RC.
 - For example: `0.19.0-rc.1` -> `0.19.0-rc.2` -> `0.19.0`. Each version is higher than the previous one, and the final stable version is higher than all its candidates.
 - Never reuse a published candidate version for changed code. Retrying a failed job or completing another platform for the exact same source candidate may reuse its version.
 - Do not use build metadata such as `+build.2` to signal an update; it does not increase semantic-version precedence.
 - The GitHub prerelease flag and moving `updater-prerelease` tag select the distribution channel; they do not add a candidate suffix to the application's version.
 
-**If a plain version was already published as a prerelease:** an installed `0.18.0` will not update to a rebuilt stable `0.18.0`, and `0.18.0-rc.1` is older. Use a higher release line, for example `0.18.1-rc.1` -> `0.18.1`, to preserve automatic updates. Otherwise, testers must manually install the replacement. This applies to the plain `0.18.0` candidate published during release preparation.
+**If a plain version was already published as a prerelease:** for example, an installed `0.18.1` will not update to a rebuilt stable `0.18.1`, and `0.18.1-rc.1` is older. GitHub can still publish a stable release with that version; the problem is that it is not a newer version for the updater. Use a higher unused stable version, such as `0.18.2`, to preserve automatic updates. If further prerelease testing is needed, use `0.18.2-rc.1` -> `0.18.2`. Otherwise, testers must manually install the replacement. Changing the channel or release flag does not solve equal-version updates.
 
 Before each test/release, keep the app version aligned in all of these locations:
 
@@ -69,9 +74,11 @@ Also set `bundle.windows.wix.version` in `src-tauri/tauri.windows.conf.json` to 
 
 Run `npm run check:versions` to verify alignment. This check only verifies consistency; it does not enforce candidate suffixes or increasing versions. Stable version tags must match the app version; prereleases use the moving `updater-prerelease` tag. Java bridge module versions are independent.
 
-## 3) Prerelease channel testing (recommended)
+The RC-only prerelease rule is a release policy. The current workflows do not automatically reject a plain version sent to the prerelease channel, so check the source application's version before either publishing route. Automated enforcement would require a workflow validation change; neither the channel selection nor `check:versions` provides that protection today.
 
-This publishes to the moving GitHub release tag: `updater-prerelease`.
+## 3) Prerelease channel testing (optional)
+
+Use this flow only when prerelease distribution is explicitly requested. It publishes to the moving GitHub release tag `updater-prerelease`. Under the policy above, publish only application versions of the form `X.Y.Z-rc.N` to this channel.
 
 ### 3.1 Build and publish prerelease assets
 
@@ -79,8 +86,8 @@ Before either a branch push or manual dispatch:
 
 1. Check the previously published app version in the prerelease updater manifests and the latest stable release.
 2. Set all version files listed in section 2 to the next `X.Y.Z-rc.N`. Verify that it is higher than the previous candidate and latest stable version. Do not publish a plain `X.Y.Z` to this channel.
-3. Run `npm run check:versions`, commit the version change, and validate that exact candidate using the release checklist in [DEVELOPMENT.md](../DEVELOPMENT.md#b-release-preparation-and-validation).
-4. Publish that validated source commit. For a revised candidate, increment `N` before publishing again.
+3. Run `npm run check:versions`, commit the version change, and confirm existing CI passes for that candidate using the release checklist in [DEVELOPMENT.md](../DEVELOPMENT.md#release-preparation-and-validation).
+4. Publish that validated source commit. The publishing run builds the packages; a separate non-publishing build is not required first. For a revised candidate, increment `N` before publishing again.
 
 From your local machine (no GitHub Actions UI needed):
 
@@ -132,9 +139,18 @@ Linux also hides the updater menu. Update Linux installations through APT or a n
 
 ## 4) Stable release flow
 
-When the candidate is ready, remove the `-rc.N` suffix in all version files, run `npm run check:versions`, and complete the final release checks before tagging. For example, promote `0.19.0-rc.2` to `0.19.0`. If that plain version was already distributed, follow the recovery guidance in section 2 rather than republishing changed code under the same version.
+This is the default release path. No intermediate RC, dedicated release branch, or non-publishing platform build is required.
 
-## Option A: tag push (automatic)
+1. Prepare the changes through normal PRs and complete the [release checklist](../DEVELOPMENT.md#before-releasing). Include the final plain `X.Y.Z` version and release notes in the last maintenance/feature PR, or a small follow-up PR if the changes are already merged. Align every version file from section 2 and run `npm run check:versions`.
+2. Merge the final PR after its checks pass. Wait for the `Test Suite` workflow on the intended `main` commit to pass, and verify that commit has the intended version. Avoid unrelated merges before tagging.
+3. Push the matching stable tag as shown below. Creating the tag does not bump application versions. With `PUBLISH_GH_RELEASE=true`, the tag-triggered workflow builds, signs, and publishes all platforms.
+4. Confirm the release workflow succeeds, including Linux APT deployment, and that the assets listed in section 5 are present. Publish the prepared notes and remove merged task branches and temporary release files.
+
+If an RC was actually distributed, remove its `-rc.N` suffix in the final PR and follow the same steps. For example, `0.19.0-rc.2` becomes `0.19.0`. If the plain version was already distributed, follow the recovery guidance in section 2. Always select a version newer than the latest stable release and any distributed candidates.
+
+Use optional non-publishing builds when explicitly requested or when packaging-related changes warrant them. The stable tag workflow rebuilds packages; it does not reuse candidate artifacts. Existing PR and `main` CI are sufficient before tagging an ordinary release, with packaging validated by the tag run. Investigate failures and retry affected jobs for the same source; do not move a published tag to changed code.
+
+### Option A: tag push (default)
 
 Prerequisite:
 - `PUBLISH_GH_RELEASE=true`
@@ -143,19 +159,20 @@ Prerequisite:
 Then push a version tag (example):
 
 ```bash
-git tag v0.18.0
-git push origin v0.18.0
+# On main at the intended commit whose Test Suite has passed:
+git tag v0.19.0
+git push origin v0.19.0
 ```
 
-`Release Builds` runs all platforms and publishes to release tag `v0.18.0` in this example. Use a tag matching the version committed in section 2.
+`Release Builds` runs all platforms and publishes to release tag `v0.19.0` in this example. Use an unused tag matching the version committed in section 2. Waiting for the intended commit's `Test Suite` to pass is a release-process prerequisite; the current tag workflow does not enforce that check automatically.
 
-## Option B: manual stable publish
+### Option B: manual stable publish (special cases)
 
 Run **Release Builds** manually with:
 - `ref`: commit/branch to build
 - `publish_release`: `true`
 - `release_channel`: `stable`
-- `release_tag`: exact tag name (example `v0.18.0`)
+- `release_tag`: exact tag name (example `v0.19.0`)
 - `platform`: `all`
 
 Important:
