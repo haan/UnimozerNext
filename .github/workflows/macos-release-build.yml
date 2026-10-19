@@ -48,7 +48,7 @@ jobs:
             jdtls_config_dir: config_mac
             tauri_config: src-tauri/tauri.macos.x64.conf.json
           - arch: arm64
-            os: macos-14
+            os: macos-15
             rust_target: aarch64-apple-darwin
             updater_target: darwin-aarch64
             jdk_dir: mac-arm64

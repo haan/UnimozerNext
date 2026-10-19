@@ -38,7 +38,7 @@ jobs:
     concurrency:
       group: linux-release-${{ inputs.source_ref }}
       cancel-in-progress: ${{ !startsWith(inputs.source_ref, 'refs/tags/') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       publish_apt: ${{ steps.release_meta.outputs.publish_release == 'true' && steps.release_meta.outputs.is_prerelease != 'true' && steps.release_meta.outputs.tag_name != '' }}
       deb_path: ${{ steps.release_assets.outputs.deb_path }}
@@ -101,7 +101,7 @@ jobs:
             patchelf \
             libssl-dev \
             libgtk-3-dev \
-            libfuse2 \
+            libfuse2t64 \
             apt-utils \
             dpkg-dev \
             gnupg \
@@ -346,7 +346,7 @@ jobs:
   publish-apt:
     needs: build-linux-deb
     if: ${{ needs.build-linux-deb.outputs.publish_apt == 'true' }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     environment:
       name: github-pages
       url: ${{ steps.pages_deployment.outputs.page_url }}

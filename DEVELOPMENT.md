@@ -175,6 +175,12 @@ Platform-specific builds:
 
 These npm packaging scripts pass `--no-sign` for local builds. Release CI builds signed artifacts using the platform configurations and signing setup below.
 
+Release CI builds macOS arm64 on `macos-15` and macOS x64 on
+`macos-15-intel`. Linux compilation and APT publishing use `ubuntu-24.04`.
+Ubuntu 24.04 is the baseline for new Linux release packages; Ubuntu 22.04
+compatibility is no longer targeted. Other distributions need compatible system
+libraries. The Linux workflow installs Ubuntu 24.04's `libfuse2t64` package.
+
 ## Logo Runtime Assets
 
 The About dialog depth-parallax uses preprocessed runtime files generated from source logo assets.

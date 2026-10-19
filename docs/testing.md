@@ -194,7 +194,7 @@ describe("useMyHook", () => {
 ## CI integration
 
 Tests run automatically via `.github/workflows/test.yml` on every push to `main`
-and on every pull request. The workflow runs on `ubuntu-latest` and installs
+and on every pull request. The workflow runs on `ubuntu-24.04` and installs
 Linux system dependencies required by Tauri before running the Rust tests.
 
 Steps in order:
@@ -205,7 +205,8 @@ Steps in order:
 5. `npm run test:unit`
 6. Playwright install + `npm run test:e2e`
 
-A separate Java bridge matrix runs on Windows, macOS, and Linux. It installs
+A separate Java bridge matrix runs on `windows-latest`, `macos-15`, and
+`ubuntu-24.04`. It installs
 Temurin Java 25, validates the committed Gradle Wrapper JARs, and exercises the
 native wrapper launchers. It then runs `npm run test:java`, `npm run build:parser`,
 and `npm run build:jshell` to verify both tests and JAR packaging through the
