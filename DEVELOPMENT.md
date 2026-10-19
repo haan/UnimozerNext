@@ -324,21 +324,23 @@ General maintenance is independent of releasing. A tested bug fix can be release
 
 `main` accumulates reviewed features and fixes between releases and should remain usable. The application version can stay at the previous release's version during development; individual feature PRs do not need a version bump.
 
-The default stable release is **merge changes and the final version bump -> passing CI on `main` -> push the matching tag -> build, sign, and publish**. An intermediate RC version, separate release branch, and preliminary packaging run are not required.
+The default stable release is **merge changes -> commit the version bump directly to `main` -> passing CI on that commit -> push the matching tag -> build, sign, and publish**. A version-only PR, intermediate RC version, separate release branch, and preliminary packaging run are not required.
 
 1. **Develop:** Prepare reviewed and tested feature/fix PRs and merge them into `main`.
 2. **Choose the release scope:** Confirm the intended changes, identify remaining blockers, and decide what will wait for a later release.
 3. **Review known blockers:** Review known unresolved release blockers using existing findings and decisions. Resolve them or record explicit maintainer acceptance before proceeding. This does not initiate new outdated-version checks, security scans, or dependency updates; comprehensive maintenance is a separate task.
-4. **Prepare the stable version:** Freeze the selected release scope, set all application version files to the intended plain `X.Y.Z`, and prepare release notes using the [release checklist](#release-preparation-and-validation). Include this in the last maintenance/feature PR when practical. If the changes are already merged, use a small PR with the version bump and release notes. Run `npm run check:versions`. Creating a tag does not change the application's version.
-5. **Merge and validate:** Merge the final PR once its checks pass, then wait for the existing `Test Suite` workflow on the intended `main` commit to pass. Record the maintainer's smoke-test result or mark it pending. Reuse passing checks; do not repeat them locally or dispatch preliminary platform builds by default. Avoid unrelated merges between selecting the release commit and tagging it.
+4. **Prepare the stable version:** Freeze the selected release scope, set all application version files to the intended plain `X.Y.Z`, and prepare release notes using the [release checklist](#release-preparation-and-validation). Run `npm run check:versions`, then commit and push the version-only change directly to `main`. Including the bump in the last maintenance/feature PR is also valid when practical; do not create an extra PR solely for version metadata. Application or dependency changes still follow the normal PR process. Creating a tag does not change the application's version.
+5. **Validate the release commit:** Wait for the existing `Test Suite` workflow on the intended `main` commit to pass. If the bump was included in a maintenance/feature PR, merge that PR after its checks pass, then wait for `main` CI. Record the maintainer's smoke-test result or mark it pending. Reuse passing checks; do not repeat them locally or dispatch preliminary platform builds by default. Avoid unrelated changes between selecting the release commit and tagging it.
 6. **Tag and publish:** Verify the intended commit and matching version on `main`, then push the matching `vX.Y.Z` tag with `PUBLISH_GH_RELEASE=true`. The tag-triggered `Release Builds` workflow builds, signs, and publishes all platforms once. Confirm the workflow succeeds, including Linux APT deployment, and record the release notes and outcome. Investigate failures and rerun only affected jobs for the same source; do not move a published tag to changed code.
 7. **Resume development:** Remove merged task branches and temporary release files, then continue work on `main`. The release tag identifies the exact released commit.
+
+After the tag is pushed, later commits to `main` do not change the tagged source or cancel its release build. The release workflow uses concurrency groups per Git ref and disables cancellation for tag runs. Never move the release tag to incorporate later changes.
 
 #### Optional prerelease testing and packaging checks
 
 Use the prerelease channel when the maintainer explicitly requests testing a distributed candidate before stable publication. **Only `X.Y.Z-rc.N` application versions may be published to that channel**, starting at `rc.1` and incrementing for changed published candidates. Plain `X.Y.Z` versions are reserved for stable publication. Follow the [candidate version policy](docs/updater.md#candidate-version-policy), including the version-ordering checks; the GitHub prerelease flag alone does not make an application version a release candidate.
 
-For example, `0.19.0-rc.1` -> `0.19.0-rc.2` -> `0.19.0` lets testers update to stable. When ready, remove the suffix in a PR and follow the normal merge, CI, and tag steps above. A dedicated release branch is optional for coordinating this testing.
+For example, `0.19.0-rc.1` -> `0.19.0-rc.2` -> `0.19.0` lets testers update to stable. When ready, remove the suffix in the version-only commit and follow the normal `main` CI and tag steps above. A dedicated release branch is optional for coordinating this testing.
 
 Non-publishing platform builds are also optional. Use them when explicitly requested or when installer, signing, bundled-runtime, or packaging changes warrant a pre-release build check. They do not promote artifacts into the stable release: the tag run builds again. For an ordinary release, accept that packaging failures may first be found in the tag-triggered run. Publishing a requested prerelease likewise builds its packages; it does not require a separate non-publishing build first.
 
@@ -346,11 +348,11 @@ See [docs/updater.md](docs/updater.md) for version-file locations, channel rules
 
 ### Before Releasing
 
-Record checklist outcomes and links to relevant PRs in the PR carrying the final version bump; a separate release-preparation PR is not required. Reuse existing validation and known-issue decisions. Record results and limitations, and mark optional checks not performed as **not requested**. A maintenance review is not a release prerequisite. Known release blockers require resolution or explicit maintainer acceptance before tagging; merely deferring an issue does not establish acceptance.
+Record checklist outcomes, the release commit, and links to relevant PRs and CI runs in the release-preparation report, or in the existing PR if it includes the version bump. A separate release-preparation PR is not required. Publish the prepared user-facing notes with the GitHub release. Reuse existing validation and known-issue decisions. Record results and limitations, and mark optional checks not performed as **not requested**. A maintenance review is not a release prerequisite. Known release blockers require resolution or explicit maintainer acceptance before tagging; merely deferring an issue does not establish acceptance.
 
 #### Release Preparation and Validation
 
-Complete this section in steps 4–6, from the final version PR through publication.
+Complete this section in steps 4–6, from version preparation through publication.
 
 **Validation scope:** Use the existing PR and `main` CI runs, then the tag-triggered release build. PR tests validate proposed changes; `main` tests validate the integrated release commit. These automatic runs remain part of normal CI. Do not add manual reruns, duplicate passing checks locally, or require non-publishing platform builds for an ordinary stable release. Investigate failures and repeat only affected checks. Documentation-only changes do not require an additional application build or local test run.
 
@@ -358,7 +360,7 @@ Manual desktop checks are performed by the maintainer and may be recorded as pen
 
 - [ ] **Version and release notes:** Align the application version across npm, Cargo, and Tauri files, including lockfiles; run `npm run check:versions`. Describe user-visible changes, compatibility changes, and known limitations in the release notes.
 - [ ] **Known blockers:** Review known unresolved release blockers using existing findings and decisions. Record resolutions or explicit maintainer acceptance. Do not start a fresh dependency/tooling review or upgrade work as part of this check.
-- [ ] **Automated tests:** Confirm the final PR checks and the `Test Suite` on the intended `main` commit pass. Run local checks only where CI does not cover the change or when diagnosing a failure.
+- [ ] **Automated tests:** Confirm the `Test Suite` on the intended `main` commit passes. Reuse the passing checks from the merged change PRs; a direct version-only commit needs no additional PR test run. Run local checks only where CI does not cover the change or when diagnosing a failure.
 - [ ] **Optional prerelease publication:** Only when requested, require `X.Y.Z-rc.N` and verify it is higher than the previous published candidate and latest stable version. Increment `N` for changed code; never publish the reserved plain stable version to the prerelease channel. `check:versions` checks alignment only, so record this ordering check separately. See the [recovery guidance](docs/updater.md#candidate-version-policy) if a plain version has already been distributed.
 - [ ] **Optional non-publishing builds:** Record the reason and results if preliminary packaging validation was requested or warranted by packaging changes. Otherwise mark not requested; this is not a default release gate.
 - [ ] **Maintainer smoke test:** Manually check the changed feature and basic project opening, saving, compiling, and running. Record the result or mark it pending; this is not an instruction for an agent to automate desktop testing.

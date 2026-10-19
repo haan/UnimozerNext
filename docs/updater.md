@@ -2,7 +2,7 @@
 
 This guide covers the `Release Builds` workflow and the app's update channels. Windows NSIS and macOS installations support in-app updates when writable. Linux releases use Debian packages and a signed APT repository; Linux in-app updates are disabled.
 
-For a normal stable release, merge the changes and final version bump into `main`, wait for CI on that commit to pass, then push the matching version tag. The tag workflow builds, signs, and publishes the release. See [section 4](#4-stable-release-flow). Prerelease distribution and preliminary non-publishing builds are optional.
+For a normal stable release, merge the changes, commit and push the version-only bump directly to `main`, wait for CI on that commit to pass, then push the matching version tag. The tag workflow builds, signs, and publishes the release. See [section 4](#4-stable-release-flow). Prerelease distribution and preliminary non-publishing builds are optional.
 
 Comprehensive dependency and tooling maintenance is a separate, explicitly invoked [maintenance skill](../.agents/skills/unimozer-maintenance/SKILL.md). Releasing does not invoke that skill or start fresh outdated-version checks or updates. Review known blockers using existing findings and decisions.
 
@@ -139,14 +139,14 @@ Linux also hides the updater menu. Update Linux installations through APT or a n
 
 ## 4) Stable release flow
 
-This is the default release path. No intermediate RC, dedicated release branch, or non-publishing platform build is required.
+This is the default release path. No version-only PR, intermediate RC, dedicated release branch, or non-publishing platform build is required.
 
-1. Prepare the changes through normal PRs and complete the [release checklist](../DEVELOPMENT.md#before-releasing). Include the final plain `X.Y.Z` version and release notes in the last maintenance/feature PR, or a small follow-up PR if the changes are already merged. Align every version file from section 2 and run `npm run check:versions`.
-2. Merge the final PR after its checks pass. Wait for the `Test Suite` workflow on the intended `main` commit to pass, and verify that commit has the intended version. Avoid unrelated merges before tagging.
+1. Prepare and merge application/dependency changes through normal PRs and complete the [release checklist](../DEVELOPMENT.md#before-releasing). Align every version file from section 2 to the final plain `X.Y.Z`, prepare release notes, and run `npm run check:versions`. Commit and push the version-only change directly to `main`. The bump may instead be included in the last maintenance/feature PR when practical; an extra PR solely for version metadata is unnecessary.
+2. Wait for the `Test Suite` workflow on the intended `main` commit to pass, and verify that commit has the intended version. If the bump was included in a change PR, merge it after its checks pass before waiting for `main` CI. Avoid unrelated changes before tagging.
 3. Push the matching stable tag as shown below. Creating the tag does not bump application versions. With `PUBLISH_GH_RELEASE=true`, the tag-triggered workflow builds, signs, and publishes all platforms.
 4. Confirm the release workflow succeeds, including Linux APT deployment, and that the assets listed in section 5 are present. Publish the prepared notes and remove merged task branches and temporary release files.
 
-If an RC was actually distributed, remove its `-rc.N` suffix in the final PR and follow the same steps. For example, `0.19.0-rc.2` becomes `0.19.0`. If the plain version was already distributed, follow the recovery guidance in section 2. Always select a version newer than the latest stable release and any distributed candidates.
+If an RC was actually distributed, remove its `-rc.N` suffix in the version-only commit and follow the same steps. For example, `0.19.0-rc.2` becomes `0.19.0`. If the plain version was already distributed, follow the recovery guidance in section 2. Always select a version newer than the latest stable release and any distributed candidates.
 
 Use optional non-publishing builds when explicitly requested or when packaging-related changes warrant them. The stable tag workflow rebuilds packages; it does not reuse candidate artifacts. Existing PR and `main` CI are sufficient before tagging an ordinary release, with packaging validated by the tag run. Investigate failures and retry affected jobs for the same source; do not move a published tag to changed code.
 
