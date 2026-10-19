@@ -496,6 +496,7 @@ mod tests {
                     .by_index(index)
                     .expect("read archive entry")
                     .name()
+                    .expect("decode archive entry name")
                     .to_string(),
             );
         }

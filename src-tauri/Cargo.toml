@@ -15,11 +15,13 @@ serde_json = "1.0"
 tauri = { version = "2.11.0", features = [] }
 tauri-plugin-clipboard-manager = "2.3.2"
 tauri-plugin-dialog = "2.7.0"
-tauri-plugin-updater = "2.10.1"
+# Windows updates use raw NSIS installers; omit legacy ZIP/AppImage archive support.
+# macOS tar updates are supported independently of the optional `zip` feature.
+tauri-plugin-updater = { version = "2.14.0", default-features = false, features = ["rustls-tls", "system-proxy"] }
 dunce = "1.0.5"
 url = "2.5.7"
 walkdir = "2.5.0"
-zip = "2.2.2"
+zip = "9.0.5"
 libc = "0.2.186"
 tokio = { version = "1.49.0", features = ["time"] }
 
