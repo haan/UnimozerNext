@@ -79,6 +79,7 @@ npm run tauri dev
 
 ## Data and Compatibility Notes
 
+- New Linux release builds target Ubuntu 24.04 or distributions with compatible system libraries.
 - Diagram state is persisted in `unimozer.json` in the project root.
 - Legacy `unimozer.pck` layout data is imported when available.
 - For NetBeans-style projects, source/classpath properties from `nbproject/project.properties` are respected where applicable.

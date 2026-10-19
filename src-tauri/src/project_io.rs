@@ -62,7 +62,7 @@ fn extract_archive_to_workspace(
             return Err("Archive contains unsafe path entries".to_string());
         };
         let output_path = workspace_dir.join(enclosed);
-        if entry.is_dir() || entry.name().ends_with('/') {
+        if entry.is_dir() || entry.name().map_err(to_command_error)?.ends_with('/') {
             fs::create_dir_all(&output_path).map_err(to_command_error)?;
             continue;
         }
@@ -399,6 +399,7 @@ mod tests {
                     .by_index(index)
                     .expect("read archive entry")
                     .name()
+                    .expect("decode archive entry name")
                     .to_string(),
             );
         }
