@@ -210,7 +210,7 @@ A separate Java bridge matrix runs on `windows-latest`, `macos-15`, and
 Temurin Java 25, validates the committed Gradle Wrapper JARs, and exercises the
 native wrapper launchers. It then runs `npm run test:java`, `npm run build:parser`,
 and `npm run build:jshell` to verify both tests and JAR packaging through the
-portable npm commands. Both bridges use Gradle 9.8.1 and target Java 25.
+portable npm commands. Both bridges use Gradle 9.8.2 and target Java 25.
 
 The separate `Java Dependency Graph` workflow resolves dependencies for each bridge
 using Java 25 and its committed Gradle Wrapper. Pull requests generate snapshots
